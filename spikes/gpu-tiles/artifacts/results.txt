@@ -1,0 +1,466 @@
+# Pigment Prose task 02 spike results
+date: 2026-09-26T19:56:20-04:00
+host: Linux 7.2.7-1-cachyos x86_64; Intel(R) Core(TM) i9-14900K
+gpu: NVIDIA GeForce RTX 4070 Ti, 12282 MiB, 615.71.09
+vulkan: 1.4.357
+toolchain: rustc 1.92.0 (ded5c06cf 2025-12-08); cargo 1.92.0 (344c4567c 2025-10-21)
+
+## 1. Adapter diagnostics
+$ gpu-tiles adapters --gl
+wgpu 30.0.1 ; 3 adapter(s)
+- NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=DiscreteGpu software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_storage_buffer_binding_size=2147483644 max_buffer_size=4294967295
+    max_compute_workgroup_size=(1024,1024,64) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+- Intel(R) Graphics (RPL-S)
+    backend=Vulkan type=IntegratedGpu software=false vendor=0x8086 device=0xa780
+    driver=Intel open-source Mesa driver (Mesa 26.2.3-arch3.1)
+    max_texture_dimension_2d=16384 max_storage_buffer_binding_size=2147483644 max_buffer_size=2147483647
+    max_compute_workgroup_size=(1024,1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=102
+- NVIDIA GeForce RTX 4070 Ti/PCIe/SSE2
+    backend=Gl type=Other software=false vendor=0x10de device=0x0000
+    driver= (3.3.0 NVIDIA 615.71.09)
+    max_texture_dimension_2d=32768 max_storage_buffer_binding_size=2147483644 max_buffer_size=2147483647
+    max_compute_workgroup_size=(1024,1024,64) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=8
+selected: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+
+software adapter check (Mesa llvmpipe exposed through GL):
+$ export_sw gpu-tiles render --gl --adapter llvmpipe --width 64 --height 64 --out out/sw-refused.png
+error: GPU initialisation failed: only a software rasterizer is available (llvmpipe (LLVM 22.1.8, 256 bits)); it is not accepted as GPU evidence. Pass --allow-software to run anyway (results are labelled software).
+Check that a hardware driver is installed and visible:
+  Linux: install the vendor Vulkan ICD (e.g. nvidia-utils / mesa-vulkan-drivers) and run `vulkaninfo --summary`
+  Windows: update the GPU driver (Direct3D 12 or Vulkan)
+  macOS: Metal is built in; check the machine supports Metal 2+
+Set WGPU_BACKEND=vulkan|dx12|metal|gl to force a backend when diagnosing.
+
+$ export_sw gpu-tiles render --gl --adapter llvmpipe --allow-software --width 320 --height 180 --out out/sw.png
+adapter: llvmpipe (LLVM 22.1.8, 256 bits) backend=Gl type=Cpu driver= 4.6 (Core Profile) Mesa 26.2.3-arch3.1 limits=adapter [SOFTWARE - not GPU evidence]
+size=320x180 tile=320x180 apron=2 blur_radius=2 tiles=1 seed=1 tile_local_noise=false
+gpu_alloc_mib=1.3 cpu_band_mib=0.2 full_image_rgba8_mib=0.2
+device_init_ms=61.6 setup_ms=0.4 gpu_readback_ms=4.4 png_stream_ms=0.9 total_ms=5.8
+png_finish_ms=0.1 out=out/sw.png
+
+## 2. Seam comparison at 3840x2160 (seed 7)
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 0 --out out/ref-4k.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=3840x2160 apron=26 blur_radius=26 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=194.6 cpu_band_mib=31.6 full_image_rgba8_mib=31.6
+device_init_ms=106.6 setup_ms=8.8 gpu_readback_ms=15.6 png_stream_ms=47.9 total_ms=72.3
+png_finish_ms=0.0 out=out/ref-4k.png
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 0 --out out/ref-4k-again.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=3840x2160 apron=26 blur_radius=26 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=194.6 cpu_band_mib=31.6 full_image_rgba8_mib=31.6
+device_init_ms=82.7 setup_ms=8.7 gpu_readback_ms=16.2 png_stream_ms=47.8 total_ms=72.7
+png_finish_ms=0.0 out=out/ref-4k-again.png
+
+$ gpu-tiles compare out/ref-4k.png out/ref-4k-again.png
+compare out/ref-4k.png vs out/ref-4k-again.png
+  size=3840x2160 tile=0 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=0 differing_in_boundary_band=0 differing_elsewhere=0
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 2048 --out out/tiled-4k-2048.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=2048x2048 apron=26 blur_radius=26 tiles=4 seed=7 tile_local_noise=false
+gpu_alloc_mib=99.3 cpu_band_mib=30.0 full_image_rgba8_mib=31.6
+device_init_ms=82.7 setup_ms=6.2 gpu_readback_ms=16.2 png_stream_ms=49.5 total_ms=71.9
+png_finish_ms=0.0 out=out/tiled-4k-2048.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-2048.png --tile 2048
+compare out/ref-4k.png vs out/tiled-4k-2048.png
+  size=3840x2160 tile=2048 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=35964 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.683 worst=0.876 | B mean=0.683 worst=0.876
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 1024 --out out/tiled-4k-1024.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=1024x1024 apron=26 blur_radius=26 tiles=12 seed=7 tile_local_noise=false
+gpu_alloc_mib=25.7 cpu_band_mib=15.0 full_image_rgba8_mib=31.6
+device_init_ms=85.2 setup_ms=6.1 gpu_readback_ms=17.2 png_stream_ms=46.3 total_ms=69.7
+png_finish_ms=0.0 out=out/tiled-4k-1024.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-1024.png --tile 1024
+compare out/ref-4k.png vs out/tiled-4k-1024.png
+  size=3840x2160 tile=1024 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=68500 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.588 worst=0.876 | B mean=0.588 worst=0.876
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 1000 --out out/tiled-4k-1000.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=1000x1000 apron=26 blur_radius=26 tiles=12 seed=7 tile_local_noise=false
+gpu_alloc_mib=24.6 cpu_band_mib=14.6 full_image_rgba8_mib=31.6
+device_init_ms=104.4 setup_ms=6.5 gpu_readback_ms=17.3 png_stream_ms=47.7 total_ms=71.5
+png_finish_ms=0.0 out=out/tiled-4k-1000.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-1000.png --tile 1000
+compare out/ref-4k.png vs out/tiled-4k-1000.png
+  size=3840x2160 tile=1000 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=68500 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=1.079 worst=1.251 | B mean=1.079 worst=1.251
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 512 --out out/tiled-4k-512.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=512x512 apron=26 blur_radius=26 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=6.9 cpu_band_mib=7.5 full_image_rgba8_mib=31.6
+device_init_ms=94.1 setup_ms=6.5 gpu_readback_ms=19.9 png_stream_ms=47.5 total_ms=74.0
+png_finish_ms=0.0 out=out/tiled-4k-512.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-512.png --tile 512
+compare out/ref-4k.png vs out/tiled-4k-512.png
+  size=3840x2160 tile=512 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=133380 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.763 worst=1.180 | B mean=0.763 worst=1.180
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 333 --out out/tiled-4k-333.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=333x333 apron=26 blur_radius=26 tiles=84 seed=7 tile_local_noise=false
+gpu_alloc_mib=3.2 cpu_band_mib=4.9 full_image_rgba8_mib=31.6
+device_init_ms=112.0 setup_ms=6.5 gpu_readback_ms=21.5 png_stream_ms=47.4 total_ms=75.4
+png_finish_ms=0.0 out=out/tiled-4k-333.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-333.png --tile 333
+compare out/ref-4k.png vs out/tiled-4k-333.png
+  size=3840x2160 tile=333 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=198004 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=1.012 worst=1.363 | B mean=1.012 worst=1.363
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 256 --out out/tiled-4k-256.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=256x256 apron=26 blur_radius=26 tiles=135 seed=7 tile_local_noise=false
+gpu_alloc_mib=1.9 cpu_band_mib=3.8 full_image_rgba8_mib=31.6
+device_init_ms=101.7 setup_ms=6.2 gpu_readback_ms=27.7 png_stream_ms=58.2 total_ms=92.2
+png_finish_ms=0.1 out=out/tiled-4k-256.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-256.png --tile 256
+compare out/ref-4k.png vs out/tiled-4k-256.png
+  size=3840x2160 tile=256 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=258120 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.894 worst=1.202 | B mean=0.894 worst=1.202
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 128 --out out/tiled-4k-128.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=128x128 apron=26 blur_radius=26 tiles=510 seed=7 tile_local_noise=false
+gpu_alloc_mib=0.6 cpu_band_mib=1.9 full_image_rgba8_mib=31.6
+device_init_ms=92.3 setup_ms=6.5 gpu_readback_ms=62.4 png_stream_ms=87.8 total_ms=156.9
+png_finish_ms=0.0 out=out/tiled-4k-128.png
+
+$ gpu-tiles compare out/ref-4k.png out/tiled-4k-128.png --tile 128
+compare out/ref-4k.png vs out/tiled-4k-128.png
+  size=3840x2160 tile=128 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=504720 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.990 worst=1.401 | B mean=0.990 worst=1.401
+
+negative controls (must differ, proving the comparison detects seams):
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 512 --apron 0 --out out/neg-apron0.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=512x512 apron=0 blur_radius=26 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=6.0 cpu_band_mib=7.5 full_image_rgba8_mib=31.6
+device_init_ms=92.8 setup_ms=6.3 gpu_readback_ms=19.4 png_stream_ms=46.6 total_ms=72.3
+png_finish_ms=0.0 out=out/neg-apron0.png
+
+$ gpu-tiles compare out/ref-4k.png out/neg-apron0.png --tile 512 --diff out/diff-apron0.png
+compare out/ref-4k.png vs out/neg-apron0.png
+  size=3840x2160 tile=512 identical=false max_channel_diff=9 differing_px=19036/8294400 psnr_db=73.43
+  boundary_band_px=133380 differing_in_boundary_band=3445 differing_elsewhere=15591
+  max_distance_of_a_differing_px_from_a_tile_edge=25
+  seam_ratio A mean=0.763 worst=1.180 | B mean=0.943 worst=1.432
+  diff image (x32) -> out/diff-apron0.png
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 512 --apron 6 --out out/neg-apron6.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=512x512 apron=6 blur_radius=26 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=6.2 cpu_band_mib=7.5 full_image_rgba8_mib=31.6
+device_init_ms=95.0 setup_ms=6.0 gpu_readback_ms=19.1 png_stream_ms=47.1 total_ms=72.2
+png_finish_ms=0.1 out=out/neg-apron6.png
+
+$ gpu-tiles compare out/ref-4k.png out/neg-apron6.png --tile 512
+compare out/ref-4k.png vs out/neg-apron6.png
+  size=3840x2160 tile=512 identical=false max_channel_diff=3 differing_px=8094/8294400 psnr_db=82.07
+  boundary_band_px=133380 differing_in_boundary_band=2150 differing_elsewhere=5944
+  max_distance_of_a_differing_px_from_a_tile_edge=19
+  seam_ratio A mean=0.763 worst=1.180 | B mean=0.821 worst=1.180
+
+$ gpu-tiles render --width 3840 --height 2160 --seed 7 --tile 512 --tile-local-noise --out out/neg-localnoise.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=512x512 apron=26 blur_radius=26 tiles=40 seed=7 tile_local_noise=true
+gpu_alloc_mib=6.9 cpu_band_mib=7.5 full_image_rgba8_mib=31.6
+device_init_ms=95.7 setup_ms=6.3 gpu_readback_ms=19.4 png_stream_ms=46.1 total_ms=71.8
+png_finish_ms=0.0 out=out/neg-localnoise.png
+
+$ gpu-tiles compare out/ref-4k.png out/neg-localnoise.png --tile 512 --diff out/diff-localnoise.png
+compare out/ref-4k.png vs out/neg-localnoise.png
+  size=3840x2160 tile=512 identical=false max_channel_diff=158 differing_px=7506681/8294400 psnr_db=31.74
+  boundary_band_px=133380 differing_in_boundary_band=121585 differing_elsewhere=7385096
+  max_distance_of_a_differing_px_from_a_tile_edge=255
+  seam_ratio A mean=0.763 worst=1.180 | B mean=8.587 worst=13.121
+  diff image (x32) -> out/diff-localnoise.png
+
+## 3. Portrait, square and odd custom sizes
+$ gpu-tiles render --width 2160 --height 3840 --seed 7 --out out/ref-portrait.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=2160x3840 tile=2160x3840 apron=26 blur_radius=26 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=194.9 cpu_band_mib=31.6 full_image_rgba8_mib=31.6
+device_init_ms=112.4 setup_ms=9.4 gpu_readback_ms=16.9 png_stream_ms=47.7 total_ms=74.0
+png_finish_ms=0.0 out=out/ref-portrait.png
+
+$ gpu-tiles render --width 2160 --height 3840 --seed 7 --tile 512 --out out/tiled-portrait.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=2160x3840 tile=512x512 apron=26 blur_radius=26 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=6.9 cpu_band_mib=4.2 full_image_rgba8_mib=31.6
+device_init_ms=87.3 setup_ms=6.2 gpu_readback_ms=19.9 png_stream_ms=46.5 total_ms=72.6
+png_finish_ms=0.0 out=out/tiled-portrait.png
+
+$ gpu-tiles compare out/ref-portrait.png out/tiled-portrait.png --tile 512
+compare out/ref-portrait.png vs out/tiled-portrait.png
+  size=2160x3840 tile=512 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=133380 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.762 worst=1.050 | B mean=0.762 worst=1.050
+
+$ gpu-tiles render --width 3000 --height 3000 --seed 7 --out out/ref-square.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3000x3000 tile=3000x3000 apron=36 blur_radius=36 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=212.8 cpu_band_mib=34.3 full_image_rgba8_mib=34.3
+device_init_ms=94.5 setup_ms=8.5 gpu_readback_ms=18.3 png_stream_ms=46.2 total_ms=73.1
+png_finish_ms=0.1 out=out/ref-square.png
+
+$ gpu-tiles render --width 3000 --height 3000 --seed 7 --tile 700 --out out/tiled-square.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3000x3000 tile=700x700 apron=36 blur_radius=36 tiles=25 seed=7 tile_local_noise=false
+gpu_alloc_mib=12.8 cpu_band_mib=8.0 full_image_rgba8_mib=34.3
+device_init_ms=86.4 setup_ms=6.2 gpu_readback_ms=21.1 png_stream_ms=44.8 total_ms=72.1
+png_finish_ms=0.1 out=out/tiled-square.png
+
+$ gpu-tiles compare out/ref-square.png out/tiled-square.png --tile 700
+compare out/ref-square.png vs out/tiled-square.png
+  size=3000x3000 tile=700 identical=true max_channel_diff=0 differing_px=0/9000000 psnr_db=inf
+  boundary_band_px=107676 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=1.162 worst=1.347 | B mean=1.162 worst=1.347
+
+$ gpu-tiles render --width 5001 --height 7003 --seed 11 --out out/ref-odd.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=5001x7003 tile=5001x7003 apron=60 blur_radius=60 tiles=1 seed=11 tile_local_noise=false
+gpu_alloc_mib=825.3 cpu_band_mib=133.6 full_image_rgba8_mib=133.6
+device_init_ms=96.4 setup_ms=20.2 gpu_readback_ms=91.2 png_stream_ms=159.2 total_ms=270.6
+png_finish_ms=0.1 out=out/ref-odd.png
+
+$ gpu-tiles render --width 5001 --height 7003 --seed 11 --tile 1000 --out out/tiled-odd.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=5001x7003 tile=1000x1000 apron=60 blur_radius=60 tiles=48 seed=11 tile_local_noise=false
+gpu_alloc_mib=26.9 cpu_band_mib=19.1 full_image_rgba8_mib=133.6
+device_init_ms=94.2 setup_ms=6.1 gpu_readback_ms=83.4 png_stream_ms=154.4 total_ms=243.9
+png_finish_ms=0.1 out=out/tiled-odd.png
+
+$ gpu-tiles compare out/ref-odd.png out/tiled-odd.png --tile 1000
+compare out/ref-odd.png vs out/tiled-odd.png
+  size=5001x7003 tile=1000 identical=true max_channel_diff=0 differing_px=0/35022003 psnr_db=inf
+  boundary_band_px=296463 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.955 worst=1.191 | B mean=0.955 worst=1.191
+
+## 4. 8K (7680x4320) export timing and memory
+context-only baseline (64x64 job):
+$ gpu-tiles render --width 64 --height 64 --seed 7 --out out/tiny.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=64x64 tile=64x64 apron=1 blur_radius=1 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=0.1 cpu_band_mib=0.0 full_image_rgba8_mib=0.0
+device_init_ms=115.2 setup_ms=6.1 gpu_readback_ms=0.3 png_stream_ms=0.0 total_ms=6.4
+png_finish_ms=0.0 out=out/tiny.png
+
+vram_mib baseline=966 peak=1180 samples=32
+
+$ gpu-tiles render --width 7680 --height 4320 --seed 7 --tile 0 --out out/ref-8k.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=7680x4320 tile=7680x4320 apron=52 blur_radius=52 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=778.6 cpu_band_mib=126.6 full_image_rgba8_mib=126.6
+device_init_ms=125.2 setup_ms=19.4 gpu_readback_ms=77.6 png_stream_ms=160.8 total_ms=257.8
+png_finish_ms=0.0 out=out/ref-8k.png
+
+vram_mib baseline=966 peak=1968 samples=45
+
+$ gpu-tiles render --width 7680 --height 4320 --seed 7 --tile 2048 --out out/tiled-8k-2048.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=7680x4320 tile=2048x2048 apron=52 blur_radius=52 tiles=12 seed=7 tile_local_noise=false
+gpu_alloc_mib=102.7 cpu_band_mib=60.0 full_image_rgba8_mib=126.6
+device_init_ms=123.0 setup_ms=8.7 gpu_readback_ms=77.3 png_stream_ms=174.1 total_ms=260.1
+png_finish_ms=0.0 out=out/tiled-8k-2048.png
+
+vram_mib baseline=966 peak=1180 samples=45
+
+$ gpu-tiles render --width 7680 --height 4320 --seed 7 --tile 1024 --out out/tiled-8k-1024.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=7680x4320 tile=1024x1024 apron=52 blur_radius=52 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=27.4 cpu_band_mib=30.0 full_image_rgba8_mib=126.6
+device_init_ms=99.6 setup_ms=6.2 gpu_readback_ms=76.6 png_stream_ms=158.2 total_ms=241.0
+png_finish_ms=0.0 out=out/tiled-8k-1024.png
+
+vram_mib baseline=966 peak=1180 samples=43
+
+$ gpu-tiles render --width 7680 --height 4320 --seed 7 --tile 512 --out out/tiled-8k-512.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=7680x4320 tile=512x512 apron=52 blur_radius=52 tiles=135 seed=7 tile_local_noise=false
+gpu_alloc_mib=7.8 cpu_band_mib=15.0 full_image_rgba8_mib=126.6
+device_init_ms=112.8 setup_ms=6.4 gpu_readback_ms=85.8 png_stream_ms=173.1 total_ms=265.3
+png_finish_ms=0.0 out=out/tiled-8k-512.png
+
+vram_mib baseline=966 peak=1180 samples=45
+
+$ gpu-tiles render --width 7680 --height 4320 --seed 7 --tile 256 --out out/tiled-8k-256.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=7680x4320 tile=256x256 apron=52 blur_radius=52 tiles=510 seed=7 tile_local_noise=false
+gpu_alloc_mib=2.5 cpu_band_mib=7.5 full_image_rgba8_mib=126.6
+device_init_ms=97.4 setup_ms=7.0 gpu_readback_ms=111.5 png_stream_ms=192.8 total_ms=311.3
+png_finish_ms=0.0 out=out/tiled-8k-256.png
+
+vram_mib baseline=966 peak=1180 samples=46
+
+$ gpu-tiles compare out/ref-8k.png out/tiled-8k-1024.png --tile 1024
+compare out/ref-8k.png vs out/tiled-8k-1024.png
+  size=7680x4320 tile=1024 identical=true max_channel_diff=0 differing_px=0/33177600 psnr_db=inf
+  boundary_band_px=267300 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.709 worst=1.153 | B mean=0.709 worst=1.153
+
+$ gpu-tiles compare out/ref-8k.png out/tiled-8k-256.png --tile 256
+compare out/ref-8k.png vs out/tiled-8k-256.png
+  size=7680x4320 tile=256 identical=true max_channel_diff=0 differing_px=0/33177600 psnr_db=inf
+  boundary_band_px=1017360 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.941 worst=1.230 | B mean=0.941 worst=1.230
+
+portable WebGPU default limits (max_texture_dimension_2d=8192):
+$ gpu-tiles render --width 7680 --height 4320 --seed 7 --tile 1024 --default-limits --out out/tiled-8k-deflimits.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=webgpu-default
+size=7680x4320 tile=1024x1024 apron=52 blur_radius=52 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=27.4 cpu_band_mib=30.0 full_image_rgba8_mib=126.6
+device_init_ms=119.9 setup_ms=6.2 gpu_readback_ms=75.3 png_stream_ms=165.5 total_ms=247.1
+png_finish_ms=0.0 out=out/tiled-8k-deflimits.png
+
+vram_mib baseline=966 peak=1180 samples=44
+
+$ gpu-tiles compare out/tiled-8k-1024.png out/tiled-8k-deflimits.png --tile 1024
+compare out/tiled-8k-1024.png vs out/tiled-8k-deflimits.png
+  size=7680x4320 tile=1024 identical=true max_channel_diff=0 differing_px=0/33177600 psnr_db=inf
+  boundary_band_px=267300 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.709 worst=1.153 | B mean=0.709 worst=1.153
+
+16K (15360x8640) exceeds the default 8192 texture limit as a single tile, but tiles fine:
+$ gpu-tiles render --width 15360 --height 8640 --seed 7 --tile 0 --default-limits --out out/refused-16k.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=webgpu-default
+error: tile 15360x8640 plus apron 104 needs a 15568x8848 texture, above this adapter's max_texture_dimension_2d=8192; use a smaller --tile
+
+$ gpu-tiles render --width 15360 --height 8640 --seed 7 --tile 2048 --default-limits --out out/tiled-16k.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=webgpu-default
+size=15360x8640 tile=2048x2048 apron=104 blur_radius=104 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=109.7 cpu_band_mib=120.0 full_image_rgba8_mib=506.2
+device_init_ms=157.6 setup_ms=6.7 gpu_readback_ms=375.0 png_stream_ms=545.6 total_ms=927.3
+png_finish_ms=0.0 out=out/tiled-16k.png
+
+vram_mib baseline=966 peak=1180 samples=80
+
+(self-comparison below only reports the reference-free seam ratio for the 16K output)
+$ gpu-tiles compare out/tiled-16k.png out/tiled-16k.png --tile 2048
+compare out/tiled-16k.png vs out/tiled-16k.png
+  size=15360x8640 tile=2048 identical=true max_channel_diff=0 differing_px=0/132710400 psnr_db=inf
+  boundary_band_px=535140 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.857 worst=1.235 | B mean=0.857 worst=1.235
+
+47198331 out/tiled-16k.png
+16846408 out/tiled-8k-1024.png
+
+## 5. Preview timing (render + readback, no PNG; scene rebuilt each frame)
+$ gpu-tiles bench-preview --width 960 --height 540 --seed 7 --iters 60
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=960x540 tile=960x540 apron=6 blur_radius=6 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=12.1 cpu_band_mib=2.0 full_image_rgba8_mib=2.0
+device_init_ms=116.3 setup_ms=6.9 gpu_readback_ms=1.6 png_stream_ms=0.0 total_ms=8.5
+first_frame_ms=8.54 warm_n=60 warm_min_ms=0.85 warm_median_ms=0.99 warm_p95_ms=1.17 warm_max_ms=1.45
+
+$ gpu-tiles bench-preview --width 1280 --height 720 --seed 7 --iters 60
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=1280x720 tile=1280x720 apron=9 blur_radius=9 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=21.6 cpu_band_mib=3.5 full_image_rgba8_mib=3.5
+device_init_ms=90.9 setup_ms=6.4 gpu_readback_ms=2.3 png_stream_ms=0.0 total_ms=8.7
+first_frame_ms=8.80 warm_n=60 warm_min_ms=1.47 warm_median_ms=2.16 warm_p95_ms=2.55 warm_max_ms=2.57
+
+$ gpu-tiles bench-preview --width 1920 --height 1080 --seed 7 --iters 60
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=1920x1080 tile=1920x1080 apron=13 blur_radius=13 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=48.7 cpu_band_mib=7.9 full_image_rgba8_mib=7.9
+device_init_ms=102.1 setup_ms=7.1 gpu_readback_ms=4.6 png_stream_ms=0.0 total_ms=11.7
+first_frame_ms=11.85 warm_n=60 warm_min_ms=3.51 warm_median_ms=5.16 warm_p95_ms=5.52 warm_max_ms=5.86
+
+$ gpu-tiles bench-preview --width 3840 --height 2160 --seed 7 --iters 30
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=3840x2160 apron=26 blur_radius=26 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=194.6 cpu_band_mib=31.6 full_image_rgba8_mib=31.6
+device_init_ms=148.4 setup_ms=8.6 gpu_readback_ms=14.8 png_stream_ms=0.0 total_ms=23.4
+first_frame_ms=25.21 warm_n=30 warm_min_ms=18.81 warm_median_ms=21.88 warm_p95_ms=27.29 warm_max_ms=27.68
+
+$ gpu-tiles bench-preview --width 3840 --height 2160 --seed 7 --iters 30 --tile 1024
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=3840x2160 tile=1024x1024 apron=26 blur_radius=26 tiles=12 seed=7 tile_local_noise=false
+gpu_alloc_mib=25.7 cpu_band_mib=15.0 full_image_rgba8_mib=31.6
+device_init_ms=136.4 setup_ms=6.7 gpu_readback_ms=16.9 png_stream_ms=0.0 total_ms=23.6
+first_frame_ms=23.84 warm_n=30 warm_min_ms=17.90 warm_median_ms=22.29 warm_p95_ms=23.75 warm_max_ms=23.97
+
+## 6. Cross-device comparison (Intel iGPU, same shader and scene)
+$ gpu-tiles render --adapter intel --width 3840 --height 2160 --seed 7 --out out/intel-ref-4k.png
+adapter: Intel(R) Graphics (RPL-S) backend=Vulkan type=IntegratedGpu driver=Intel open-source Mesa driver Mesa 26.2.3-arch3.1 limits=adapter
+size=3840x2160 tile=3840x2160 apron=26 blur_radius=26 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=194.6 cpu_band_mib=31.6 full_image_rgba8_mib=31.6
+device_init_ms=60.0 setup_ms=0.5 gpu_readback_ms=353.5 png_stream_ms=50.0 total_ms=404.0
+png_finish_ms=0.1 out=out/intel-ref-4k.png
+
+$ gpu-tiles render --adapter intel --width 3840 --height 2160 --seed 7 --tile 512 --out out/intel-tiled-4k.png
+adapter: Intel(R) Graphics (RPL-S) backend=Vulkan type=IntegratedGpu driver=Intel open-source Mesa driver Mesa 26.2.3-arch3.1 limits=adapter
+size=3840x2160 tile=512x512 apron=26 blur_radius=26 tiles=40 seed=7 tile_local_noise=false
+gpu_alloc_mib=6.9 cpu_band_mib=7.5 full_image_rgba8_mib=31.6
+device_init_ms=47.4 setup_ms=0.5 gpu_readback_ms=340.0 png_stream_ms=107.8 total_ms=448.3
+png_finish_ms=0.1 out=out/intel-tiled-4k.png
+
+$ gpu-tiles compare out/intel-ref-4k.png out/intel-tiled-4k.png --tile 512
+compare out/intel-ref-4k.png vs out/intel-tiled-4k.png
+  size=3840x2160 tile=512 identical=true max_channel_diff=0 differing_px=0/8294400 psnr_db=inf
+  boundary_band_px=133380 differing_in_boundary_band=0 differing_elsewhere=0
+  seam_ratio A mean=0.757 worst=1.188 | B mean=0.757 worst=1.188
+
+$ gpu-tiles compare out/ref-4k.png out/intel-ref-4k.png --diff out/diff-nv-intel.png
+compare out/ref-4k.png vs out/intel-ref-4k.png
+  size=3840x2160 tile=0 identical=false max_channel_diff=1 differing_px=647962/8294400 psnr_db=65.11
+  boundary_band_px=0 differing_in_boundary_band=0 differing_elsewhere=647962
+  diff image (x32) -> out/diff-nv-intel.png
+
+$ gpu-tiles bench-preview --adapter intel --width 1280 --height 720 --seed 7 --iters 30
+adapter: Intel(R) Graphics (RPL-S) backend=Vulkan type=IntegratedGpu driver=Intel open-source Mesa driver Mesa 26.2.3-arch3.1 limits=adapter
+size=1280x720 tile=1280x720 apron=9 blur_radius=9 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=21.6 cpu_band_mib=3.5 full_image_rgba8_mib=3.5
+device_init_ms=56.0 setup_ms=0.5 gpu_readback_ms=51.6 png_stream_ms=0.0 total_ms=52.1
+first_frame_ms=52.49 warm_n=30 warm_min_ms=28.90 warm_median_ms=29.61 warm_p95_ms=29.86 warm_max_ms=32.22
+
+## 7. Resolution-aware texture: preview vs downsampled export
+$ gpu-tiles render --width 960 --height 540 --seed 7 --out out/preview-540.png
+adapter: NVIDIA GeForce RTX 4070 Ti backend=Vulkan type=DiscreteGpu driver=NVIDIA 615.71.09 limits=adapter
+size=960x540 tile=960x540 apron=6 blur_radius=6 tiles=1 seed=7 tile_local_noise=false
+gpu_alloc_mib=12.1 cpu_band_mib=2.0 full_image_rgba8_mib=2.0
+device_init_ms=126.2 setup_ms=6.5 gpu_readback_ms=1.5 png_stream_ms=3.6 total_ms=11.6
+png_finish_ms=0.1 out=out/preview-540.png
+
+$ gpu-tiles downsample out/ref-4k.png 4 out/ref-4k-down4.png
+
+$ gpu-tiles compare out/preview-540.png out/ref-4k-down4.png
+compare out/preview-540.png vs out/ref-4k-down4.png
+  size=960x540 tile=0 identical=false max_channel_diff=83 differing_px=347351/518400 psnr_db=47.10
+  boundary_band_px=0 differing_in_boundary_band=0 differing_elsewhere=347351
+
+$ gpu-tiles downsample out/ref-8k.png 8 out/ref-8k-down8.png
+
+$ gpu-tiles compare out/preview-540.png out/ref-8k-down8.png
+compare out/preview-540.png vs out/ref-8k-down8.png
+  size=960x540 tile=0 identical=false max_channel_diff=78 differing_px=346713/518400 psnr_db=47.00
+  boundary_band_px=0 differing_in_boundary_band=0 differing_elsewhere=346713
+
+## 8. Committed artifacts
+fb41cf4522b57075624878689ee49734d47b5784973140965d0b1cd031e0ae0c  out/ref-4k.png
+fb41cf4522b57075624878689ee49734d47b5784973140965d0b1cd031e0ae0c  out/tiled-4k-512.png
+0cbb76123ad4a7ce6f92a24ae9aef3aa8a97f1e4464fbbd91229f081c718534c  out/ref-8k.png
+0cbb76123ad4a7ce6f92a24ae9aef3aa8a97f1e4464fbbd91229f081c718534c  out/tiled-8k-1024.png
+done

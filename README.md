@@ -6,5 +6,6 @@ A local-first desktop painting studio in planning. Arbitrary prose supplies **no
 - [Art direction and visual review](docs/art-direction.md)
 - [Milestones, gates and architecture questions](docs/milestones.md)
 - [Public synthetic seed passages](fixtures/README.md)
+- [Architecture spike: GPU painting and tiled rendering](docs/architecture-spike.md)
 
-This repository currently contains specifications and test passages only. There is no renderer, application, chosen GPU backend, or published release.
+This repository contains specifications, test passages and a throwaway architecture spike ([`spikes/gpu-tiles/`](spikes/gpu-tiles/)). The spike validated Rust/wgpu compute painting and seam-free tiled export on Linux (Vulkan, RTX 4070 Ti), and that stack is the recommended backend. Windows and macOS are unverified. There is no product renderer, application or published release yet.

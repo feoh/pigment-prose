@@ -14,6 +14,8 @@ The [product brief](product-brief.md) sets scope and invariants; the [art rubric
 | 21–22, 24 — Platform expansion | Validate/package Windows and macOS; full expanded-studio acceptance. | Evidence on actual supported GPU backends and packaging; no assumed cross-backend byte equality. |
 | 23 — Separate study | Investigate CPU-only feasibility after core contracts. | Recorded go/no-go decision and performance/quality costs; no automatic MVP fallback. |
 
+**Recorded outcomes.** 02 (2026-09-26): [architecture spike](architecture-spike.md). Rust + wgpu 30 compute painting over a 2.5D layered scene is recommended. Tiled output was bit-identical to single-image output up to 16K on the Linux RTX 4070 Ti (Vulkan). Direct3D 12 and Metal remain unverified.
+
 ## Control boundaries
 
 - **Form** controls the structural scene: ridge massing, lake/shore shape, terrain planes and vegetation placement/density. Composition variation is a separate seeded layout control; users can explore it without editing prose.
