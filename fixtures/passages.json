@@ -1,0 +1,12 @@
+[
+  {"id": "shore-a", "text": "A pebble rests by the shore."},
+  {"id": "shore-b", "text": "A pebble rests by the shores."},
+  {"id": "short", "text": "Blue dusk."},
+  {"id": "line-break", "text": "The path bends.\nThe evening waits."},
+  {"id": "punctuation", "text": "A comma, a dash — and silence."},
+  {"id": "accent", "text": "Café lumière près du lac."},
+  {"id": "non-latin", "text": "風が湖を渡る。"},
+  {"id": "emoji", "text": "Clouds drift ☁ above quiet water."},
+  {"id": "whitespace", "text": "  A lantern glows at dawn.  "},
+  {"id": "unrelated", "text": "A clock ticks behind the door."}
+]

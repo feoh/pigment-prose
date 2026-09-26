@@ -1,0 +1,26 @@
+# Milestones and decision gates
+
+The [product brief](product-brief.md) sets scope and invariants; the [art rubric](art-direction.md) defines the visual gate. Task numbers refer to the dependency-linked children of Witan project `wp-pigment-prose-3e96a6` (parent epic `tk-pigment-prose-deliver-the-gpu-accelerated-landsc-0c782c`). This document is a roadmap, **not a claim that any feature or platform works**.
+
+| Stage | Work | Exit evidence / gate |
+| --- | --- | --- |
+| 01 — Durable spec | Create the local repository, agree product/art rules, and check in synthetic passages. | Documents and ten fixtures reviewed; no backend or UI chosen. |
+| 02 — Architecture experiment | Compare a fixed scenic painting pipeline with feasible alternatives; prototype candidate GPU rendering (Rust/wgpu is one candidate), paint layering and off-axis/tiled continuity on Linux RTX 4070. | Measured feasibility, license/dependency notes and a recorded backend choice or explicit unresolved risks; do not assume CPU fallback or Windows/macOS validation. |
+| 03–04 — Core contracts | Define tested modules, text normalization, versioned recipes and independent seed streams. | Round-trip recipes, stream isolation and deterministic structural tests on the chosen implementation. |
+| 05–07 — First visual prototype | Compose terrain and lake, then coherent color planes, watercolor washes, woods and rocks. | Multi-seed and variation contact sheet with settings and failed examples against the art rubric. |
+| **08 — User visual gate** | Present multiple seeds and variants to the user, collect specific revision notes. | **Explicit user approval of visual quality** recorded before tasks 09–15; if rejected, iterate 05–07 and re-review. Automation cannot waive this gate. |
+| 09–15 — Linux MVP | Seamless bounded-memory tiled export; private versioned recipe persistence; non-blocking desktop preview; control wiring; progress/cancellation; regression/privacy/performance checks; Linux packaging and license audit. | Measured 4K/8K/custom, multi-aspect outputs without seams, recipe reload and privacy tests, plus actual Linux GPU validation. |
+| 16–20 — Later landscapes | Biome-sensitive seasons, shared biome profiles, then distinct desert, tundra and jungle. | Coherent silhouettes/palettes across cycles, reviewed per-biome rather than generic recolors. |
+| 21–22, 24 — Platform expansion | Validate/package Windows and macOS; full expanded-studio acceptance. | Evidence on actual supported GPU backends and packaging; no assumed cross-backend byte equality. |
+| 23 — Separate study | Investigate CPU-only feasibility after core contracts. | Recorded go/no-go decision and performance/quality costs; no automatic MVP fallback. |
+
+## Control boundaries
+
+- **Form** controls the structural scene: ridge massing, lake/shore shape, terrain planes and vegetation placement/density. Composition variation is a separate seeded layout control; users can explore it without editing prose.
+- **Paint Handling** controls mark scale, wash transparency, pigment granulation, soft/hard edge selection and gouache accents. These controls should not change scene geometry. Independent random streams prevent paint tweaks from perturbing terrain or trees.
+- **Palette and atmosphere** alter color, lighting/haze and depth appearance while preserving geography, shoreline, ridge silhouette and vegetation positions. Verify with structural snapshots before/after; visual overlap alone is not a sufficient test.
+- Seasons and biome selectors are **later** controls, not part of the initial first-scene prototype. Only implement controls within their designated tasks; don't add UI affordances for unimplemented behaviors.
+
+## Non-goals and constraints
+
+No semantic prompting, training or inclusion of reference art; no mandatory cloud, watermark or attribution; no navigable 3D world, animals or buildings in the first scene. No promise of CPU-only MVP operation, chosen GPU/UI stack, exact cross-hardware pixels, bundled-art rights, or Windows/macOS support before real validation. A local Git repository is not a GitHub publication. Ship only audited assets/dependencies and omit original prose from exported image metadata by default.
