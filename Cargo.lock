@@ -705,6 +705,7 @@ dependencies = [
  "pigment-core",
  "pigment-gpu",
  "png",
+ "serde_json",
 ]
 
 [[package]]

@@ -66,7 +66,7 @@ From the command line: `pigment-prose export --out FILE.png (--recipe R.recipe.j
 
 | Test | Where | What it proves |
 | --- | --- | --- |
-| `tiled_png_export_equals_the_single_tile_render` | `crates/pigment-io/tests/gpu_export.rs` (hardware) | Decoded exports with 256 px row-major, 333 px reverse and budget-derived tiles equal the single-tile render **byte for byte**, for 3 scenes (river valley, lake with rocks, framing ridges) × looseness 0/0.4/1, including wide washes, tile-crossing trees and rocks, and corners. Tolerance: exact, same device (tier 2). |
+| `tiled_png_export_equals_the_single_tile_render` | `crates/pigment-io/tests/gpu_export.rs` (hardware) | Decoded exports with 256 px row-major, 333 px reverse-order and budget-derived tiles (a single tile at this size) equal the single-tile render **byte for byte**, for 3 scenes (river valley, lake with rocks, framing ridges) × looseness 0/0.4/1, including wide washes, tile-crossing trees and rocks, and corners. Tolerance: exact, same device (tier 2). |
 | `eight_k_export_keeps_the_preview_composition` | same | Real 7680×4320 export: decoded size, chunk list, and the 8×-downsampled image vs the 960×540 preview: **PSNR 34.0 dB** (floor 24 dB, as for `painting_agrees_across_resolutions`) |
 | `custom_portrait_export_keeps_the_preview_composition` | same | 3000×4000 with 1000 px reverse-order tiles vs the 600×800 preview: **PSNR 32.1 dB** |
 | `cancelled_export_leaves_the_old_file_and_no_partial` | same | Cancel after 2 tiles on the GPU |

@@ -342,3 +342,142 @@ fn impossible_budgets_and_bad_destinations_are_errors() {
     assert!(e.to_string().contains("aspect ratio"), "{e}");
     assert!(dir.entries().is_empty());
 }
+
+fn fnv(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| {
+        (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
+/// A preview-size request for `doc`, as the contact sheet renders cells.
+fn document_request(doc: &pigment_io::Document, policy: TilePolicy) -> RenderRequest {
+    let r = doc.recipe();
+    let scene = LakeshoreGenerator
+        .generate(&doc.seeds(), &r.form, r.frame.aspect())
+        .unwrap();
+    RenderRequest {
+        id: IDS.next(),
+        purpose: RenderPurpose::Export,
+        scene: Arc::new(scene),
+        seeds: doc.seeds(),
+        appearance: doc.appearance(),
+        target: RenderTarget {
+            width: r.frame.width,
+            height: r.frame.height,
+            policy,
+            order: TileOrder::RowMajor,
+        },
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn approved_recipes_repaint_identically_after_save_and_load() {
+    // Every task 08 baseline recipe, saved and reopened, paints the same
+    // pixels as the original file. On the baseline device (RTX 4070 Ti,
+    // Vulkan) they must also match the approved image hashes.
+    let dir = Scratch::new("baseline-paint");
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-08");
+    let label = renderer_label();
+    let baseline_device = label == "NVIDIA GeForce RTX 4070 Ti (Vulkan)";
+    let mut checked = 0;
+    for sheet in [
+        "corpus-16x9",
+        "corpus-9x16",
+        "corpus-1x1",
+        "round-06-scenes",
+    ] {
+        let notes = std::fs::read_to_string(base.join(format!("{sheet}.txt"))).unwrap();
+        let mut lines = notes.lines().skip_while(|l| !l.starts_with("cell\t"));
+        let header: Vec<&str> = lines.next().unwrap().split('\t').collect();
+        let fnv_col = header.iter().position(|h| *h == "image fnv").unwrap();
+        for line in lines.filter(|l| !l.trim().is_empty()) {
+            let f: Vec<&str> = line.split('\t').collect();
+            let cell: usize = f[0].parse().unwrap();
+            let path = base.join(sheet).join(format!("{cell:02}.recipe.json"));
+            let (original, _) = pigment_io::Document::open(&path).unwrap();
+            let copy = dir.0.join("copy.recipe.json");
+            original.clone().save_as(&copy).unwrap();
+            let (reopened, _) = pigment_io::Document::open(&copy).unwrap();
+            let a = render_memory(&document_request(&original, TilePolicy::Single));
+            let b = render_memory(&document_request(
+                &reopened,
+                TilePolicy::Fixed { edge: 128 },
+            ));
+            assert!(a == b, "{sheet} {cell}: reopened recipe paints differently");
+            if baseline_device {
+                let mut sink = MemorySink::default();
+                renderer()
+                    .render(
+                        &document_request(&reopened, TilePolicy::Single),
+                        &CancelToken::new(),
+                        &mut NoProgress,
+                        &mut sink,
+                    )
+                    .unwrap();
+                assert_eq!(
+                    format!("{:016x}", fnv(&sink.rgba8)),
+                    f[fnv_col],
+                    "{sheet} {cell}: differs from the approved baseline"
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 47);
+    if !baseline_device {
+        eprintln!(
+            "{label} is not the baseline device: checked reopened == original only, \
+             not the approved image hashes"
+        );
+    }
+}
+
+fn renderer_label() -> String {
+    // The renderer's report carries the device label.
+    let req = request(
+        "label probe",
+        Frame::new(64, 64).unwrap(),
+        TilePolicy::Single,
+    );
+    let mut sink = MemorySink::default();
+    renderer()
+        .render(&req, &CancelToken::new(), &mut NoProgress, &mut sink)
+        .unwrap()
+        .device
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn kept_prose_never_reaches_the_exported_png() {
+    const PROSE: &str = "Zebra lantern marigolds drift past the quiet jetty at dusk.";
+    let dir = Scratch::new("privacy");
+    let mut doc = pigment_io::Document::from_prose(PROSE, Frame::new(1600, 900).unwrap()).unwrap();
+    doc.set_keep_source_text(true);
+    let recipe_path = dir.0.join("kept.recipe.json");
+    doc.save_as(&recipe_path).unwrap();
+    assert!(
+        std::fs::read_to_string(&recipe_path)
+            .unwrap()
+            .contains(PROSE)
+    );
+    let (doc, _) = pigment_io::Document::open(&recipe_path).unwrap();
+    assert_eq!(doc.prose(), Some(PROSE));
+    let png = dir.0.join("out.png");
+    export(&document_request(&doc, TilePolicy::default_export()), &png);
+    assert_clean_metadata(&png);
+    let bytes = std::fs::read(&png).unwrap();
+    for needle in [
+        "Zebra",
+        "zebra",
+        "marigold",
+        "jetty",
+        "source_text",
+        "recipe",
+    ] {
+        assert!(
+            !bytes.windows(needle.len()).any(|w| w == needle.as_bytes()),
+            "{needle} in the PNG"
+        );
+    }
+}

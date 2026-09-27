@@ -36,7 +36,9 @@ use crate::version;
 /// grows a byte to at most six (`\u001f`), so 8 MiB covers every valid file.
 pub const MAX_RECIPE_BYTES: usize = 8 << 20;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// `Debug` is written by hand so a kept `source_text` shows only its length:
+/// a recipe can be logged or appear in a test failure without its prose.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Recipe {
     /// Recipe format version (`version::RECIPE_SCHEMA_VERSION`).
@@ -55,6 +57,26 @@ pub struct Recipe {
     /// into exported images. Omitted from the file entirely when `None`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_text: Option<String>,
+}
+
+impl fmt::Debug for Recipe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let source = self
+            .source_text
+            .as_ref()
+            .map(|t| format!("<{} bytes>", t.len()));
+        f.debug_struct("Recipe")
+            .field("schema", &self.schema)
+            .field("versions", &self.versions)
+            .field("seed", &self.seed)
+            .field("frame", &self.frame)
+            .field("form", &self.form)
+            .field("painting", &self.painting)
+            .field("palette", &self.palette)
+            .field("atmosphere", &self.atmosphere)
+            .field("source_text", &source)
+            .finish()
+    }
 }
 
 /// Algorithms and versions that produced this recipe.
@@ -1078,5 +1100,15 @@ mod tests {
                 assert!(!shown.contains("zebra"), "{shown}");
             }
         }
+    }
+
+    #[test]
+    fn debug_shows_the_length_of_kept_source_text_only() {
+        let mut kept = sample();
+        kept.source_text = Some("zebra lantern".into());
+        let shown = format!("{kept:?}");
+        assert!(!shown.contains("zebra"), "{shown}");
+        assert!(shown.contains("<13 bytes>"), "{shown}");
+        assert!(format!("{:?}", sample()).contains("source_text: None"));
     }
 }

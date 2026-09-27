@@ -19,7 +19,7 @@ This document freezes the interfaces that tasks 04–23 build on. Where it says 
 | `crates/pigment-gpu/` | lib | wgpu adapter selection and capability reports, `GpuContext` (device, queue, device-lost and error scopes), the shared tile loop (`tiled.rs`), renderers implementing `pigment_core::request::Renderer`. | exists (smoke and scene debug renderers) |
 | `crates/pigment-gpu/tests/gpu_hardware.rs` | test | Hardware GPU suite, `#[ignore]` by default. | exists |
 | `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`, `contact-sheet` (task 05, debug views to PNG), `paint-bench`, `export` (task 09). Task 14 adds `bench`. | exists |
-| `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize, and the export job (09); recipe files and the document model (10). | exists (09); recipe files → 10 |
+| `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize, and the export job (09); recipe files and the document model (10). | exists (09, 10) |
 | `crates/pigment-studio/` → binary `pigment-studio` | bin | eframe/egui desktop app (11–13). | task 11 creates |
 | `spikes/gpu-tiles/` | separate Cargo project | Task 02 throwaway spike, excluded from the workspace. | frozen |
 
@@ -32,7 +32,8 @@ Dependency direction: `pigment-core` ← `pigment-gpu`, `pigment-core` ← `pigm
 | Text input gate | `text::check_source`, `text::MAX_SOURCE_BYTES` (1 MiB) | `crates/pigment-core/src/text.rs` | exists |
 | Normalized text | `text::NormalizedText` (length-only `Debug`) | same | exists (`text::normalize`, `nfc-lf-utf8/1`, task 04) |
 | SeedBundle | `seed::SeedBundle`, `TextDigest` (256-bit, hex), `Variation(u32)`, `Domain`, `StreamSeed(u64)` | `crates/pigment-core/src/seed.rs` | exists (`TextDigest::of`/`from_source`, `SeedBundle::derive`, `StreamSeed::rng` → `Rng`, `pigment-seed/1`, task 04) |
-| Recipe | `recipe::Recipe`, `RecipeVersions`, `RecipeSeed` | `crates/pigment-core/src/recipe.rs` | exists (`from_json`, `to_canonical_json`, `validate`, `seeds`, `version_notices`, `SCHEMA`; task 04); files → 10 |
+| Recipe | `recipe::Recipe`, `RecipeVersions`, `RecipeSeed` | `crates/pigment-core/src/recipe.rs` | exists (`from_json`, `to_canonical_json`, `validate`, `seeds`, `version_notices`, `SCHEMA`; task 04; redacted `Debug`) |
+| Recipe files and document | `pigment_io::{read_recipe, write_recipe, RecipeFileError, Document, SaveError}` | `crates/pigment-io/src/recipe_file.rs`, `document.rs` | exists (task 10, [recipe-files.md](recipe-files.md)) |
 | Scene | `scene::Scene` (with `light()`: `LightSide`), `SceneKey`, `SceneLayer` (with structural `shade`), `LayerRole` (incl. `Mountain`, `Cloud`), `CanvasPoint`, `SceneGenerator` | `crates/pigment-core/src/scene/mod.rs` | exists (plus diagnostic `TestCard` v1) |
 | Scene generator | `scene::lakeshore::{LakeshoreGenerator, Composition, Template}` | `crates/pigment-core/src/scene/lakeshore.rs` (+ `noise.rs`) | exists (task 05, [spec](scene-generation.md)) |
 | CPU reference raster | `scene::raster::{front_layers, role_coverage, empty_fraction, is_simple}` | `crates/pigment-core/src/scene/raster.rs` | exists |
@@ -198,7 +199,8 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 | --- | --- | --- |
 | `TextError::{Empty, WhitespaceOnly}` | `text::check_source` | inline prompt "enter some prose"; nothing is rendered or saved |
 | `TextError::TooLong` | same | inline message with the byte limit |
-| `ValidationError { field, problem }` | settings, frame, scene and recipe validation | name the field; the recipe is not applied (task 10 keeps the current document) |
+| `ValidationError { field, problem }` | settings, frame, scene and recipe validation | name the field; the recipe is not applied (`Document::replace_from_file` keeps the current document) |
+| `pigment_io::RecipeFileError::{Io, NotAFile, NotUtf8, Recipe}` | recipe open/save | the UI names the file; the message has no contents, prose or path ([samples](recipe-files.md#errors-and-redacted-diagnostics)) |
 | `RenderError::{NoAdapter, SoftwareOnly, NoAdapterMatches, DeviceRequest}` | `GpuContext::new` | blocking diagnostics screen with driver hints; a software adapter is never called hardware |
 | `RenderError::TilePlan`, `OutOfMemory` | renderer | export: retry with a smaller budget (09), then an actionable message |
 | `RenderError::DeviceLost` | `GpuContext::check_alive` | recreate the context; tell the user the preview was reset |
@@ -248,7 +250,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | 07 woodland, rocks, water | **Done** (round 6 review pending). Same renderer; placements are part of `Scene` (vegetation stream), never generated on the GPU per tile. Paint-level marks (stand ages, emergents) hash canvas lattices; reflections and rock accents evaluate the scene at offset points, so no halo |
 | 08 visual gate | `docs/visual-review/`, contact sheets from `pigment-prose contact-sheet` |
 | 09 tiled PNG export | **Done.** Spec: [export.md](export.md); evidence: [evidence/export-09](evidence/export-09/README.md). `pigment-io/src/png_sink.rs` (`PngSink: TileSink`, streaming, `IEND` check), `atomic.rs` (`AtomicFile`, also for task 10), `export.rs` (`export_png`, `ExportSize`, OOM retry); `TileOrder` on `RenderTarget`; `pigment-prose export`; hardware suite `crates/pigment-io/tests/gpu_export.rs` |
-| 10 recipe persistence | `crates/pigment-io/src/recipe_file.rs`, `document.rs` (dirty state, path); privacy per `Recipe::source_text` |
+| 10 recipe persistence | **Done.** Spec: [recipe-files.md](recipe-files.md). `pigment-io/src/recipe_file.rs` (size-limited read, atomic `write_recipe`, redacted `RecipeFileError`), `document.rs` (`Document`: prose in memory, `keep_source_text` off by default, path, dirty state, validate-before-replace); `tests/recipes.rs` (47 baseline recipes, restart in a child process) |
 | 11 shell and preview | new `crates/pigment-studio/` (eframe/egui, `WgpuSetup::Existing` with `GpuContext`); render worker on `job::Mailbox`; `PreviewState`; diagnostics panel from `GpuCapabilities` |
 | 12 controls | `pigment-studio/src/controls.rs` generated from `settings::CONTROLS`; `Invalidation::between` decides what reruns |
 | 13 export UI | `pigment-studio/src/export_dialog.rs`; `Frame::new` validation; progress from `job::Progress` |
