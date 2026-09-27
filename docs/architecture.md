@@ -9,7 +9,7 @@ This document freezes the interfaces that tasks 04–23 build on. Where it says 
 - **Rust 1.98** (pinned in `rust-toolchain.toml`), edition 2024, one Cargo workspace. `Cargo.lock` is committed. Dependencies are declared once in `[workspace.dependencies]` with exact minimum versions (`wgpu = "30.0.1"`), and the lock file pins the full graph. Build with `--locked`.
 - **wgpu 30.0.1**, WebGPU core features only, device limits `wgpu::Limits::default()`.
 - **eframe/egui 0.36** desktop shell (task 11), sharing the renderer's device.
-- **Licenses (survey, not the task 15 audit):** the 72 third-party crates resolved for Linux (`cargo metadata --filter-platform x86_64-unknown-linux-gnu`) are all permissive: MIT and/or Apache-2.0, with Zlib, ISC, BSD-2-Clause, Unicode-3.0 and Unlicense options. No copyleft. egui/eframe and rfd, added in task 11, are MIT OR Apache-2.0 and MIT.
+- **Licenses (survey, not the task 15 audit):** the 72 third-party crates resolved for Linux (`cargo metadata --filter-platform x86_64-unknown-linux-gnu`) are all permissive: MIT and/or Apache-2.0, with Zlib, ISC, BSD-2-Clause, Unicode-3.0 and Unlicense options. No copyleft. **Task 11 update:** with eframe/egui 0.36.2 the Linux graph is 256 crates, all permissive (MIT and/or Apache-2.0, Zlib, BSD, ISC, 0BSD, Unlicense, Unicode-3.0). `self_cell` is dual `Apache-2.0 OR GPL-2.0-only` and is used under Apache-2.0. `epaint_default_fonts` bundles fonts under **OFL-1.1** (Noto Emoji) and the **Ubuntu Font Licence 1.0** (Ubuntu-Light), plus MIT/Bitstream (Hack) and MIT (emoji icons). Those need their notices shipped with the app (task 15) and impose nothing on exported images. rfd is not added until the file dialogs (tasks 12–13).
 
 ## Workspace layout
 
