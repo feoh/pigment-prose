@@ -816,6 +816,7 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
             // Each stand has its own age (crown size).
             let age = exp2(-0.45 + 0.9 * hash3(i32(l), 0, 409u));
             rgb = plant_color(plant, c, depth, shade, layers[4u * l + 1u], age);
+            rgb = grass_over_base(rgb, l, c, depth, shade);
         }
         case R_WATER: {
             rgb = col(WATER_FAR); // painted by `water`
@@ -832,9 +833,7 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
         case R_ROCK: {
             // Stronger plane contrast: rocks are the solid forms up front.
             rgb = shaded(ROCK, clamp((shade - 0.5) * 1.8 + 0.5, 0.0, 1.0));
-            // Moss gathers in the shadowed, lower parts of the planes.
-            let moss = smoothstep(0.62, 0.72, fbm(c, 0.03 * P.handling.z, 3u, 91u)) * (1.0 - shade);
-            rgb = mix(rgb, col(MOSS) * (0.6 + 0.6 * shade), 0.7 * moss);
+            rgb = mossy(rgb, c, shade);
             rgb = rock_edges(rgb, c);
         }
         default: {
@@ -858,6 +857,46 @@ fn aerial(rgb: vec3<f32>, role: u32, depth: f32) -> vec3<f32> {
     }
     let haze = mix(col(HAZE), col(SKY_HORIZON), 0.4);
     return mix(rgb, haze, amt);
+}
+
+// Meadow grass growing up over the base of a near stand, so it stands in
+// the meadow rather than on a ruled line: ragged blades 0.003–0.011 canvas
+// units tall (the point that far below is outside the stand).
+fn grass_over_base(rgb: vec3<f32>, l: u32, c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
+    if (depth > 0.3) {
+        return rgb;
+    }
+    let blades = fbm(vec2<f32>(c.x * 3.0, c.y * 0.5), 0.006, 3u, 311u);
+    let tall = 0.003 + 0.008 * smoothstep(0.3, 0.8, blades);
+    if (inside(l, c + vec2<f32>(0.0, tall))) {
+        return rgb;
+    }
+    let resolve = smoothstep(1.0, 2.5, tall / P.look.w);
+    return mix(rgb, meadow_color(c, depth, shade), 0.9 * resolve);
+}
+
+// Moss on a rock: soft cushions that follow the form rather than patches
+// with ruled edges. It gathers on the shadowed planes, at the rock's foot
+// and along its top, fades out through a feathered fringe of speckles,
+// and is tufted from yellow-green where lit to deep green in its hollows.
+fn mossy(rgb: vec3<f32>, c: vec2<f32>, shade: f32) -> vec3<f32> {
+    let s = P.handling.z;
+    // Where moisture keeps moss: shadowed planes, the foot, the top.
+    let foot = select(0.0, 1.0, role_of(front_layer(c + vec2<f32>(0.0, 0.012))) != R_ROCK);
+    let top = select(0.0, 1.0, role_of(front_layer(c - vec2<f32>(0.0, 0.008))) != R_ROCK);
+    let damp = 0.45 * (1.0 - shade) + 0.3 * foot + 0.2 * top;
+    // Warped, multi-scale cover with a fine, fibrous fringe.
+    let warp = vec2<f32>(fbm(c, 0.03 * s, 2u, 92u), fbm(c + vec2<f32>(3.1, 7.7), 0.03 * s, 2u, 93u)) - 0.5;
+    let broad = fbm(c + 0.02 * s * warp, 0.035 * s, 4u, 91u);
+    let fringe = fbm(c, 0.004 * s, 2u, 94u) - 0.5;
+    let cover = smoothstep(0.3, 0.65, broad + 0.6 * damp - 0.15 + 0.3 * fringe);
+    // Tufts: bright on their lit tops, deep in between.
+    let tuft = crown_field(c, 0.0035 * s, 95u);
+    let tuft_res = smoothstep(2.0, 4.0, 0.0035 * s / P.look.w);
+    let bright = mix(col(MOSS), col(FOLIAGE_WARM), 0.45) * (0.85 + 0.35 * shade);
+    let deep = mix(col(MOSS), col(FOLIAGE_COOL), 0.35) * 0.55;
+    let moss = mix(mix(deep, bright, 0.55), mix(deep, bright, smoothstep(0.2, 0.9, tuft.y) * tuft.x + 0.2), tuft_res);
+    return mix(rgb, moss, 0.9 * cover);
 }
 
 // Selective accents on a rock (gouache): a lit rim where its edge faces the

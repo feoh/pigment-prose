@@ -1013,7 +1013,10 @@ impl<'a> Builder<'a> {
                 .iter()
                 .map(|&i| {
                     let x = xs[i];
-                    top[i] - tree * envelope((x - a) / (b - a)) * canopy(plant, wood_seed, x, wl)
+                    top[i]
+                        - tree
+                            * stand_envelope(plant, (x - a) / (b - a))
+                            * canopy(plant, wood_seed, x, wl)
                 })
                 .collect();
             let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.8 * tree + 0.001).collect();
@@ -1421,7 +1424,9 @@ impl<'a> Builder<'a> {
                 .iter()
                 .zip(&wl)
                 .map(|(&x, &y)| {
-                    y - tall * envelope((x - a) / (b - a)) * canopy(plant, seed, x, crown)
+                    y - tall
+                        * stand_envelope(plant, (x - a) / (b - a))
+                        * canopy(plant, seed, x, crown)
                 })
                 .collect();
             let bottom: Vec<f64> = wl.iter().map(|y| y + 0.006).collect();
@@ -1597,7 +1602,9 @@ impl<'a> Builder<'a> {
                 .iter()
                 .zip(&sy)
                 .map(|(&x, &y)| {
-                    y - tall * envelope((x - a) / (b - a)) * canopy(plant, seed, x, crown)
+                    y - tall
+                        * stand_envelope(plant, (x - a) / (b - a))
+                        * canopy(plant, seed, x, crown)
                 })
                 .collect();
             let bottom: Vec<f64> = sy.iter().map(|y| y + 0.02).collect();
@@ -1860,6 +1867,18 @@ fn envelope(s: f64) -> f64 {
     (1.0 - q * q).max(0.0)
 }
 
+/// A stand's outline across its width, `s` in `[0, 1]`. Trees keep the
+/// flat-topped quartic; shrubland is a rounded dome, so its ends slope
+/// down instead of ending in steep sides.
+fn stand_envelope(p: Plant, s: f64) -> f64 {
+    if p == Plant::Shrub {
+        let q = 2.0 * s - 1.0;
+        (1.0 - q * q).max(0.0)
+    } else {
+        envelope(s)
+    }
+}
+
 /// Scalloped tree-crown edge in `(0, 1]`: rounded bumps of wavelength
 /// about `wl` with per-crown heights; continuous at the cusps.
 fn crowns(seed: u64, x: f64, wl: f64) -> f64 {
@@ -1906,7 +1925,9 @@ fn canopy(p: Plant, seed: u64, x: f64, wl: f64) -> f64 {
     let hv = (0.55 + 0.45 * unit(seed, k as i64)) * age_mul;
     match p {
         Plant::Conifer => 0.3 + 0.7 * (1.0 - c.abs()) * hv,
-        Plant::Shrub => 0.72 + 0.28 * (1.0 - c * c) * hv,
+        // Separate rounded clumps of different sizes, not one even hedge
+        // (round 6: a flat-topped stand read as a mossy block).
+        Plant::Shrub => 0.4 + 0.6 * (1.0 - c * c) * hv,
         Plant::Birch => 0.55 + 0.45 * (1.0 - c * c) * hv,
         Plant::Broadleaf | Plant::Copper | Plant::Flowering => {
             0.5 + 0.5 * (1.0 - c * c).sqrt() * hv
@@ -2138,9 +2159,9 @@ mod tests {
     #[test]
     fn checksums_are_frozen() {
         // Exact arithmetic only, so these hold on every OS; portable CI
-        // checks them on Linux, Windows and macOS. GENERATOR_VERSION is 0
-        // (pre-approval): update them freely until the task 08 visual gate,
-        // after which any change needs a version bump.
+        // checks them on Linux, Windows and macOS. They freeze
+        // GENERATOR_VERSION 1, approved at the task 08 visual gate: any
+        // change needs a version bump.
         let c = corpus();
         let get = |id: &str| &c.iter().find(|(i, _)| i == id).unwrap().1;
         let got = [
@@ -2169,7 +2190,7 @@ mod tests {
     }
 
     const FROZEN: [u64; 3] = [
-        0xbf9b_dd70_d80d_c80a,
+        0xebcb_4eee_d400_1f03,
         0xb4ed_d2da_c120_3e96,
         0x18b6_7727_ba4c_9b0d,
     ];

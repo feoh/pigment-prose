@@ -24,7 +24,8 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | GPU smoke test | `cargo run --release -p pigment-cli -- gpu-smoke [--width W --height H --tile T --adapter NAME]` |
 | Contact sheet (paintings or debug views) | `cargo run --release -p pigment-cli -- contact-sheet --out SHEET.png [--aspect 9:16] [--view paint\|flat\|regions] [--sample N \| --samples I,J] [--palette ID --haze H ...]`; see [docs/visual-review/](docs/visual-review/) |
 | Painting benchmark | `cargo run --release -p pigment-cli -- paint-bench [--sizes 960,1920,3840] [--sample N] [--stress] [--adapter NAME]` |
-| Settings side-by-side | `contact-sheet ... --vary KEY=V1,V2` (for example `--vary wash=0,0.25,1`) |
+| Settings side-by-side | `contact-sheet ... --vary KEY=V1,V2` (paint or form keys, for example `--vary wash=0,0.25,1` or `--vary relief=0,1`) |
+| Individual images with recipes | `contact-sheet ... --cells DIR` writes `DIR/NN.png` and `DIR/NN.recipe.json` (no source text) |
 | Hardware test suite only | `cargo test --release --locked -p pigment-gpu --test gpu_hardware -- --ignored --test-threads=1` |
 
 `scripts/gpu-tests.sh` builds the CLI, prints `gpu-info`, runs `gpu-smoke` and then the ignored hardware tests. It exits non-zero if any step fails. **A machine without a hardware GPU fails these checks; it never skips them into a pass.** A software rasterizer is refused by default. With `--allow-software` it runs, labelled SOFTWARE, and `gpu-smoke` still exits non-zero.
@@ -54,4 +55,4 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 
 ## Repository
 
-This is a private project. Do not publish releases, packages or crates. Pushing to the private GitHub remote requires the owner's go-ahead. The project source is licensed under the [MIT License](LICENSE). That covers the code only; it adds no watermark, attribution or other terms to images the application exports.
+This is a private project. Do not publish releases, packages or crates. The owner's standing go-ahead (2026-09-27): push to the private GitHub remote at the end of each major section or task, without asking. The project source is licensed under the [MIT License](LICENSE). That covers the code only; it adds no watermark, attribution or other terms to images the application exports.

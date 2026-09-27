@@ -208,7 +208,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 ## Versioning and compatibility
 
 - `RECIPE_SCHEMA_VERSION` = 1. A recipe with a **newer** schema is rejected with a clear message. An older schema loads only through an explicit, tested migration. No invented migrations ([migration limits](seeds-and-recipes.md#versions-and-migration-limits)).
-- `GENERATOR_VERSION` and `RENDERER_VERSION` start at **0 = pre-approval**: fixtures and images may change without a bump until the task 08 visual gate. After approval they become 1. From then on, **any** change to scene checksums for the same key bumps `GENERATOR_VERSION`, and any intentional pixel change on the same device bumps `RENDERER_VERSION`.
+- `GENERATOR_VERSION` and `RENDERER_VERSION` started at **0 = pre-approval**: fixtures and images could change without a bump until the task 08 visual gate. **Both became 1 at the gate (2026-09-27)**, with the approved baseline in [visual-review/baseline-08](visual-review/baseline-08/README.md). From then on, **any** change to scene checksums for the same key bumps `GENERATOR_VERSION`, and any intentional pixel change on the same device bumps `RENDERER_VERSION`.
 - The app ships exactly **one** generator and one renderer. It does not keep old versions alive. A recipe whose recorded versions differ opens with a visible notice ("made with generator vN; this version may compose/paint differently"). The recorded versions update only when the user saves.
 - `NORMALIZATION_ID` (`nfc-lf-utf8/1`) and `SEED_ALGORITHM_ID` (`pigment-seed/1`) name the algorithms. Changing either one creates a new identifier, never a silent change.
 

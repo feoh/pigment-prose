@@ -1,0 +1,12 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v1, renderer v1, view paint, aspect 16:9, cell 400x225, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)	image fnv
+1	sample passage 15 faceting=0	high-vantage	false	37	11934	3d64516c625f6b3b	0.23	10	11	0.54	0.00	0.05	0.63	0.74	18.4 0.5 1.1 49.2 14.9 0.2 0.4 0.0 10.7 4.6	478942c76550fedc
+2	sample passage 15 faceting=1	high-vantage	false	41	11920	ea097844e053c1ad	0.22	10	11	0.54	0.00	0.06	0.65	0.74	18.9 0.9 1.2 49.1 14.9 0.2 0.4 0.0 8.3 6.1	111ddfd0aa710a61
+3	sample passage 33 faceting=0	high-vantage	true	28	9592	7721536185c04fb4	0.27	18	9	0.55	0.00	0.07	0.75	0.75	13.2 1.1 2.3 49.5 16.5 0.2 0.1 0.0 10.5 6.6	dd247fbf8f0adb22
+4	sample passage 33 faceting=1	high-vantage	true	30	9598	8f686f5896412555	0.27	19	9	0.55	0.00	0.07	0.75	0.75	14.2 2.0 2.4 49.5 16.4 0.2 0.1 0.0 8.2 7.0	c0ca244966e3fc3f
+5	sample passage 8 faceting=0	framing-ridges	false	54	11320	d196eb572f8118d0	0.36	6	3	0.22	0.01	0.12	0.73	0.54	24.0 0.2 1.7 3.7 20.7 17.2 1.6 1.8 17.1 12.1	ec27ef2f0ed601c5
+6	sample passage 8 faceting=1	framing-ridges	false	58	11318	fcce4b6dadc96cc8	0.36	6	4	0.22	0.01	0.13	0.73	0.53	26.2 0.8 1.5 3.7 20.7 17.1 1.5 1.9 13.9 12.7	dee1b615d3df87fd
+7	sample passage 16 faceting=0	peak-over-water	false	47	10549	3807fa943fa4c424	0.30	5	3	0.31	0.03	0.04	0.54	0.28	36.6 0.4 1.9 0.0 30.1 9.1 1.6 2.1 13.9 4.3	76fd9291ba84eb02
+8	sample passage 16 faceting=1	peak-over-water	false	50	10373	bb705b76bfa1cb39	0.30	5	3	0.31	0.03	0.04	0.54	0.28	39.0 1.5 1.9 0.0 30.1 9.0 1.6 2.3 10.4 4.3	4a06ee1e2a322871

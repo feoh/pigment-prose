@@ -12,6 +12,7 @@ use pigment_core::capability::{AdapterPolicy, AdapterReport};
 use pigment_core::frame::AspectRatio;
 use pigment_core::frame::Frame;
 use pigment_core::job::{CancelToken, NoProgress, Progress};
+use pigment_core::recipe::Recipe;
 use pigment_core::request::{
     MemorySink, RenderOutcome, RenderPurpose, RenderReport, RenderRequest, RenderTarget, Renderer,
     RequestIds,
@@ -46,7 +47,7 @@ pigment-prose <command> [options]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
             [--palette lakeshore|golden-evening] [--looseness L] [--wash W]
             [--haze H] [--intensity I] [--marks M] [--grain G] [--granulation G]
-            [--vary KEY=V1,V2,...]
+            [--vary KEY=V1,V2,...] [--cells DIR]
       Render lakeshore scenes (painted, or the structure debug views) into a
       grid PNG, plus SHEET.txt listing each cell's passage id,
       variation, template, geometry checksum and visible coverage by role.
@@ -55,8 +56,11 @@ pigment-prose <command> [options]
       listed sample seeds in the given order (for rating rounds).
       Cells are numbered in their corner from --first (default 1), so
       numbers can run on across the sheets of one review round.
-      --vary renders every cell once per value of one paint setting (KEY is
-      a paint option name above, e.g. wash=0,1), one row per cell.
+      --vary renders every cell once per value of one setting (KEY is a
+      form or paint option name above, e.g. wash=0,1 or relief=0,1), one row
+      per cell. --cells also writes each cell as DIR/NN.png with the recipe
+      that reproduces it (DIR/NN.recipe.json, no source text); the notes
+      end with each image's FNV-1a hash.
       Defaults: 16:9, paint, cell 480 px long side, variation 0, 5 columns,
       form and paint settings at their defaults.
   paint-bench [--sizes 960,1920,3840] [--sample N] [--aspect W:H] [--runs R]
@@ -406,8 +410,24 @@ fn gpu_smoke(o: &Opts) -> Result<(), String> {
 
 struct Cell {
     label: String,
+    digest: TextDigest,
+    variation: u32,
     seeds: SeedBundle,
+    form: FormSettings,
     appearance: Appearance,
+}
+
+/// Applies one `contact-sheet` form option (`--faceting` etc.) by name.
+fn set_form(f: &mut FormSettings, key: &str, v: &str) -> Result<bool, String> {
+    let num =
+        || -> Result<f64, String> { v.parse().map_err(|_| format!("--{key}: bad number {v:?}")) };
+    match key {
+        "faceting" => f.faceting = num()?,
+        "relief" => f.relief = num()?,
+        "density" => f.woodland_density = num()?,
+        _ => return Ok(false),
+    }
+    Ok(true)
 }
 
 /// Applies one `contact-sheet` paint option (`--looseness` etc.) by name.
@@ -493,6 +513,10 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     let cell: u32 = o.num("cell", 480)?;
     let cols_opt: Option<usize> = o.0.get("cols").map(|_| o.num("cols", 5)).transpose()?;
     let first: usize = o.num("first", 1)?;
+    let cells_dir = o.0.get("cells").map(std::path::Path::new);
+    if let Some(dir) = cells_dir {
+        std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    }
     let variation: u32 = o.num("variation", 0)?;
     let form = FormSettings {
         faceting: o.num("faceting", FormSettings::default().faceting)?,
@@ -500,9 +524,16 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         woodland_density: o.num("density", FormSettings::default().woodland_density)?,
     };
     form.validate().map_err(|e| e.to_string())?;
-    let derive = |text: &str, v: u32| -> Result<SeedBundle, String> {
+    let make = |label: String, text: &str, v: u32| -> Result<Cell, String> {
         let digest = TextDigest::from_source(text).map_err(|e| e.to_string())?;
-        Ok(SeedBundle::derive(digest, Variation(v)))
+        Ok(Cell {
+            label,
+            digest,
+            variation: v,
+            seeds: SeedBundle::derive(digest, Variation(v)),
+            form,
+            appearance,
+        })
     };
     let passages =
         o.0.get("passages")
@@ -515,11 +546,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
                 .parse()
                 .map_err(|_| format!("--samples {list:?}: bad number {part:?}"))?;
             let label = format!("sample passage {i}");
-            cells.push(Cell {
-                seeds: derive(&label, variation)?,
-                label,
-                appearance,
-            });
+            cells.push(make(label.clone(), &label, variation)?);
         }
     } else if let Some(n) = o.0.get("sample") {
         let n: u32 = n
@@ -527,11 +554,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             .map_err(|_| format!("--sample {n:?}: bad number"))?;
         for i in 0..n {
             let label = format!("sample passage {i}");
-            cells.push(Cell {
-                seeds: derive(&label, variation)?,
-                label,
-                appearance,
-            });
+            cells.push(make(label.clone(), &label, variation)?);
         }
     } else if let Some(id) = o.0.get("passage") {
         let n: u32 = o.num("variations", 10)?;
@@ -540,19 +563,11 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             .find(|(pid, _)| pid == id)
             .ok_or_else(|| format!("no passage {id:?} in {passages}"))?;
         for v in 0..n {
-            cells.push(Cell {
-                label: format!("{id} v{v}"),
-                seeds: derive(&text, v)?,
-                appearance,
-            });
+            cells.push(make(format!("{id} v{v}"), &text, v)?);
         }
     } else {
         for (id, text) in corpus(passages)? {
-            cells.push(Cell {
-                label: format!("{id} v{variation}"),
-                seeds: derive(&text, variation)?,
-                appearance,
-            });
+            cells.push(make(format!("{id} v{variation}"), &text, variation)?);
         }
     }
     if cells.is_empty() {
@@ -568,12 +583,18 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         let mut varied = Vec::new();
         for c in &cells {
             for v in &values {
-                let mut appearance = c.appearance;
-                set_paint(&mut appearance, key, v)?;
+                let (mut appearance, mut form) = (c.appearance, c.form);
+                if !set_form(&mut form, key, v)? {
+                    set_paint(&mut appearance, key, v)?;
+                }
                 appearance.validate().map_err(|e| e.to_string())?;
+                form.validate().map_err(|e| e.to_string())?;
                 varied.push(Cell {
                     label: format!("{} {key}={v}", c.label),
+                    digest: c.digest,
+                    variation: c.variation,
                     seeds: c.seeds,
+                    form,
                     appearance,
                 });
             }
@@ -605,7 +626,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     let mut notes = format!(
         "pigment-prose {} contact-sheet: lakeshore generator v{}, renderer v{}, view {}, aspect {}:{}, \
          cell {cw}x{ch}, form faceting={} relief={} woodland_density={}\nappearance: {appearance:?}\ndevice: {}\n\
-         cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\t{}\tcoverage % ({})\n",
+         cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\t{}\tcoverage % ({})\timage fnv\n",
         version::APP_VERSION,
         version::GENERATOR_VERSION,
         version::RENDERER_VERSION,
@@ -623,7 +644,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     for (i, c) in cells.iter().enumerate() {
         let scene = Arc::new(
             LakeshoreGenerator
-                .generate(&c.seeds, &form, aspect)
+                .generate(&c.seeds, &c.form, aspect)
                 .map_err(|e| format!("{}: {e}", c.label))?,
         );
         let comp = Composition::draw(&c.seeds, aspect);
@@ -643,6 +664,9 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         renderer
             .render(&req, &CancelToken::new(), &mut NoProgress, &mut sink)
             .map_err(|e| e.to_string())?;
+        if let Some(dir) = cells_dir {
+            write_cell(dir, first + i, c, cw, ch, &sink.rgba8)?;
+        }
         let (col, row) = ((i % cols) as u32, (i / cols) as u32);
         let (ox, oy) = (GAP + col * (cw + GAP), GAP + row * (ch + GAP));
         for y in 0..ch {
@@ -664,7 +688,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         let cov = raster::role_coverage(&scene, 160, 160);
         let verts: usize = scene.layers().iter().map(|l| l.outline.len()).sum();
         notes.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\t{}\t{:016x}\n",
             first + i,
             c.label,
             comp.template.name(),
@@ -673,18 +697,10 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             scene.geometry_checksum(),
             metrics::measure(&scene).columns(),
             cov.map(|v| format!("{:.1}", v * 100.0)).join(" "),
+            fnv(&sink.rgba8),
         ));
     }
-    let file = std::fs::File::create(out).map_err(|e| format!("creating {out}: {e}"))?;
-    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), sw, sh);
-    enc.set_color(png::ColorType::Rgb);
-    enc.set_depth(png::BitDepth::Eight);
-    enc.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
-    let mut writer = enc.write_header().map_err(|e| format!("{out}: {e}"))?;
-    writer
-        .write_image_data(&sheet)
-        .map_err(|e| format!("{out}: {e}"))?;
-    writer.finish().map_err(|e| format!("{out}: {e}"))?;
+    write_png(std::path::Path::new(out), sw, sh, &sheet)?;
     let txt = std::path::Path::new(out).with_extension("txt");
     std::fs::write(&txt, notes).map_err(|e| format!("writing {}: {e}", txt.display()))?;
     println!(
@@ -847,6 +863,50 @@ fn stress_scene(aspect: AspectRatio) -> Result<Scene, String> {
         .collect();
     let key = SceneKey::new(0, &diagnostic_seeds(1), FormSettings::default(), aspect);
     Scene::new(key, layers).map_err(|e| e.to_string())
+}
+
+/// Writes one sheet cell as `NN.png` plus `NN.recipe.json` (the recipe that
+/// reproduces it, without source text: the privacy default).
+fn write_cell(
+    dir: &std::path::Path,
+    n: usize,
+    c: &Cell,
+    w: u32,
+    h: u32,
+    rgba: &[u8],
+) -> Result<(), String> {
+    let png_path = dir.join(format!("{n:02}.png"));
+    let rgb: Vec<u8> = rgba
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|p| [p[0], p[1], p[2]])
+        .collect();
+    write_png(&png_path, w, h, &rgb)?;
+    let mut r = Recipe::new(c.digest, Frame::new(w, h).map_err(|e| e.to_string())?);
+    r.seed.variation = Variation(c.variation);
+    r.form = c.form;
+    r.painting = c.appearance.painting;
+    r.palette = c.appearance.palette;
+    r.atmosphere = c.appearance.atmosphere;
+    let json = r.to_canonical_json().map_err(|e| e.to_string())?;
+    let path = dir.join(format!("{n:02}.recipe.json"));
+    std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))
+}
+
+/// An 8-bit sRGB PNG with no text, time or EXIF chunks.
+fn write_png(path: &std::path::Path, w: u32, h: u32, rgb: &[u8]) -> Result<(), String> {
+    let shown = path.display();
+    let file = std::fs::File::create(path).map_err(|e| format!("creating {shown}: {e}"))?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), w, h);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+    let mut writer = enc.write_header().map_err(|e| format!("{shown}: {e}"))?;
+    writer
+        .write_image_data(rgb)
+        .map_err(|e| format!("{shown}: {e}"))?;
+    writer.finish().map_err(|e| format!("{shown}: {e}"))
 }
 
 /// 3×5 bitmap digits, one row per `u8` (bit 2 = left column).

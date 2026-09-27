@@ -110,7 +110,7 @@ Every key except `source_text` is required. There are no defaults, so a missing 
 | 5 | a setting outside its range, bad frame size or aspect | `Validation(ValidationError)`. Values are **rejected, never clamped**. |
 | 5 | `source_text` empty, blank or oversized | `SourceText(TextError)` |
 | 5 | `source_text` does not reproduce `seed.digest` | `SourceTextMismatch`. The digest is authoritative, and showing prose that is not the painting's would be wrong. |
-| — | `versions.generator` or `.renderer` differ from this build | **loads**. `Recipe::version_notices()` returns "made with generator v7; this version (v0) may compose differently" for the UI. |
+| — | `versions.generator` or `.renderer` differ from this build | **loads**. `Recipe::version_notices()` returns "made with generator v7; this version (v1) may compose differently" for the UI. |
 
 **No file contents in errors.** Paths are built only from schema key names. An unrecognized key or algorithm id is shown only if it is at most 64 characters from `[A-Za-z0-9_./-]`, and otherwise as `<unrecognized>` (`error::sanitized_key`). serde_json's own messages, which can quote values, are never passed through. Only their line, column and category are used. A test plants a marker string in every field position and checks every `Display` and `Debug` output.
 

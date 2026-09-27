@@ -17,11 +17,14 @@
 /// Recipe file format version understood by this build.
 pub const RECIPE_SCHEMA_VERSION: u32 = 1;
 
-/// Scene generator version. `0` = pre-approval, no cross-build promise.
-pub const GENERATOR_VERSION: u32 = 0;
+/// Scene generator version. `1` = the scene family approved at the task 08
+/// visual gate (2026-09-27); any geometry checksum change is a bump.
+pub const GENERATOR_VERSION: u32 = 1;
 
-/// Painting renderer version. `0` = pre-approval, no cross-build promise.
-pub const RENDERER_VERSION: u32 = 0;
+/// Painting renderer version. `1` = the painting approved at the task 08
+/// visual gate (2026-09-27, baseline in docs/visual-review/baseline-08/);
+/// any visible change on the same device is a bump.
+pub const RENDERER_VERSION: u32 = 1;
 
 /// Text normalization: NFC, then CRLF/CR to LF, as UTF-8 (`text::normalize`).
 pub const NORMALIZATION_ID: &str = "nfc-lf-utf8/1";
