@@ -14,17 +14,23 @@
 //! crate), never platform `f64::sin`/`exp`, whose results differ between
 //! operating systems (tier 1 in docs/architecture.md).
 //!
-//! Task 05 implements the product generator in `crates/pigment-core/src/scene/`
-//! (a `lakeshore` module) and may add layer roles and per-layer attributes;
-//! each such change bumps `GENERATOR_VERSION` and extends the checksum.
+//! The product generator is [`lakeshore::LakeshoreGenerator`] (task 05,
+//! documented in `docs/scene-generation.md`). [`raster`] is a CPU reference
+//! rasterizer and topology checker for tests and diagnostics.
+
+pub mod lakeshore;
+mod noise;
+pub mod raster;
 
 use crate::error::{Problem, ValidationError};
 use crate::frame::{AspectRatio, CanvasExtents};
 use crate::seed::{Domain, SeedBundle, StreamSeed};
 use crate::settings::FormSettings;
 
-pub const MAX_LAYERS: usize = 64;
+pub const MAX_LAYERS: usize = 96;
 pub const MAX_LAYER_VERTICES: usize = 4096;
+/// Bound on the sum of all layer vertices (GPU upload and per-pixel cost).
+pub const MAX_SCENE_VERTICES: usize = 32768;
 
 /// Inputs that fully determine a scene.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,13 +63,48 @@ impl SceneKey {
 #[repr(u8)]
 pub enum LayerRole {
     Sky = 0,
+    /// Distant range behind the main mountain.
     FarRidge = 1,
+    /// Foothills along the far shore.
     MidRidge = 2,
+    /// Ridges that frame a valley from the sides and come down to the lake.
     NearRidge = 3,
     Water = 4,
+    /// Far beach strip and the near-shore land.
     Shore = 5,
+    /// Placement region for trees (task 07 fills it; debug views show a mass).
     Woodland = 6,
     ForegroundRock = 7,
+    /// The main mountain massif and its facet planes.
+    Mountain = 8,
+}
+
+impl LayerRole {
+    pub const ALL: [LayerRole; 9] = [
+        LayerRole::Sky,
+        LayerRole::FarRidge,
+        LayerRole::MidRidge,
+        LayerRole::NearRidge,
+        LayerRole::Water,
+        LayerRole::Shore,
+        LayerRole::Woodland,
+        LayerRole::ForegroundRock,
+        LayerRole::Mountain,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            LayerRole::Sky => "sky",
+            LayerRole::FarRidge => "far-ridge",
+            LayerRole::MidRidge => "mid-ridge",
+            LayerRole::NearRidge => "near-ridge",
+            LayerRole::Water => "water",
+            LayerRole::Shore => "shore",
+            LayerRole::Woodland => "woodland",
+            LayerRole::ForegroundRock => "foreground-rock",
+            LayerRole::Mountain => "mountain",
+        }
+    }
 }
 
 /// A point in canvas units (short side = 1, +y down).
@@ -80,6 +121,11 @@ pub struct SceneLayer {
     pub role: LayerRole,
     /// 0 = nearest, 1 = farthest. Drives atmospheric perspective.
     pub depth: f32,
+    /// Structural illumination, 0–1: how directly this plane faces the
+    /// scene's light, from its geometry (0 = turned away, 0.5 = neutral or
+    /// not a facet, 1 = facing the light). Painting maps it to value and
+    /// temperature; it is not a color.
+    pub shade: f32,
     pub outline: Vec<CanvasPoint>,
 }
 
@@ -104,8 +150,28 @@ impl Scene {
                 },
             );
         }
+        let total: usize = layers.iter().map(|l| l.outline.len()).sum();
+        if total > MAX_SCENE_VERTICES {
+            return err(
+                "scene.vertices",
+                Problem::TooLarge {
+                    value: total as u64,
+                    max: MAX_SCENE_VERTICES as u64,
+                },
+            );
+        }
         let mut prev_depth = f32::INFINITY;
         for l in &layers {
+            if !(0.0..=1.0).contains(&l.shade) {
+                return err(
+                    "scene.layer.shade",
+                    Problem::OutOfRange {
+                        value: l.shade.into(),
+                        min: 0.0,
+                        max: 1.0,
+                    },
+                );
+            }
             if !(0.0..=1.0).contains(&l.depth) {
                 return err(
                     "scene.layer.depth",
@@ -172,8 +238,8 @@ impl Scene {
     }
 
     /// FNV-1a 64 over the canonical little-endian encoding of everything the
-    /// GPU receives (aspect, then per layer: role, depth bits, vertex count,
-    /// vertex bits). A regression checksum, not a security hash.
+    /// GPU receives (aspect, then per layer: role, depth bits, shade bits,
+    /// vertex count, vertex bits). A regression checksum, not a security hash.
     pub fn geometry_checksum(&self) -> u64 {
         let mut h = Fnv1a::new();
         h.u32(self.key.aspect.width);
@@ -182,6 +248,7 @@ impl Scene {
         for l in &self.layers {
             h.bytes(&[l.role as u8]);
             h.u32(l.depth.to_bits());
+            h.u32(l.shade.to_bits());
             h.u32(l.outline.len() as u32);
             for p in &l.outline {
                 h.u32(p.x.to_bits());
@@ -225,14 +292,15 @@ pub trait SceneGenerator: Send + Sync {
 }
 
 /// Diagnostic scene for the GPU smoke path and tests: sky plus three angular
-/// ridge bands. **Not the product generator** (task 05) and not an art
+/// ridge bands. **Not the product generator** ([`lakeshore`]) and not an art
 /// candidate. Uses its own SplitMix64 on the terrain stream and only exact
 /// arithmetic, so its checksum is identical on every platform.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TestCard;
 
 impl TestCard {
-    pub const VERSION: u32 = 0;
+    /// 1: layers gained `shade` (always 0.5 here), which the checksum covers.
+    pub const VERSION: u32 = 1;
 }
 
 impl SceneGenerator for TestCard {
@@ -257,6 +325,7 @@ impl SceneGenerator for TestCard {
         let mut layers = vec![SceneLayer {
             role: LayerRole::Sky,
             depth: 1.0,
+            shade: 0.5,
             outline: vec![
                 pt(-0.1, -0.1),
                 pt(w + 0.1, -0.1),
@@ -286,6 +355,7 @@ impl SceneGenerator for TestCard {
             layers.push(SceneLayer {
                 role,
                 depth,
+                shade: 0.5,
                 outline,
             });
         }
@@ -399,9 +469,10 @@ mod tests {
         assert_eq!(s.geometry_checksum(), TEST_CARD_SEED7_4K_CHECKSUM);
     }
 
-    // Captured from the first run on Linux x86_64; portable CI re-checks it on
-    // Windows and macOS.
-    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0x54e3_8098_64ea_446c;
+    // Captured on Linux x86_64 for TestCard v1 (v0 was 0x54e3_8098_64ea_446c,
+    // before layers had `shade`); portable CI re-checks it on Windows and
+    // macOS.
+    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0x2257_2651_a5cc_f378;
 
     #[test]
     fn invalid_scenes_are_rejected() {
@@ -409,6 +480,7 @@ mod tests {
         let tri = |depth: f32, x: f32| SceneLayer {
             role: LayerRole::FarRidge,
             depth,
+            shade: 0.5,
             outline: vec![
                 CanvasPoint { x, y: 0.0 },
                 CanvasPoint { x: 1.0, y: 0.0 },
@@ -433,5 +505,11 @@ mod tests {
         let mut two = tri(0.5, 0.0);
         two.outline.pop();
         assert!(Scene::new(key, vec![two]).is_err());
+        let mut dark = tri(0.5, 0.0);
+        dark.shade = -0.1;
+        assert_eq!(
+            Scene::new(key, vec![dark]).unwrap_err().field,
+            "scene.layer.shade"
+        );
     }
 }

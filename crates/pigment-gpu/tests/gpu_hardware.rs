@@ -15,14 +15,16 @@ use pigment_core::job::{CancelToken, NoProgress, Progress};
 use pigment_core::request::{
     MemorySink, RenderOutcome, RenderPurpose, RenderRequest, RenderTarget, Renderer, RequestIds,
 };
-use pigment_core::scene::{SceneGenerator, TestCard, diagnostic_seeds};
+use pigment_core::scene::lakeshore::LakeshoreGenerator;
+use pigment_core::scene::{SceneGenerator, TestCard, diagnostic_seeds, raster};
+use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
-use pigment_gpu::{GpuContext, SmokeRenderer};
+use pigment_gpu::{DebugRenderer, DebugView, GpuContext, SmokeRenderer};
 
-fn renderer() -> &'static SmokeRenderer {
-    static R: OnceLock<SmokeRenderer> = OnceLock::new();
-    R.get_or_init(|| {
+fn context() -> Arc<GpuContext> {
+    static C: OnceLock<Arc<GpuContext>> = OnceLock::new();
+    C.get_or_init(|| {
         let ctx = GpuContext::new(&AdapterPolicy::default())
             .unwrap_or_else(|e| panic!("hardware GPU required for this suite: {e}"));
         assert!(
@@ -30,8 +32,14 @@ fn renderer() -> &'static SmokeRenderer {
             "software adapter is not GPU evidence"
         );
         eprintln!("GPU suite on {}", ctx.capabilities.label());
-        SmokeRenderer::new(Arc::new(ctx)).expect("smoke pipelines")
+        Arc::new(ctx)
     })
+    .clone()
+}
+
+fn renderer() -> &'static SmokeRenderer {
+    static R: OnceLock<SmokeRenderer> = OnceLock::new();
+    R.get_or_init(|| SmokeRenderer::new(context()).expect("smoke pipelines"))
 }
 
 static IDS: RequestIds = RequestIds::new();
@@ -168,4 +176,93 @@ fn impossible_tile_plan_is_an_error_not_a_crash() {
         .render(&req, &CancelToken::new(), &mut NoProgress, &mut sink)
         .unwrap_err();
     assert!(err.to_string().contains("texture limit"), "{err}");
+}
+
+fn lakeshore_request(text: &str, frame: Frame, policy: TilePolicy) -> RenderRequest {
+    let seeds = SeedBundle::derive(TextDigest::from_source(text).unwrap(), Variation(0));
+    let scene = LakeshoreGenerator
+        .generate(&seeds, &FormSettings::default(), frame.aspect())
+        .unwrap();
+    RenderRequest {
+        id: IDS.next(),
+        purpose: RenderPurpose::Preview,
+        scene: Arc::new(scene),
+        seeds,
+        appearance: Appearance::default(),
+        target: RenderTarget {
+            width: frame.width,
+            height: frame.height,
+            policy,
+        },
+    }
+}
+
+fn render_debug(view: DebugView, req: &RenderRequest) -> MemorySink {
+    let r = DebugRenderer::new(context(), view).expect("debug pipelines");
+    let mut sink = MemorySink::default();
+    let rep = r
+        .render(req, &CancelToken::new(), &mut NoProgress, &mut sink)
+        .expect("render");
+    assert_eq!(rep.outcome, RenderOutcome::Completed);
+    sink
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn debug_layer_ids_match_the_cpu_rasterizer() {
+    // Same coverage rule on both sides; only pixels whose centre lies
+    // within float rounding of an edge may differ.
+    for (text, frame) in [
+        (
+            "A pebble rests by the shore.",
+            Frame::new(640, 360).unwrap(),
+        ),
+        ("風が湖を渡る。", Frame::new(360, 640).unwrap()),
+        (
+            "Clouds drift ☁ above quiet water.",
+            Frame::new(500, 500).unwrap(),
+        ),
+    ] {
+        let req = lakeshore_request(text, frame, TilePolicy::Single);
+        let gpu = render_debug(DebugView::LayerIds, &req);
+        let cpu = raster::front_layers(&req.scene, frame.width as usize, frame.height as usize);
+        let mut differ = 0;
+        for (i, id) in cpu.iter().enumerate() {
+            let want = if *id == raster::NONE {
+                0
+            } else {
+                *id as u32 + 1
+            };
+            if gpu.rgba8[i * 4] as u32 != want {
+                differ += 1;
+            }
+        }
+        let frac = differ as f64 / cpu.len() as f64;
+        eprintln!(
+            "{text:?} {}x{}: {differ} of {} pixels differ",
+            frame.width,
+            frame.height,
+            cpu.len()
+        );
+        assert!(frac < 0.002, "{frac} of pixels differ");
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn debug_views_are_identical_tiled_and_single() {
+    let frame = Frame::new(1001, 563).unwrap();
+    for view in [DebugView::Flat, DebugView::Regions] {
+        let single = render_debug(
+            view,
+            &lakeshore_request("Blue dusk.", frame, TilePolicy::Single),
+        );
+        for edge in [256, 333] {
+            let tiled = render_debug(
+                view,
+                &lakeshore_request("Blue dusk.", frame, TilePolicy::Fixed { edge }),
+            );
+            assert!(tiled.rgba8 == single.rgba8, "{view:?} tile {edge}");
+        }
+    }
 }

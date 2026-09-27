@@ -1,9 +1,18 @@
-//! Tiled test-card renderer: the GPU capability smoke path.
+//! Scene debug renderer (task 05): shows structure, not painting.
 //!
-//! Implements [`Renderer`] with the shared tile loop ([`crate::tiled`])
-//! using a flat-value test card instead of painting. Its pixels are the
-//! evidence for tiled/single identity, so its shader and parameters are
-//! frozen (`SMOKE_RENDERER_VERSION`).
+//! - [`DebugView::Flat`]: neutral gray values per layer from its role and
+//!   structural `shade`, lightened with depth. Checks value grouping and
+//!   depth planes before any paint exists.
+//! - [`DebugView::Regions`]: a fixed color per role, modulated by `shade`,
+//!   with a 1-pixel outline wherever the front-most layer changes. Shows the
+//!   region topology later passes select by (woodland, water, rocks).
+//! - [`DebugView::LayerIds`]: the front-most layer index + 1 in the red
+//!   channel, unencoded (0 = uncovered). For comparing against the CPU
+//!   reference rasterizer in tests.
+//!
+//! Coverage follows the CPU reference rasterizer's rule exactly
+//! (`pigment_core::scene::raster`), so the two can be compared pixel by
+//! pixel. Uses the shared tile loop, so tiled output equals single-tile.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -11,33 +20,41 @@ use std::time::Instant;
 use pigment_core::error::RenderError;
 use pigment_core::job::{CancelToken, Phase, Progress, ProgressSink};
 use pigment_core::request::{RenderReport, RenderRequest, Renderer, TileSink};
-use pigment_core::seed::Domain;
+use pigment_core::scene::Scene;
 use pigment_core::settings::Appearance;
 use pigment_core::tiles::{Support, Tile, TileCostModel, TilePlan, apron_pixels};
 
 use crate::context::GpuContext;
 use crate::tiled::{TilePasses, drive, storage_buffer, texture};
 
-/// Version of the test card's *pixels*; not `RENDERER_VERSION`.
-pub const SMOKE_RENDERER_VERSION: u32 = 0;
+/// Version of the debug views' pixels; not `RENDERER_VERSION`.
+pub const DEBUG_RENDERER_VERSION: u32 = 0;
 
 const PARAMS_BYTES: u64 = 48;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DebugView {
+    Flat,
+    Regions,
+    LayerIds,
+}
+
 #[derive(Debug)]
-pub struct SmokeRenderer {
+pub struct DebugRenderer {
     ctx: Arc<GpuContext>,
+    view: DebugView,
     field: wgpu::ComputePipeline,
     composite: wgpu::ComputePipeline,
 }
 
-impl SmokeRenderer {
-    pub fn new(ctx: Arc<GpuContext>) -> Result<SmokeRenderer, RenderError> {
+impl DebugRenderer {
+    pub fn new(ctx: Arc<GpuContext>, view: DebugView) -> Result<DebugRenderer, RenderError> {
         let (field, composite) = ctx.scoped("shader compilation", || {
             let module = ctx
                 .device
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("smoke.wgsl"),
-                    source: wgpu::ShaderSource::Wgsl(include_str!("smoke.wgsl").into()),
+                    label: Some("debug.wgsl"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("debug.wgsl").into()),
                 });
             let make = |entry: &str| {
                 ctx.device
@@ -52,48 +69,51 @@ impl SmokeRenderer {
             };
             (make("field_main"), make("composite_main"))
         })?;
-        Ok(SmokeRenderer {
+        Ok(DebugRenderer {
             ctx,
+            view,
             field,
             composite,
         })
     }
 
-    fn upload_scene(&self, req: &RenderRequest) -> (wgpu::Buffer, wgpu::Buffer, u32) {
+    fn upload_scene(&self, scene: &Scene) -> (wgpu::Buffer, wgpu::Buffer) {
         let mut headers: Vec<f32> = Vec::new();
         let mut verts: Vec<f32> = Vec::new();
-        for l in req.scene.layers() {
+        for l in scene.layers() {
             let first = (verts.len() / 2) as f32;
-            // Flat value by depth: nearer is darker (linear light).
-            let value = 0.08 + 0.72 * l.depth;
-            headers.extend([first, l.outline.len() as f32, l.depth, value]);
+            let (mut minx, mut miny) = (f32::INFINITY, f32::INFINITY);
+            let (mut maxx, mut maxy) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
             for p in &l.outline {
                 verts.extend([p.x, p.y]);
+                minx = minx.min(p.x);
+                miny = miny.min(p.y);
+                maxx = maxx.max(p.x);
+                maxy = maxy.max(p.y);
             }
+            headers.extend([first, l.outline.len() as f32, l.depth, l.shade]);
+            headers.extend([minx, miny, maxx, maxy]);
+            headers.extend([l.role as u8 as f32, 0.0, 0.0, 0.0]);
         }
         (
             storage_buffer(&self.ctx, "layers", &headers),
             storage_buffer(&self.ctx, "verts", &verts),
-            req.scene.layers().len() as u32,
         )
     }
 }
 
-/// Per-render resources of the test card.
-struct SmokeTiles<'a> {
-    renderer: &'a SmokeRenderer,
+struct DebugTiles<'a> {
+    renderer: &'a DebugRenderer,
     out: wgpu::Texture,
     params: wgpu::Buffer,
     bg_field: wgpu::BindGroup,
     bg_comp: wgpu::BindGroup,
     apron: u32,
-    seed: u32,
     n_layers: u32,
     scale: [f32; 2],
-    paper_grain: f32,
 }
 
-impl TilePasses for SmokeTiles<'_> {
+impl TilePasses for DebugTiles<'_> {
     fn output(&self) -> &wgpu::Texture {
         &self.out
     }
@@ -109,10 +129,14 @@ impl TilePasses for SmokeTiles<'_> {
         for v in self.scale {
             words.extend(v.to_le_bytes());
         }
-        for v in [self.apron, self.seed, self.n_layers] {
+        let view = match self.renderer.view {
+            DebugView::Flat => 0u32,
+            DebugView::Regions => 1,
+            DebugView::LayerIds => 2,
+        };
+        for v in [self.apron, self.n_layers, view, 0] {
             words.extend(v.to_le_bytes());
         }
-        words.extend(self.paper_grain.to_le_bytes());
         self.renderer
             .ctx
             .queue
@@ -128,20 +152,25 @@ impl TilePasses for SmokeTiles<'_> {
     }
 }
 
-impl Renderer for SmokeRenderer {
+impl Renderer for DebugRenderer {
     fn cost_model(&self) -> TileCostModel {
         TileCostModel {
-            extended_bytes_per_px: 8, // one rgba16float field
+            extended_bytes_per_px: 8, // one rgba16float layer-index field
             output_bytes_per_px: 4,
             staging_bytes_per_px: 4,
         }
     }
 
-    fn supports(&self, appearance: &Appearance) -> Vec<Support> {
-        vec![Support {
-            pass: "edge-bleed",
-            radius: appearance.painting.edge_bleed_radius(),
-        }]
+    /// Regions: one pixel of neighbourhood for the outlines, whatever the
+    /// resolution (a tiny radius rounds up to one pixel). Flat: none.
+    fn supports(&self, _appearance: &Appearance) -> Vec<Support> {
+        match self.view {
+            DebugView::Flat | DebugView::LayerIds => Vec::new(),
+            DebugView::Regions => vec![Support {
+                pass: "region-outline",
+                radius: f64::MIN_POSITIVE,
+            }],
+        }
     }
 
     fn render(
@@ -155,7 +184,6 @@ impl Renderer for SmokeRenderer {
         let ctx = &self.ctx;
         let dev = &ctx.device;
         ctx.check_alive()?;
-        req.appearance.validate()?;
         let mapping = req.mapping();
         let apron = apron_pixels(&mapping, &self.supports(&req.appearance));
         let plan = TilePlan::new(
@@ -172,7 +200,6 @@ impl Renderer for SmokeRenderer {
             done: 0,
             total: plan.len(),
         });
-
         let (ew, eh) = (plan.tile_w + 2 * apron, plan.tile_h + 2 * apron);
         let (field, out, params) = ctx.scoped("tile resource allocation", || {
             let field = texture(
@@ -199,7 +226,7 @@ impl Renderer for SmokeRenderer {
             });
             (field, out, params)
         })?;
-        let (layers, verts, n_layers) = self.upload_scene(req);
+        let (layers, verts) = self.upload_scene(&req.scene);
         let field_v = field.create_view(&Default::default());
         let out_v = out.create_view(&Default::default());
         let bind = |p: &wgpu::ComputePipeline, entries: &[wgpu::BindGroupEntry]| {
@@ -238,6 +265,10 @@ impl Renderer for SmokeRenderer {
                     resource: params.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: layers.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
                     binding: 4,
                     resource: wgpu::BindingResource::TextureView(&field_v),
                 },
@@ -247,31 +278,24 @@ impl Renderer for SmokeRenderer {
                 },
             ],
         );
-
-        let seed = {
-            let s = req.seeds.stream(Domain::PaintDetail).0;
-            (s ^ (s >> 32)) as u32
-        };
-        let tiles = SmokeTiles {
+        let tiles = DebugTiles {
             renderer: self,
             out,
             params,
             bg_field,
             bg_comp,
             apron,
-            seed,
-            n_layers,
+            n_layers: req.scene.layers().len() as u32,
             scale: [
                 (mapping.extents.width / mapping.pixels_w as f64) as f32,
                 (mapping.extents.height / mapping.pixels_h as f64) as f32,
             ],
-            paper_grain: req.appearance.painting.paper_grain as f32,
         };
         drive(
             ctx,
             req,
             plan,
-            SMOKE_RENDERER_VERSION,
+            DEBUG_RENDERER_VERSION,
             &tiles,
             t0,
             cancel,

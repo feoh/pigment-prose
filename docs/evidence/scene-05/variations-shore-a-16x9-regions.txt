@@ -1,0 +1,13 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v0, debug view Regions, aspect 16:9, cell 400x225, form faceting=0.55 relief=0.5 woodland_density=0.5
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain)
+0	shore-a v0	peak-over-water	true	40	10383	6642bf77051c6628	44.5 1.1 1.4 0.0 24.2 7.1 3.6 2.3 15.8
+1	shore-a v1	peak-over-water	false	49	9734	7670e7d499d16a30	46.3 2.2 2.6 0.0 22.7 9.1 2.4 1.2 13.5
+2	shore-a v2	twin-summits	false	33	8510	ce583b14e421fc36	39.0 0.0 3.4 0.0 22.0 9.1 2.2 2.6 21.7
+3	shore-a v3	peak-over-water	false	48	10660	e32ba6e0c45734f7	40.4 2.4 2.7 0.0 24.2 11.9 2.3 2.6 13.5
+4	shore-a v4	peak-over-water	false	49	10515	c197d8ab48e4e500	42.9 1.0 1.5 0.0 28.1 10.2 2.9 1.8 11.5
+5	shore-a v5	peak-over-water	false	41	8312	8e6a086e5eaa47ec	47.5 0.7 2.8 0.0 25.3 8.8 1.9 0.8 12.1
+6	shore-a v6	twin-summits	false	48	9506	502cd4ec2123f144	40.4 0.0 3.2 0.0 15.7 13.8 3.6 1.7 21.5
+7	shore-a v7	framing-ridges	true	48	9895	bac64cde5198f1fc	44.2 0.1 0.8 4.7 16.8 17.2 1.5 1.1 13.6
+8	shore-a v8	framing-ridges	true	41	9032	4e81c0626ed7b270	40.7 0.1 2.1 4.8 16.1 18.8 2.4 2.7 12.2
+9	shore-a v9	twin-summits	true	44	8999	bdf740a6cc366f01	35.5 0.7 3.1 0.0 25.4 7.8 4.1 0.7 22.8

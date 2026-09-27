@@ -1,4 +1,6 @@
-//! `pigment-prose`: diagnostics CLI. Reads no prose; seeds are numbers.
+//! `pigment-prose`: diagnostics CLI. Reads no user prose: `gpu-*` seeds are
+//! numbers, and `contact-sheet` reads only the synthetic fixture corpus or
+//! generated sample labels.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::collections::HashMap;
@@ -7,17 +9,20 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use pigment_core::capability::{AdapterPolicy, AdapterReport};
+use pigment_core::frame::AspectRatio;
 use pigment_core::frame::Frame;
 use pigment_core::job::{CancelToken, NoProgress, Progress};
 use pigment_core::request::{
     MemorySink, RenderOutcome, RenderPurpose, RenderReport, RenderRequest, RenderTarget, Renderer,
     RequestIds,
 };
-use pigment_core::scene::{SceneGenerator, TestCard, diagnostic_seeds};
+use pigment_core::scene::lakeshore::{Composition, LakeshoreGenerator};
+use pigment_core::scene::{LayerRole, SceneGenerator, TestCard, diagnostic_seeds, raster};
+use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
 use pigment_core::version;
-use pigment_gpu::{GpuContext, SmokeRenderer, adapter};
+use pigment_gpu::{DebugRenderer, DebugView, GpuContext, SmokeRenderer, adapter};
 
 const USAGE: &str = "\
 pigment-prose <command> [options]
@@ -31,6 +36,17 @@ pigment-prose <command> [options]
       tiled; require byte-identical output, test cancellation and time a warm
       preview. Exit status 0 only if every check passes on a hardware GPU.
       Defaults: 1920x1080, tile 512, seed 7, looseness 0.4.
+  contact-sheet --out SHEET.png [--aspect W:H] [--view flat|regions]
+            [--cell PX] [--cols N] [--variation V]
+            [--passages FILE | --passage ID --variations N | --sample N]
+            [--faceting F] [--relief R] [--density D] [--adapter NAME]
+      Render lakeshore scenes (task 05 geometry, debug views, no painting)
+      into a grid PNG, plus SHEET.txt listing each cell's passage id,
+      variation, template, geometry checksum and visible coverage by role.
+      Cells: the corpus (default fixtures/passages.json) at one variation,
+      one passage's variations 0..N-1, or N generated sample seeds.
+      Defaults: 16:9, regions, cell 480 px long side, variation 0, 5 columns,
+      form settings at their defaults.
 ";
 
 fn main() -> ExitCode {
@@ -38,6 +54,7 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("gpu-info") => parse(&args[1..]).and_then(|o| gpu_info(&o)),
         Some("gpu-smoke") => parse(&args[1..]).and_then(|o| gpu_smoke(&o)),
+        Some("contact-sheet") => parse(&args[1..]).and_then(|o| contact_sheet(&o)),
         Some("--version") => {
             println!("pigment-prose {}", version::APP_VERSION);
             Ok(())
@@ -363,4 +380,198 @@ fn gpu_smoke(o: &Opts) -> Result<(), String> {
         println!("RESULT: FAIL");
         Err(failures.join("; "))
     }
+}
+
+struct Cell {
+    label: String,
+    seeds: SeedBundle,
+}
+
+fn corpus(path: &str) -> Result<Vec<(String, String)>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
+    let doc: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| format!("{path}: not JSON ({e})"))?;
+    doc.as_array()
+        .ok_or_else(|| format!("{path}: expected an array of {{id, text}}"))?
+        .iter()
+        .map(|p| match (p["id"].as_str(), p["text"].as_str()) {
+            (Some(id), Some(t)) => Ok((id.to_string(), t.to_string())),
+            _ => Err(format!("{path}: every entry needs string id and text")),
+        })
+        .collect()
+}
+
+fn parse_aspect(s: &str) -> Result<AspectRatio, String> {
+    let (w, h) = s
+        .split_once(':')
+        .ok_or_else(|| format!("--aspect {s:?}: expected W:H"))?;
+    let (w, h): (u32, u32) = (
+        w.parse()
+            .map_err(|_| format!("--aspect {s:?}: bad width"))?,
+        h.parse()
+            .map_err(|_| format!("--aspect {s:?}: bad height"))?,
+    );
+    if w == 0 || h == 0 || w.max(h) as f64 / w.min(h) as f64 > pigment_core::frame::MAX_ASPECT {
+        return Err(format!("--aspect {s:?}: out of range"));
+    }
+    Ok(AspectRatio::of(w, h))
+}
+
+fn contact_sheet(o: &Opts) -> Result<(), String> {
+    let out =
+        o.0.get("out")
+            .ok_or("contact-sheet needs --out SHEET.png")?;
+    let aspect = parse_aspect(o.0.get("aspect").map_or("16:9", String::as_str))?;
+    let view = match o.0.get("view").map_or("regions", String::as_str) {
+        "flat" => DebugView::Flat,
+        "regions" => DebugView::Regions,
+        v => return Err(format!("--view {v:?}: expected flat or regions")),
+    };
+    let cell: u32 = o.num("cell", 480)?;
+    let cols: usize = o.num("cols", 5)?;
+    let variation: u32 = o.num("variation", 0)?;
+    let form = FormSettings {
+        faceting: o.num("faceting", FormSettings::default().faceting)?,
+        relief: o.num("relief", FormSettings::default().relief)?,
+        woodland_density: o.num("density", FormSettings::default().woodland_density)?,
+    };
+    form.validate().map_err(|e| e.to_string())?;
+    let derive = |text: &str, v: u32| -> Result<SeedBundle, String> {
+        let digest = TextDigest::from_source(text).map_err(|e| e.to_string())?;
+        Ok(SeedBundle::derive(digest, Variation(v)))
+    };
+    let passages =
+        o.0.get("passages")
+            .map_or("fixtures/passages.json", String::as_str);
+    let mut cells = Vec::new();
+    if let Some(n) = o.0.get("sample") {
+        let n: u32 = n
+            .parse()
+            .map_err(|_| format!("--sample {n:?}: bad number"))?;
+        for i in 0..n {
+            let label = format!("sample passage {i}");
+            cells.push(Cell {
+                seeds: derive(&label, variation)?,
+                label,
+            });
+        }
+    } else if let Some(id) = o.0.get("passage") {
+        let n: u32 = o.num("variations", 10)?;
+        let (_, text) = corpus(passages)?
+            .into_iter()
+            .find(|(pid, _)| pid == id)
+            .ok_or_else(|| format!("no passage {id:?} in {passages}"))?;
+        for v in 0..n {
+            cells.push(Cell {
+                label: format!("{id} v{v}"),
+                seeds: derive(&text, v)?,
+            });
+        }
+    } else {
+        for (id, text) in corpus(passages)? {
+            cells.push(Cell {
+                label: format!("{id} v{variation}"),
+                seeds: derive(&text, variation)?,
+            });
+        }
+    }
+    if cells.is_empty() {
+        return Err("no cells to render".into());
+    }
+
+    let ext = aspect.extents();
+    let (cw, ch) = if ext.width >= ext.height {
+        (cell, ((cell as f64) / ext.width).round() as u32)
+    } else {
+        (((cell as f64) / ext.height).round() as u32, cell)
+    };
+    let ctx = Arc::new(GpuContext::new(&o.policy()).map_err(|e| e.to_string())?);
+    let renderer = DebugRenderer::new(ctx.clone(), view).map_err(|e| e.to_string())?;
+    let cols = cols.clamp(1, cells.len());
+    let rows = cells.len().div_ceil(cols);
+    const GAP: u32 = 6;
+    let (sw, sh) = (
+        cols as u32 * cw + (cols as u32 + 1) * GAP,
+        rows as u32 * ch + (rows as u32 + 1) * GAP,
+    );
+    let mut sheet = vec![0x80u8; sw as usize * sh as usize * 3];
+    let ids = RequestIds::default();
+    let mut notes = format!(
+        "pigment-prose {} contact-sheet: lakeshore generator v{}, debug view {view:?}, aspect {}:{}, \
+         cell {cw}x{ch}, form faceting={} relief={} woodland_density={}\ndevice: {}\n\
+         cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\tcoverage % ({})\n",
+        version::APP_VERSION,
+        version::GENERATOR_VERSION,
+        aspect.width,
+        aspect.height,
+        form.faceting,
+        form.relief,
+        form.woodland_density,
+        ctx.capabilities.label(),
+        LayerRole::ALL.map(|r| r.name()).join(" "),
+    );
+    let t0 = Instant::now();
+    for (i, c) in cells.iter().enumerate() {
+        let scene = Arc::new(
+            LakeshoreGenerator
+                .generate(&c.seeds, &form, aspect)
+                .map_err(|e| format!("{}: {e}", c.label))?,
+        );
+        let comp = Composition::draw(&c.seeds, aspect);
+        let req = RenderRequest {
+            id: ids.next(),
+            purpose: RenderPurpose::Preview,
+            scene: scene.clone(),
+            seeds: c.seeds,
+            appearance: Appearance::default(),
+            target: RenderTarget {
+                width: cw,
+                height: ch,
+                policy: TilePolicy::Single,
+            },
+        };
+        let mut sink = MemorySink::default();
+        renderer
+            .render(&req, &CancelToken::new(), &mut NoProgress, &mut sink)
+            .map_err(|e| e.to_string())?;
+        let (col, row) = ((i % cols) as u32, (i / cols) as u32);
+        let (ox, oy) = (GAP + col * (cw + GAP), GAP + row * (ch + GAP));
+        for y in 0..ch {
+            for x in 0..cw {
+                let s = ((y * cw + x) * 4) as usize;
+                let d = (((oy + y) * sw + ox + x) * 3) as usize;
+                sheet[d..d + 3].copy_from_slice(&sink.rgba8[s..s + 3]);
+            }
+        }
+        let cov = raster::role_coverage(&scene, 160, 160);
+        let verts: usize = scene.layers().iter().map(|l| l.outline.len()).sum();
+        notes.push_str(&format!(
+            "{i}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\n",
+            c.label,
+            comp.template.name(),
+            comp.mirrored,
+            scene.layers().len(),
+            scene.geometry_checksum(),
+            cov.map(|v| format!("{:.1}", v * 100.0)).join(" "),
+        ));
+    }
+    let file = std::fs::File::create(out).map_err(|e| format!("creating {out}: {e}"))?;
+    let mut enc = png::Encoder::new(std::io::BufWriter::new(file), sw, sh);
+    enc.set_color(png::ColorType::Rgb);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+    let mut writer = enc.write_header().map_err(|e| format!("{out}: {e}"))?;
+    writer
+        .write_image_data(&sheet)
+        .map_err(|e| format!("{out}: {e}"))?;
+    writer.finish().map_err(|e| format!("{out}: {e}"))?;
+    let txt = std::path::Path::new(out).with_extension("txt");
+    std::fs::write(&txt, notes).map_err(|e| format!("writing {}: {e}", txt.display()))?;
+    println!(
+        "wrote {out} ({sw}x{sh}, {} cells in {}) and {}",
+        cells.len(),
+        ms(t0.elapsed()),
+        txt.display()
+    );
+    Ok(())
 }

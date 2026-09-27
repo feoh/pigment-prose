@@ -2,7 +2,7 @@
 
 This document freezes the interfaces that tasks 04–23 build on. Where it says **exists**, the code is in the repository, tested, and runs today. Where it names a later task, that task implements the item at the stated path with the stated signature. Decision record: [ADR 0001](decisions/0001-renderer-and-desktop-shell.md). Spike evidence: [architecture-spike.md](architecture-spike.md). Build and test commands: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Status of what runs today.** Only the portable core (including text seeding and the recipe format, task 04) and the GPU smoke path are implemented. There is no painting, no PNG export and no desktop UI yet. The GPU smoke path was verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/gpu-smoke-linux-2026-09-26.txt](evidence/gpu-smoke-linux-2026-09-26.txt). Windows and macOS are unverified.
+**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. There is no painting, no PNG export and no desktop UI yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
 
 ## Stack
 
@@ -16,9 +16,9 @@ This document freezes the interfaces that tasks 04–23 build on. Where it says 
 | Path | Kind | Responsibility | Status |
 | --- | --- | --- | --- |
 | `crates/pigment-core/` | lib | Portable contracts: text gate, seeds, settings and controls, frame and coordinates, scene, recipe, requests and sinks, tile planning, job model, invalidation, capability data, errors. **No GPU, window or filesystem dependency**, so its tests run in CI on Linux, Windows and macOS. | exists |
-| `crates/pigment-gpu/` | lib | wgpu adapter selection and capability reports, `GpuContext` (device, queue, device-lost and error scopes), renderers implementing `pigment_core::request::Renderer`. | exists (smoke renderer only) |
+| `crates/pigment-gpu/` | lib | wgpu adapter selection and capability reports, `GpuContext` (device, queue, device-lost and error scopes), the shared tile loop (`tiled.rs`), renderers implementing `pigment_core::request::Renderer`. | exists (smoke and scene debug renderers) |
 | `crates/pigment-gpu/tests/gpu_hardware.rs` | test | Hardware GPU suite, `#[ignore]` by default. | exists |
-| `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`. Tasks 05/08/14 add `contact-sheet` and `bench` subcommands. | exists |
+| `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`, `contact-sheet` (task 05, debug views to PNG). Task 14 adds `bench`. | exists |
 | `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize (09), recipe files and the document model (10). | task 09 creates |
 | `crates/pigment-studio/` → binary `pigment-studio` | bin | eframe/egui desktop app (11–13). | task 11 creates |
 | `spikes/gpu-tiles/` | separate Cargo project | Task 02 throwaway spike, excluded from the workspace. | frozen |
@@ -33,7 +33,10 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | Normalized text | `text::NormalizedText` (length-only `Debug`) | same | exists (`text::normalize`, `nfc-lf-utf8/1`, task 04) |
 | SeedBundle | `seed::SeedBundle`, `TextDigest` (256-bit, hex), `Variation(u32)`, `Domain`, `StreamSeed(u64)` | `crates/pigment-core/src/seed.rs` | exists (`TextDigest::of`/`from_source`, `SeedBundle::derive`, `StreamSeed::rng` → `Rng`, `pigment-seed/1`, task 04) |
 | Recipe | `recipe::Recipe`, `RecipeVersions`, `RecipeSeed` | `crates/pigment-core/src/recipe.rs` | exists (`from_json`, `to_canonical_json`, `validate`, `seeds`, `version_notices`, `SCHEMA`; task 04); files → 10 |
-| Scene | `scene::Scene`, `SceneKey`, `SceneLayer`, `LayerRole`, `CanvasPoint`, `SceneGenerator` | `crates/pigment-core/src/scene.rs` | exists (plus diagnostic `TestCard`); product generator → 05 |
+| Scene | `scene::Scene`, `SceneKey`, `SceneLayer` (with structural `shade`), `LayerRole` (incl. `Mountain`), `CanvasPoint`, `SceneGenerator` | `crates/pigment-core/src/scene/mod.rs` | exists (plus diagnostic `TestCard` v1) |
+| Scene generator | `scene::lakeshore::{LakeshoreGenerator, Composition, Template}` | `crates/pigment-core/src/scene/lakeshore.rs` (+ `noise.rs`) | exists (task 05, [spec](scene-generation.md)) |
+| CPU reference raster | `scene::raster::{front_layers, role_coverage, empty_fraction, is_simple}` | `crates/pigment-core/src/scene/raster.rs` | exists |
+| Scene debug views | `pigment_gpu::{DebugRenderer, DebugView}` (`Flat`, `Regions`, `LayerIds`) | `crates/pigment-gpu/src/debug.rs` + `debug.wgsl` | exists |
 | PaintingSettings | `settings::PaintingSettings` (+ `Appearance`, `PaletteSettings`, `AtmosphereSettings`) | `crates/pigment-core/src/settings.rs` | exists; effects → 06/07 |
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |
 | Control specification | `settings::CONTROLS`, `ControlSpec`, `Channel`, `Group` | same | exists; UI → 12 |
@@ -70,7 +73,7 @@ recipe.validate_values()?;                                     // exists
 let seeds = recipe.seeds();                                    // exists: SeedBundle::derive
 
 // 2. Seeds + form + aspect → immutable scene (built once, shared by preview and export).
-let scene = Arc::new(LakeshoreGenerator.generate(&seeds, &recipe.form, recipe.frame.aspect())?); // task 05
+let scene = Arc::new(LakeshoreGenerator.generate(&seeds, &recipe.form, recipe.frame.aspect())?); // exists
 
 // 3. Snapshot request. Later edits to controls cannot reach it.
 let ids = RequestIds::new();
@@ -96,7 +99,7 @@ match report.outcome {
 }
 ```
 
-**Runnable today:** `pigment-prose gpu-smoke` ([crates/pigment-cli/src/main.rs](../crates/pigment-cli/src/main.rs)) runs steps 2–4 with `diagnostic_seeds`, `TestCard`, `SmokeRenderer` and `MemorySink`. It builds real `RenderRequest`s under four tile policies and checks the resulting `RenderReport`s.
+**Runnable today:** `pigment-prose gpu-smoke` ([crates/pigment-cli/src/main.rs](../crates/pigment-cli/src/main.rs)) runs steps 2–4 with `diagnostic_seeds`, `TestCard`, `SmokeRenderer` and `MemorySink`. It builds real `RenderRequest`s under four tile policies and checks the resulting `RenderReport`s. `pigment-prose contact-sheet` runs steps 1–4 for real prose with `LakeshoreGenerator` and `DebugRenderer` in place of the painting renderer.
 
 ## Coordinates and units
 
@@ -210,7 +213,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 | Tier | What | Guarantee | How it is checked |
 | --- | --- | --- | --- |
 | 0 | Text → normalized bytes → digest → stream seeds | exact on every platform and build | frozen vectors in `fixtures/seed-vectors.json`, reproduced by an independent Python reference; portable CI on Linux, Windows and macOS ([spec](seeds-and-recipes.md)) |
-| 1 | Seeds + form + aspect → scene geometry (`geometry_checksum`) for one `GENERATOR_VERSION` | exact on every platform | exact arithmetic only in generators: `+ − × ÷`, `sqrt`, comparisons, or a pure-Rust `libm`; never platform `sin`/`exp`. Checksum fixtures in CI. The `TestCard` checksum `54e3809864ea446c` is already frozen |
+| 1 | Seeds + form + aspect → scene geometry (`geometry_checksum`) for one `GENERATOR_VERSION` | exact on every platform | exact arithmetic only in generators: `+ − × ÷`, `sqrt`, comparisons, or a pure-Rust `libm`; never platform `sin`/`exp`. Checksum fixtures in CI. Frozen: the `TestCard` v1 checksum `22572651a5ccf378` and three lakeshore checksums |
 | 2 | Pixels on one device, driver, backend and build, including tiled vs single tile | byte-identical | hardware suite and `gpu-smoke`: verified on NVIDIA and Intel Vulkan (tasks 02, 03) |
 | 3 | Pixels across devices, backends or drivers | **within a measured tolerance, never identical** | per-backend baselines (tasks 14, 21, 22) |
 
@@ -235,8 +238,8 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | Task | Entry points and files |
 | --- | --- |
 | 04 seeds and recipe schema | **Done.** Spec: [seeds-and-recipes.md](seeds-and-recipes.md). `text::normalize`; `TextDigest::of`, `SeedBundle::derive`, `StreamSeed::rng` (xoshiro256\*\*); `Recipe::from_json`/`to_canonical_json`; vectors in `fixtures/seed-vectors.json` from `scripts/seed-vectors.py`. CPU generators (05, 07) draw from `seeds.stream(Domain::…).rng()`, one generator per domain |
-| 05 composition and landforms | `scene.rs` → `scene/mod.rs` + `scene/lakeshore.rs` (`LakeshoreGenerator: SceneGenerator`); extend `LayerRole`/`SceneLayer`, bumping the version and the checksum; flat-value debug view by extending `pigment-gpu/src/smoke.rs` into `debug.rs`; `pigment-prose contact-sheet` in `pigment-cli` |
-| 06 color planes and washes | `pigment-gpu/src/paint.rs` + `paint.wgsl` (`PaintRenderer: Renderer`); palettes in `pigment-core/src/palette.rs`; control effects per the table above |
+| 05 composition and landforms | **Done.** Spec: [scene-generation.md](scene-generation.md); evidence: [evidence/scene-05/](evidence/scene-05/README.md). `scene/lakeshore.rs` (`LakeshoreGenerator`), `scene/noise.rs`, `scene/raster.rs`; `SceneLayer::shade`, `LayerRole::Mountain`; `pigment-gpu/src/debug.rs` (views) over the shared `tiled.rs` loop; `pigment-prose contact-sheet` |
+| 06 color planes and washes | `pigment-gpu/src/paint.rs` + `paint.wgsl` (`PaintRenderer: Renderer`) on `tiled::drive`; palettes in `pigment-core/src/palette.rs`; control effects per the table above. Map `SceneLayer::shade` to plane value/temperature. Do **not** reuse the debug shader's per-pixel all-vertex coverage loop (84 ms per 4K frame for about 10k vertices); use per-row crossing tables or coverage masks |
 | 07 woodland, rocks, water | same renderer; placements are part of `Scene` (vegetation stream), never generated on the GPU per tile |
 | 08 visual gate | `docs/visual-review/`, contact sheets from `pigment-prose contact-sheet` |
 | 09 tiled PNG export | new `crates/pigment-io/src/png_sink.rs` (`PngSink: TileSink`, temp file + atomic rename, abort deletes); OOM retry around `Renderer::render`; export job in `pigment-io/src/export.rs` |
@@ -251,5 +254,5 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 ## Known limits of this task
 
 - Only the diagnostic `TestCard` scene and `SmokeRenderer` exist. They are not art and must not be shown for visual review.
-- Portable CI (`.github/workflows/ci.yml`) is written but **has not run**: the repository has not been pushed from this task. Windows and macOS builds and tests are therefore unverified.
+- Portable CI (`.github/workflows/ci.yml`) first ran after task 04 was pushed and passed on Linux, Windows and macOS. It has no GPU, so GPU rendering on Windows (Direct3D 12) and macOS (Metal) is still unverified.
 - Device-lost handling is wired (`set_device_lost_callback`, `check_alive`) but was not exercised by a real device loss.
