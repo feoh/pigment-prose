@@ -83,7 +83,7 @@ impl PaintRenderer {
             }
             headers.extend([first, l.outline.len() as f32, l.depth, l.shade]);
             headers.extend([minx, miny, maxx, maxy]);
-            headers.extend([l.role as u8 as f32, 0.0, 0.0, 0.0]);
+            headers.extend([l.role as u8 as f32, l.plant as u8 as f32, 0.0, 0.0]);
         }
         (
             storage_buffer(&self.ctx, "layers", &headers),

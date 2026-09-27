@@ -216,6 +216,7 @@ mod tests {
             role: LayerRole::Sky,
             depth,
             shade: 0.5,
+            plant: crate::scene::Plant::None,
             outline: vec![p(x0, y0), p(x1, y0), p(x1, y1), p(x0, y1)],
         };
         let scene = Scene::new(

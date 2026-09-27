@@ -37,7 +37,7 @@ pigment-prose <command> [options]
       preview. Exit status 0 only if every check passes on a hardware GPU.
       Defaults: 1920x1080, tile 512, seed 7, looseness 0.4.
   contact-sheet --out SHEET.png [--aspect W:H] [--view paint|flat|regions]
-            [--cell PX] [--cols N] [--variation V]
+            [--cell PX] [--cols N] [--variation V] [--first N]
             [--passages FILE | --passage ID --variations N | --sample N
              | --samples I,J,...]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
@@ -49,6 +49,8 @@ pigment-prose <command> [options]
       Cells: the corpus (default fixtures/passages.json) at one variation,
       one passage's variations 0..N-1, N generated sample seeds, or the
       listed sample seeds in the given order (for rating rounds).
+      Cells are numbered in their corner from --first (default 1), so
+      numbers can run on across the sheets of one review round.
       Defaults: 16:9, paint, cell 480 px long side, variation 0, 5 columns,
       form and paint settings at their defaults.
 ";
@@ -452,6 +454,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     appearance.validate().map_err(|e| e.to_string())?;
     let cell: u32 = o.num("cell", 480)?;
     let cols: usize = o.num("cols", 5)?;
+    let first: usize = o.num("first", 1)?;
     let variation: u32 = o.num("variation", 0)?;
     let form = FormSettings {
         faceting: o.num("faceting", FormSettings::default().faceting)?,
@@ -584,10 +587,20 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
                 sheet[d..d + 3].copy_from_slice(&sink.rgba8[s..s + 3]);
             }
         }
+        // Visible cell number (1-based), matching the notes.
+        draw_label(
+            &mut sheet,
+            sw,
+            ox + 6,
+            oy + 6,
+            first + i,
+            (ch / 90).clamp(2, 6),
+        );
         let cov = raster::role_coverage(&scene, 160, 160);
         let verts: usize = scene.layers().iter().map(|l| l.outline.len()).sum();
         notes.push_str(&format!(
-            "{i}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\t{}\n",
+            "{}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\t{}\n",
+            first + i,
             c.label,
             comp.template.name(),
             comp.mirrored,
@@ -616,4 +629,57 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         txt.display()
     );
     Ok(())
+}
+
+/// 3×5 bitmap digits, one row per `u8` (bit 2 = left column).
+const DIGITS: [[u8; 5]; 10] = [
+    [7, 5, 5, 5, 7],
+    [2, 6, 2, 2, 7],
+    [7, 1, 7, 4, 7],
+    [7, 1, 7, 1, 7],
+    [5, 5, 7, 1, 1],
+    [7, 4, 7, 1, 7],
+    [7, 4, 7, 5, 7],
+    [7, 1, 1, 1, 1],
+    [7, 5, 7, 5, 7],
+    [7, 5, 7, 1, 7],
+];
+
+/// Draws `n` in white on a dark box at `(x, y)` of an RGB sheet `sw` wide,
+/// each font pixel `scale` sheet pixels.
+fn draw_label(sheet: &mut [u8], sw: u32, x: u32, y: u32, n: usize, scale: u32) {
+    let digits: Vec<usize> = n.to_string().bytes().map(|b| (b - b'0') as usize).collect();
+    let pad = scale;
+    let (w, h) = (
+        digits.len() as u32 * 4 * scale - scale + 2 * pad,
+        5 * scale + 2 * pad,
+    );
+    let mut put = |px: u32, py: u32, rgb: [u8; 3]| {
+        let d = ((py * sw + px) * 3) as usize;
+        if d + 3 <= sheet.len() {
+            sheet[d..d + 3].copy_from_slice(&rgb);
+        }
+    };
+    for py in 0..h {
+        for px in 0..w {
+            put(x + px, y + py, [24, 24, 24]);
+        }
+    }
+    for (k, &dg) in digits.iter().enumerate() {
+        for (row, bits) in DIGITS[dg].iter().enumerate() {
+            for colm in 0..3u32 {
+                if bits & (4 >> colm) != 0 {
+                    for sy in 0..scale {
+                        for sx in 0..scale {
+                            put(
+                                x + pad + (k as u32 * 4 + colm) * scale + sx,
+                                y + pad + row as u32 * scale + sy,
+                                [255, 255, 255],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

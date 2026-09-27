@@ -73,6 +73,14 @@ pub struct Palette {
     pub water_far: Srgb,
     pub water_sheen: Srgb,
     pub sand: Material,
+    /// Per plant, in `Plant::TREES` order: broadleaf, conifer, birch,
+    /// shrub, flowering, copper.
+    pub plants: [Material; 6],
+    /// Pale birch bark, and the woody stems of shrubs.
+    pub bark: Srgb,
+    pub wood: Srgb,
+    /// Blossom colors of flowering trees.
+    pub blossom: [Srgb; 2],
 }
 
 /// Verdant high summer: sap and viridian greens with yellow-green light,
@@ -99,6 +107,17 @@ pub const LAKESHORE: Palette = Palette {
     water_far: Srgb(0x8cc8cf),
     water_sheen: Srgb(0xe8f5ef),
     sand: mat(0xe6d2a2, 0x9a8c77),
+    plants: [
+        mat(0x62a832, 0x1b4a26), // broadleaf: bright sap green
+        mat(0x2f7a5a, 0x0d3024), // conifer: deep blue-green
+        mat(0xc2dc5e, 0x6a9a3e), // birch: light yellow-green
+        mat(0x8f9c3c, 0x3c4222), // shrub: olive
+        mat(0x7cbc4c, 0x2a5a30), // flowering
+        mat(0x9a4e62, 0x421c2e), // copper beech: red-purple
+    ],
+    bark: Srgb(0xe8e2d2),
+    wood: Srgb(0x6e4a2c),
+    blossom: [Srgb(0xf08cbc), Srgb(0xfff4f0)],
 };
 
 /// Evening: low gold light, rose clouds, deep blue-green shadows.
@@ -124,6 +143,17 @@ pub const GOLDEN_EVENING: Palette = Palette {
     water_far: Srgb(0xeab88e),
     water_sheen: Srgb(0xfff0d0),
     sand: mat(0xecc796, 0x8e7a70),
+    plants: [
+        mat(0x9eaa3a, 0x223e2a),
+        mat(0x4a7258, 0x142c26),
+        mat(0xe2d05e, 0x7e8a42),
+        mat(0xa8963e, 0x44402a),
+        mat(0xa8b84c, 0x34502e),
+        mat(0xc8584a, 0x4c1c2a),
+    ],
+    bark: Srgb(0xf4e2c8),
+    wood: Srgb(0x7a4a2a),
+    blossom: [Srgb(0xf7a0b0), Srgb(0xfff0dc)],
 };
 
 pub const PALETTES: [&Palette; 2] = [&LAKESHORE, &GOLDEN_EVENING];
@@ -137,7 +167,7 @@ pub fn palette(id: PaletteId) -> &'static Palette {
 
 /// Number of `vec4` entries [`Palette::gpu`] produces; the shader's
 /// constants index into this layout.
-pub const GPU_ENTRIES: usize = 31;
+pub const GPU_ENTRIES: usize = 48;
 
 impl Palette {
     /// Linear RGB, one `[r, g, b, 0]` per entry, in the order the painting
@@ -169,6 +199,12 @@ impl Palette {
         out.push(e(self.water_far));
         out.push(e(self.water_sheen));
         out.extend(m(self.sand));
+        for p in self.plants {
+            out.extend(m(p));
+        }
+        out.push(e(self.bark));
+        out.push(e(self.wood));
+        out.extend(self.blossom.map(e));
         // Padding entries keep the count fixed for future materials.
         while out.len() < GPU_ENTRIES {
             out.push([0.0; 4]);
@@ -219,6 +255,12 @@ mod tests {
                 ("forest", p.forest),
                 ("meadow", p.meadow),
                 ("sand", p.sand),
+                ("broadleaf", p.plants[0]),
+                ("conifer", p.plants[1]),
+                ("birch", p.plants[2]),
+                ("shrub", p.plants[3]),
+                ("flowering", p.plants[4]),
+                ("copper", p.plants[5]),
             ] {
                 assert!(lum(m.light) > lum(m.shadow), "{} {name}", p.name);
             }

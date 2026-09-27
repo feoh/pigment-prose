@@ -31,7 +31,7 @@ struct Params {
 }
 
 @group(0) @binding(0) var<uniform> P: Params;
-// Per layer: (first, count, depth, shade), (bbox), (role, 0, 0, 0).
+// Per layer: (first, count, depth, shade), (bbox), (role, plant, 0, 0).
 @group(0) @binding(1) var<storage, read> layers: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> verts: array<vec2<f32>>;
 @group(0) @binding(3) var<storage, read> pal: array<vec4<f32>>;
@@ -60,6 +60,18 @@ const WATER_DEEP = 21u;
 const WATER_FAR = 22u;
 const WATER_SHEEN = 23u;
 const SAND = 24u;
+const PLANTS = 26u;     // light, shadow per plant (1-based plant ids below)
+const BARK = 38u;
+const WOOD = 39u;
+const BLOSSOM = 40u;    // two colors
+
+// Plants (pigment_core::scene::Plant).
+const P_BROADLEAF = 1u;
+const P_CONIFER = 2u;
+const P_BIRCH = 3u;
+const P_SHRUB = 4u;
+const P_FLOWERING = 5u;
+const P_COPPER = 6u;
 
 // Roles (pigment_core::scene::LayerRole).
 const R_SKY = 0u;
@@ -174,7 +186,12 @@ fn canvas_of_ext(t: vec2<u32>) -> vec2<f32> {
 // how much the point faces up (the light), so each clump is sunlit on top
 // and shadowed below.
 fn crown_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
-    let p = c / size;
+    return crown_field_wide(c, size, 1.0, s);
+}
+
+// `wide` > 1 flattens crowns into low, wide mounds (shrubs).
+fn crown_field_wide(c: vec2<f32>, size: f32, wide: f32, s: u32) -> vec2<f32> {
+    let p = vec2<f32>(c.x / (size * wide), c.y / size);
     let i = floor(p);
     var best = 1e9;
     var rel = vec2<f32>(0.0);
@@ -197,6 +214,170 @@ fn crown_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
     let crown = clamp(1.0 - best, 0.0, 1.0);
     let lit = clamp(0.55 - 0.75 * rel.y - 0.2 * rel.x, 0.0, 1.0);
     return vec2<f32>(crown, lit);
+}
+
+// Conifer spires: tall pointed crowns, cells twice as tall as wide. The
+// front-most (lowest) spire wins where they overlap. Lit on the left and
+// toward the tip.
+fn spire_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
+    let p = vec2<f32>(c.x / size, c.y / (2.0 * size));
+    let i = floor(p);
+    var crown = 0.0;
+    var lit = 0.0;
+    var best_y = -1e9;
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
+            let pt = vec2<f32>(cell) + vec2<f32>(
+                0.2 + 0.6 * hash3(cell.x, cell.y, s),
+                0.2 + 0.6 * hash3(cell.x, cell.y, s + 1u)
+            );
+            let d = p - pt;
+            let t = (d.y + 0.9) / 1.8; // 0 at the tip, 1 at the base
+            if (t < 0.0 || t > 1.0) {
+                continue;
+            }
+            let half = 0.06 + 0.46 * t;
+            let v = 1.0 - abs(d.x) / half;
+            if (v > 0.0 && pt.y > best_y) {
+                best_y = pt.y;
+                crown = min(1.0, 2.5 * v);
+                lit = clamp(0.5 - 0.8 * d.x / half + 0.3 * (1.0 - t), 0.0, 1.0);
+            }
+        }
+    }
+    return vec2<f32>(crown, lit);
+}
+
+// Plant ids by natural weights (matches pigment_core::scene::Plant::pick).
+fn pick_plant(u: f32) -> u32 {
+    if (u < 0.26) { return P_BROADLEAF; }
+    if (u < 0.48) { return P_CONIFER; }
+    if (u < 0.62) { return P_BIRCH; }
+    if (u < 0.80) { return P_SHRUB; }
+    if (u < 0.92) { return P_FLOWERING; }
+    return P_COPPER;
+}
+
+// Stands on forested hills: broadleaf is the matrix and the others form
+// patches within it (their share is lower than for woodland stands).
+fn pick_hill_plant(u: f32) -> u32 {
+    if (u < 0.44) { return P_BROADLEAF; }
+    if (u < 0.68) { return P_CONIFER; }
+    if (u < 0.79) { return P_BIRCH; }
+    if (u < 0.88) { return P_SHRUB; }
+    if (u < 0.95) { return P_FLOWERING; }
+    return P_COPPER;
+}
+
+struct Stands {
+    first: u32,
+    second: u32,
+    // 0 on the boundary between the two nearest stands, 1 well inside.
+    inside: f32,
+}
+
+// Irregular Voronoi stands (smaller with distance) with the two nearest
+// stands, so their colors can blend across a soft, warped boundary.
+fn stands(c: vec2<f32>, depth: f32) -> Stands {
+    let size = 0.08 + 0.1 * (1.0 - depth);
+    let w = c + (vec2<f32>(fbm(c, 0.04, 3u, 401u), fbm(c, 0.04, 3u, 402u)) - 0.5) * 0.9 * size;
+    let p = w / size;
+    let i = floor(p);
+    var d1 = 1e9;
+    var d2 = 1e9;
+    var u1 = 0.0;
+    var u2 = 0.0;
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
+            let pt = vec2<f32>(cell) + vec2<f32>(hash3(cell.x, cell.y, 403u), hash3(cell.x, cell.y, 404u));
+            let d = length(p - pt);
+            let u = hash3(cell.x, cell.y, 405u);
+            if (d < d1) {
+                d2 = d1;
+                u2 = u1;
+                d1 = d;
+                u1 = u;
+            } else if (d < d2) {
+                d2 = d;
+                u2 = u;
+            }
+        }
+    }
+    return Stands(pick_hill_plant(u1), pick_hill_plant(u2), smoothstep(0.0, 0.35, d2 - d1));
+}
+
+fn stand_plant(c: vec2<f32>, depth: f32) -> u32 {
+    return stands(c, depth).first;
+}
+
+// One plant's painted canopy: its own crown shape, colors and details.
+// `bb` is the layer's bounding box, for trunks under near canopies.
+fn plant_color(plant: u32, c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32> {
+    let near = 1.0 - depth;
+    let size = (0.003 + 0.03 * near * near) * P.handling.z;
+    let light = col(PLANTS + 2u * (plant - 1u));
+    let shadow = col(PLANTS + 2u * (plant - 1u) + 1u);
+    let base = mix(shadow, light, smoothstep(0.08, 0.92, shade)) * (0.72 + 0.3 * depth);
+    var cr = vec2<f32>(0.0);
+    var gap = mix(shadow, col(FOLIAGE_COOL), 0.3) * 0.7;
+    var s = size;
+    switch plant {
+        case P_CONIFER: {
+            s = size * 0.9;
+            cr = spire_field(c, s, 17u);
+        }
+        case P_BIRCH: {
+            s = size * 0.6;
+            cr = crown_field(c, s, 19u);
+            gap = mix(gap, col(BARK), 0.35);
+        }
+        case P_SHRUB: {
+            s = size * 0.7;
+            cr = crown_field_wide(c, s, 1.8, 23u);
+            gap = mix(col(WOOD), shadow, 0.3) * 0.8;
+        }
+        default: {
+            s = size * 1.25;
+            let big = crown_field(c, s, 11u);
+            let small = crown_field(c + vec2<f32>(0.37, 0.11), s * 0.45, 13u);
+            cr = vec2<f32>(max(big.x, 0.8 * small.x), mix(small.y, big.y, 0.6));
+        }
+    }
+    let sun = mix(base, mix(light, col(FOLIAGE_WARM), 0.35), 0.25 + 0.3 * shade);
+    var out = mix(base, sun, smoothstep(0.35, 0.9, cr.y) * (0.4 + 0.6 * shade));
+    if (plant == P_FLOWERING) {
+        // Blossom on the sunlit tops.
+        let fsize = s * 0.22;
+        let f = crown_field(c + vec2<f32>(1.3, 0.7), fsize, 27u);
+        let cell = floor(c / fsize);
+        let kind = hash3(i32(cell.x), i32(cell.y), 28u);
+        let bloom = smoothstep(0.4, 0.7, f.x) * smoothstep(0.45, 0.8, cr.y) * step(0.35, kind);
+        out = mix(out, select(col(BLOSSOM + 1u), col(BLOSSOM), kind > 0.62), 0.85 * bloom);
+    }
+    out = mix(gap, out, smoothstep(0.02, 0.35, cr.x));
+    // Trunks show under near tall canopies.
+    if (depth <= 0.25 && plant != P_SHRUB && bb.w > bb.y) {
+        let rel = (bb.w - c.y) / (bb.w - bb.y);
+        // Irregular: about half the columns carry a trunk, each offset and
+        // with its own height and width.
+        let tc = c.x / (s * 1.1);
+        let col_i = i32(floor(tc));
+        let has = hash3(col_i, 0, 30u) < 0.5;
+        let fx = fract(tc) - 0.5 - 0.35 * (hash3(col_i, 0, 31u) - 0.5);
+        let tw = 0.05 + 0.05 * hash3(col_i, 0, 29u);
+        let reach = 0.18 + 0.14 * hash3(col_i, 0, 32u);
+        if (has && rel < reach && abs(fx) < tw && cr.x < 0.5) {
+            var trunk = col(WOOD) * 0.55;
+            if (plant == P_BIRCH) {
+                trunk = col(BARK);
+            }
+            out = mix(out, trunk, smoothstep(reach, reach - 0.12, rel));
+        }
+    }
+    let mean = mix(base, gap, 0.25);
+    return mix(mean, out, smoothstep(2.0, 5.0, s / P.look.w));
 }
 
 // Painted forest: clumps of crowns at two scales, warm light on their tops,
@@ -234,6 +415,23 @@ fn forest_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
     base = mix(base, col(FOLIAGE_WARM), 0.25 * amount * smoothstep(0.56, 0.66, stand));
     base *= 0.72 + 0.3 * depth;
     return foliage(base, c, depth, shade);
+}
+
+// Forested hills: a patchwork of plant stands, fading to the generic
+// forest with distance so far slopes read through their planes.
+fn mixed_forest(c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32> {
+    let generic = forest_color(c, depth, shade);
+    let amount = smoothstep(0.75, 0.35, depth);
+    if (amount <= 0.0) {
+        return generic;
+    }
+    let st = stands(c, depth);
+    var rgb = plant_color(st.first, c, depth, shade, vec4<f32>(0.0));
+    if (st.second != st.first && st.inside < 1.0) {
+        let other = plant_color(st.second, c, depth, shade, vec4<f32>(0.0));
+        rgb = mix(other, rgb, 0.5 + 0.5 * st.inside);
+    }
+    return mix(generic, rgb, amount);
 }
 
 // Grass: horizontal strokes of warm and cool green.
@@ -305,15 +503,20 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
             }
         }
         case R_MID_RIDGE: {
-            rgb = forest_color(c, depth, shade);
+            rgb = mixed_forest(c, depth, shade, layers[3u * l + 1u]);
         }
         case R_NEAR_RIDGE: {
-            // Forest with a few soft meadow clearings.
+            // Mixed forest with a few soft meadow clearings.
             let clearing = smoothstep(0.68, 0.8, fbm(c, 0.07, 3u, 61u));
-            rgb = mix(forest_color(c, depth, shade), meadow_color(c, depth, shade), 0.7 * clearing);
+            rgb = mix(mixed_forest(c, depth, shade, layers[3u * l + 1u]),
+                      meadow_color(c, depth, shade), 0.7 * clearing);
         }
         case R_WOODLAND: {
-            rgb = forest_color(c, depth, shade);
+            var plant = u32(layers[3u * l + 2u].y);
+            if (plant == 0u) {
+                plant = stand_plant(c, depth);
+            }
+            rgb = plant_color(plant, c, depth, shade, layers[3u * l + 1u]);
         }
         case R_WATER: {
             let t = clamp((c.y - horizon) / max(P.frame.w - horizon, 1e-3), 0.0, 1.0);

@@ -1,6 +1,6 @@
 # Art direction and review rubric
 
-**The goal is awe.** A painting should make the viewer feel the vastness of the place: sweeping vistas, towering scale, an expanse seen from above, and dramatic light and sky (user direction, 2026-09-26). Everything below serves that.
+**The goal is awe.** A painting should make the viewer feel the vastness of the place: sweeping vistas, towering scale, an expanse seen from above, and dramatic light and sky (user direction, 2026-09-26). Everything below serves that. The land should be alive with the **variety of plant life seen in nature**: vibrant color, tall leafy trees beside squat woody shrubs, dark spires, pale birches and blossom (user direction, 2026-09-27).
 
 **Solid forms, loose paint.** Seek Cézanne-like interlocking color planes and substantial geometry, with Winslow Homer-like watercolor handling: luminous translucent washes, selective crisp and soft edges, and restrained gouache-like opaque foreground accents. These are visual principles, not a request to reproduce a particular artwork. No training on, embedding, bundling or tracing the referenced works is required or planned.
 

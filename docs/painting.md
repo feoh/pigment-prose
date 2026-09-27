@@ -31,6 +31,24 @@ Each palette has a light and a shadow color per material (cloud, far range, rock
 - **Palette intensity:** saturation around luminance, × (0.35 + 1.3 × intensity). Brightness is unchanged.
 - **Wash and gouache:** a wash is a transmittance glaze over paper, `paper × (color / paper)^density`, with the density varying 0.8–1.2 at low frequency. Gouache is opaque body color with brush-mark value variation. `wash_gouache` blends the two. Forms at depth ≤ 0.25 lean 0.35 toward gouache (the art direction's opaque foreground).
 
+## Plants
+
+After round 2 the user asked for "a variety of plant life … some trees tall and leafy and others squat and woody". There are six plants (`pigment_core::scene::Plant`). Each has its own palette colors (light and shadow), crown shape and details:
+
+| Plant | Silhouette (generator) | Crowns and details (painting) |
+| --- | --- | --- |
+| broadleaf | rounded crowns, 1.15× tall, 1.3× wide | big round clumps at two scales |
+| conifer | pointed spires, 1.45× tall, 0.7× wide | stacked spires, lit on one side and toward the tip |
+| birch | rounded, 1.2× tall, 0.8× wide | small airy crowns, pale bark in the gaps and as trunks |
+| shrub | low even mounds, 0.45× tall, 1.4× wide | flattened wide mounds, woody brown in the gaps |
+| flowering | rounded, 0.85× tall | round clumps with pink and white blossom on sunlit tops |
+| copper | rounded, 1.1× tall, 1.25× wide | red-purple summer foliage (copper beech) |
+
+- **Woodland layers carry their plant.** It is picked per stand by hashing the stand's seed (weights: broadleaf 26 %, conifer 22 %, shrub 18 %, birch 14 %, flowering 12 %, copper 8 %). So picking adds no random draws, and form sliders still morph.
+- **Forested hills** (foothills, spurs, framing ridges) use a painted mixed forest: warped Voronoi stands, larger nearby, drawn from a broadleaf matrix (44 %, conifer 24 %, then smaller shares). Colors blend across stand boundaries. The mix fades to the generic forest with distance, so far slopes read by their planes.
+- **Trunks** show under near tall canopies. About half the crown columns carry one, each offset and with its own height.
+- **Tests:** every woodland layer has a plant and nothing else has one, all six occur across a sample, conifers stand over 1.8× as tall as shrubs, and broadleaf trees over 1.5× (`woodland_stands_have_varied_plants`).
+
 ## Edges and texture (pass 2)
 
 - **Loose edges:** each pixel's lookup is displaced by a coherent noise warp, and an 8-tap disc is averaged where layers differ. The radius is `0.02 × edge_looseness × (0.15 + 0.85 × depth)` canvas units, so distant edges wander and soften while near ones stay crisp (selective edges). Offsets are rounded independently of the tile origin.

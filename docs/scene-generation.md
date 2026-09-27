@@ -30,7 +30,7 @@ Layers produced, back to front:
 | Far beach | `Shore` | 0.52 | a thin strip on the waterline |
 | Lake | `Water` | 0.45 | the far shoreline is its top edge |
 | Near shore | `Shore` | 0.25 | foreground land; the near shoreline is its top edge |
-| Near woods | `Woodland` | 0.20 | up to 3 clusters on the near shore |
+| Near woods | `Woodland` | 0.20 | up to 5 stands along the near shore, each one plant (see [painting.md](painting.md#plants)) |
 | Rocks | `ForegroundRock` | 0.15 → 0.03 | 3–6 boulders, each a body plus three planes (two flanks and a top cap), sorted far to near |
 | Valley spurs (05b, `high-vantage`) | `NearRidge` | 0.44 → 0.14 | 4–7 ridges from alternating sides, far to near, each with a band of trees sized for its distance; the lake winds between them |
 | Cliff edge (05b, `high-vantage`) | `ForegroundRock` | 0.08 | the ledge the viewer stands on, high at one side, with a lit rim and a stand of trees there (replaces the near shore, near woods and rocks) |

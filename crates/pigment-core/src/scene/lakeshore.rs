@@ -17,7 +17,7 @@
 //!   transcendental functions, so geometry is identical on every OS (tier 1).
 
 use super::noise::{Fbm, unit};
-use super::{CanvasPoint, LayerRole, Scene, SceneGenerator, SceneKey, SceneLayer};
+use super::{CanvasPoint, LayerRole, Plant, Scene, SceneGenerator, SceneKey, SceneLayer};
 use crate::error::ValidationError;
 use crate::frame::AspectRatio;
 use crate::seed::{Domain, Rng, SeedBundle};
@@ -43,7 +43,7 @@ pub const MAX_ROCKS: usize = 6;
 pub const MAX_CUMULUS: usize = 3;
 pub const MAX_SPURS: usize = 7;
 pub const MAX_FAR_WOODS: usize = 6;
-pub const MAX_NEAR_WOODS: usize = 3;
+pub const MAX_NEAR_WOODS: usize = 5;
 pub const MAX_MOUNTAIN_PLANES: usize = 24;
 
 /// Layer depths, back to front.
@@ -616,6 +616,17 @@ impl<'a> Builder<'a> {
             role,
             depth,
             shade: shade as f32,
+            plant: Plant::None,
+            outline,
+        });
+    }
+
+    fn push_woods(&mut self, plant: Plant, depth: f32, outline: Vec<CanvasPoint>) {
+        self.layers.push(SceneLayer {
+            role: LayerRole::Woodland,
+            depth,
+            shade: 0.5,
+            plant,
             outline,
         });
     }
@@ -900,24 +911,21 @@ impl<'a> Builder<'a> {
             if sel.len() < 4 {
                 continue;
             }
-            let tree = (0.003 + 0.03 * t * t) * (0.6 + 0.8 * f.woodland_density);
-            let wl = (0.004 + 0.02 * t) * (0.8 + 0.4 * wood_wl);
+            let plant = Plant::pick(unit(wood_seed, 0));
+            let (tall_mul, wl_mul) = plant_shape(plant);
+            let tree = (0.003 + 0.03 * t * t) * (0.6 + 0.8 * f.woodland_density) * tall_mul;
+            let wl = (0.004 + 0.02 * t) * (0.8 + 0.4 * wood_wl) * wl_mul;
             let (a, b) = (xs[sel[0]], xs[sel[sel.len() - 1]]);
             let wxs: Vec<f64> = sel.iter().map(|&i| xs[i]).collect();
             let wtop: Vec<f64> = sel
                 .iter()
                 .map(|&i| {
                     let x = xs[i];
-                    top[i] - tree * envelope((x - a) / (b - a)) * crowns(wood_seed, x, wl)
+                    top[i] - tree * envelope((x - a) / (b - a)) * canopy(plant, wood_seed, x, wl)
                 })
                 .collect();
             let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.8 * tree + 0.001).collect();
-            self.push(
-                LayerRole::Woodland,
-                d,
-                0.5,
-                band(&wxs, &wtop, Bottom::Open(&wbot)),
-            );
+            self.push_woods(plant, d, band(&wxs, &wtop, Bottom::Open(&wbot)));
         }
     }
 
@@ -980,7 +988,10 @@ impl<'a> Builder<'a> {
         if sel.len() < 4 {
             return;
         }
-        let tall = (0.12 + 0.2 * wood_tall) * (0.6 + 0.6 * f.woodland_density);
+        let plant = Plant::pick(unit(wood_seed, 0));
+        let (tall_mul, wl_mul) = plant_shape(plant);
+        let tall = (0.12 + 0.2 * wood_tall) * (0.6 + 0.6 * f.woodland_density) * tall_mul;
+        let wood_wl = wood_wl * wl_mul;
         let (a, b) = (self.xs[sel[0]], self.xs[sel[sel.len() - 1]]);
         let wxs: Vec<f64> = sel.iter().map(|&i| self.xs[i]).collect();
         let wtop: Vec<f64> = sel
@@ -990,16 +1001,11 @@ impl<'a> Builder<'a> {
                 // Full height toward the frame edge, thinning inward.
                 let s = (x - a) / (b - a);
                 let s = if high_right { s } else { 1.0 - s };
-                top[i] - tall * (0.25 + 0.75 * s) * crowns(wood_seed, x, wood_wl)
+                top[i] - tall * (0.25 + 0.75 * s) * canopy(plant, wood_seed, x, wood_wl)
             })
             .collect();
         let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.02).collect();
-        self.push(
-            LayerRole::Woodland,
-            depth::LEDGE,
-            0.5,
-            band(&wxs, &wtop, Bottom::Open(&wbot)),
-        );
+        self.push_woods(plant, depth::LEDGE, band(&wxs, &wtop, Bottom::Open(&wbot)));
     }
 
     /// Structural light: layers inside the light pool are lifted, the rest
@@ -1378,7 +1384,10 @@ impl<'a> Builder<'a> {
                 Template::HighVantage => 0.5,
                 _ => 1.0,
             };
-            let tall = (0.012 + 0.035 * height) * (0.6 + 0.8 * density) * scale;
+            let plant = Plant::pick(unit(seed, 0));
+            let (tall_mul, wl_mul) = plant_shape(plant);
+            let crown = crown * wl_mul;
+            let tall = (0.012 + 0.035 * height) * (0.6 + 0.8 * density) * scale * tall_mul;
             let (a, b) = (
                 (centre - hw).max(-MARGIN),
                 (centre + hw).min(self.w + MARGIN),
@@ -1391,11 +1400,13 @@ impl<'a> Builder<'a> {
             let top: Vec<f64> = xs
                 .iter()
                 .zip(&wl)
-                .map(|(&x, &y)| y - tall * envelope((x - a) / (b - a)) * crowns(seed, x, crown))
+                .map(|(&x, &y)| {
+                    y - tall * envelope((x - a) / (b - a)) * canopy(plant, seed, x, crown)
+                })
                 .collect();
             let bottom: Vec<f64> = wl.iter().map(|y| y + 0.006).collect();
             let outline = band(&xs, &top, Bottom::Open(&bottom));
-            self.push(LayerRole::Woodland, depth::FAR_WOODS, 0.5, outline);
+            self.push_woods(plant, depth::FAR_WOODS, outline);
         }
     }
 
@@ -1521,7 +1532,7 @@ impl<'a> Builder<'a> {
         for _ in 0..MAX_NEAR_WOODS {
             let v = &mut self.vegetation;
             let (pos, width, height, roll, crown, seed) = (
-                v.range_f64(0.0, 0.6),
+                v.range_f64(0.0, 0.9),
                 v.next_f64(),
                 v.next_f64(),
                 v.next_f64(),
@@ -1529,7 +1540,7 @@ impl<'a> Builder<'a> {
                 v.next_u64(),
             );
             let Some(run) = run else { continue };
-            if roll >= 0.1 + 0.9 * density {
+            if roll >= 0.2 + 0.8 * density {
                 continue;
             }
             let len = run.1 - run.0;
@@ -1543,9 +1554,12 @@ impl<'a> Builder<'a> {
             } else {
                 run.1 - pos * len
             };
-            let hw = 0.5 * (0.12 + 0.25 * width) * (0.6 + 0.6 * density);
+            let hw = 0.5 * (0.08 + 0.2 * width) * (0.6 + 0.6 * density);
             // Near trees must not rival the mountain, or it reads as a hill.
-            let tall = ((0.06 + 0.16 * height) * (0.5 + 0.7 * density) * self.sky)
+            let plant = Plant::pick(unit(seed, 0));
+            let (tall_mul, wl_mul) = plant_shape(plant);
+            let crown = crown * wl_mul;
+            let tall = ((0.06 + 0.16 * height) * (0.5 + 0.7 * density) * self.sky * tall_mul)
                 .min(0.35 * self.primary);
             let (a, b) = (
                 (centre - hw).max(-MARGIN),
@@ -1562,11 +1576,13 @@ impl<'a> Builder<'a> {
             let top: Vec<f64> = xs
                 .iter()
                 .zip(&sy)
-                .map(|(&x, &y)| y - tall * envelope((x - a) / (b - a)) * crowns(seed, x, crown))
+                .map(|(&x, &y)| {
+                    y - tall * envelope((x - a) / (b - a)) * canopy(plant, seed, x, crown)
+                })
                 .collect();
             let bottom: Vec<f64> = sy.iter().map(|y| y + 0.02).collect();
             let outline = band(&xs, &top, Bottom::Open(&bottom));
-            self.push(LayerRole::Woodland, depth::NEAR_WOODS, 0.5, outline);
+            self.push_woods(plant, depth::NEAR_WOODS, outline);
         }
     }
 
@@ -1807,6 +1823,39 @@ fn crowns(seed: u64, x: f64, wl: f64) -> f64 {
     let bump = 1.0 - c * c;
     let hv = 0.6 + 0.4 * unit(seed, k as i64);
     0.65 + 0.35 * bump * hv
+}
+
+/// Height and crown-width multipliers of a plant's silhouette.
+fn plant_shape(p: Plant) -> (f64, f64) {
+    match p {
+        Plant::Broadleaf => (1.15, 1.3),
+        Plant::Conifer => (1.45, 0.7),
+        Plant::Birch => (1.2, 0.8),
+        Plant::Shrub => (0.45, 1.4),
+        Plant::Flowering => (0.85, 1.0),
+        Plant::Copper => (1.1, 1.25),
+        Plant::None => (1.0, 1.0),
+    }
+}
+
+/// A stand's canopy edge in `(0, 1]` by plant: rounded crowns for leafy
+/// trees, pointed spires for conifers, low even mounds for shrubs. Each
+/// crown has its own height, and the profile is continuous where crowns
+/// meet.
+fn canopy(p: Plant, seed: u64, x: f64, wl: f64) -> f64 {
+    let t = x / wl;
+    let k = t.floor();
+    let c = 2.0 * (t - k) - 1.0;
+    let hv = 0.55 + 0.45 * unit(seed, k as i64);
+    match p {
+        Plant::Conifer => 0.3 + 0.7 * (1.0 - c.abs()) * hv,
+        Plant::Shrub => 0.72 + 0.28 * (1.0 - c * c) * hv,
+        Plant::Birch => 0.55 + 0.45 * (1.0 - c * c) * hv,
+        Plant::Broadleaf | Plant::Copper | Plant::Flowering => {
+            0.5 + 0.5 * (1.0 - c * c).sqrt() * hv
+        }
+        Plant::None => crowns(seed, x, wl),
+    }
 }
 
 /// Rounded cloud billows in `[0, 1]`: semicircular bumps of wavelength
@@ -2052,9 +2101,9 @@ mod tests {
     }
 
     const FROZEN: [u64; 3] = [
-        0x11d0_4125_b35e_1131,
-        0x6ec8_2a9d_7ce3_b2e6,
-        0x93e0_cd7d_4357_9056,
+        0x91a2_336a_07d0_1989,
+        0x9143_581e_72ed_10df,
+        0x477e_18fc_c742_e567,
     ];
 
     #[test]
@@ -2367,6 +2416,55 @@ mod tests {
             avg(&drama),
             avg(&calm)
         );
+    }
+
+    #[test]
+    fn woodland_stands_have_varied_plants() {
+        let aspect = UHD_4K.aspect();
+        let mut seen = std::collections::HashSet::new();
+        // (plant, depth band) -> canopy heights, to compare like with like.
+        let mut heights: std::collections::HashMap<Plant, Vec<f64>> = Default::default();
+        for i in 0..80 {
+            let s = scene(&sample(i), FormSettings::default(), aspect);
+            for l in s.layers() {
+                if l.role == LayerRole::Woodland {
+                    assert_ne!(l.plant, Plant::None, "sample {i}: woodland without a plant");
+                    seen.insert(l.plant);
+                    if l.depth == depth::FAR_WOODS {
+                        // An open band: the top chain, then the bottom chain
+                        // reversed. Canopy height is their largest gap,
+                        // less the 0.006 the band reaches below the water.
+                        let o = &l.outline;
+                        let n = o.len() / 2;
+                        let canopy = (0..n)
+                            .map(|i| (o[o.len() - 1 - i].y - o[i].y) as f64 - 0.006)
+                            .fold(0.0, f64::max);
+                        heights.entry(l.plant).or_default().push(canopy);
+                    }
+                } else {
+                    assert_eq!(l.plant, Plant::None, "sample {i}: {:?} has a plant", l.role);
+                }
+            }
+        }
+        assert_eq!(seen.len(), Plant::TREES.len(), "{seen:?}");
+        let mean = |p: Plant| {
+            let v = &heights[&p];
+            v.iter().sum::<f64>() / v.len() as f64
+        };
+        // Tall trees stand over squat shrubs at the same distance.
+        assert!(mean(Plant::Conifer) > 1.8 * mean(Plant::Shrub));
+        assert!(mean(Plant::Broadleaf) > 1.5 * mean(Plant::Shrub));
+    }
+
+    #[test]
+    fn plant_weights_cover_the_unit_interval() {
+        let mut counts = std::collections::HashMap::new();
+        for k in 0..1000 {
+            *counts.entry(Plant::pick(k as f64 / 1000.0)).or_insert(0) += 1;
+        }
+        assert_eq!(counts.len(), 6);
+        assert_eq!(counts[&Plant::Broadleaf], 260);
+        assert_eq!(counts[&Plant::Copper], 80);
     }
 
     #[test]

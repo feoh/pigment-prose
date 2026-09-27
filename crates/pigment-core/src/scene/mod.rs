@@ -112,6 +112,71 @@ impl LayerRole {
     }
 }
 
+/// What grows in a woodland layer. Chosen per stand from the vegetation
+/// stream; it shapes the stand's silhouette (in the generator) and its
+/// crowns and colors (in the painting). `None` for every other layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(u8)]
+pub enum Plant {
+    #[default]
+    None = 0,
+    /// Tall, leafy, rounded crowns.
+    Broadleaf = 1,
+    /// Tall, narrow, dark spires.
+    Conifer = 2,
+    /// Light, airy crowns on pale trunks.
+    Birch = 3,
+    /// Squat, woody, low and wide.
+    Shrub = 4,
+    /// Blossoming trees.
+    Flowering = 5,
+    /// Red-purple summer foliage (copper beech).
+    Copper = 6,
+}
+
+impl Plant {
+    pub const TREES: [Plant; 6] = [
+        Plant::Broadleaf,
+        Plant::Conifer,
+        Plant::Birch,
+        Plant::Shrub,
+        Plant::Flowering,
+        Plant::Copper,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Plant::None => "none",
+            Plant::Broadleaf => "broadleaf",
+            Plant::Conifer => "conifer",
+            Plant::Birch => "birch",
+            Plant::Shrub => "shrub",
+            Plant::Flowering => "flowering",
+            Plant::Copper => "copper",
+        }
+    }
+
+    /// Picks a plant from `u` in `[0, 1)` by natural-looking weights.
+    pub fn pick(u: f64) -> Plant {
+        const W: [(Plant, f64); 6] = [
+            (Plant::Broadleaf, 0.26),
+            (Plant::Conifer, 0.22),
+            (Plant::Birch, 0.14),
+            (Plant::Shrub, 0.18),
+            (Plant::Flowering, 0.12),
+            (Plant::Copper, 0.08),
+        ];
+        let mut acc = 0.0;
+        for (p, w) in W {
+            acc += w;
+            if u < acc {
+                return p;
+            }
+        }
+        Plant::Broadleaf
+    }
+}
+
 /// A point in canvas units (short side = 1, +y down).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CanvasPoint {
@@ -131,6 +196,8 @@ pub struct SceneLayer {
     /// not a facet, 1 = facing the light). Painting maps it to value and
     /// temperature; it is not a color.
     pub shade: f32,
+    /// What grows here (woodland layers only).
+    pub plant: Plant,
     pub outline: Vec<CanvasPoint>,
 }
 
@@ -243,15 +310,15 @@ impl Scene {
     }
 
     /// FNV-1a 64 over the canonical little-endian encoding of everything the
-    /// GPU receives (aspect, then per layer: role, depth bits, shade bits,
-    /// vertex count, vertex bits). A regression checksum, not a security hash.
+    /// GPU receives (aspect, then per layer: role, plant, depth bits, shade
+    /// bits, vertex count, vertex bits). A regression checksum, not a security hash.
     pub fn geometry_checksum(&self) -> u64 {
         let mut h = Fnv1a::new();
         h.u32(self.key.aspect.width);
         h.u32(self.key.aspect.height);
         h.u32(self.layers.len() as u32);
         for l in &self.layers {
-            h.bytes(&[l.role as u8]);
+            h.bytes(&[l.role as u8, l.plant as u8]);
             h.u32(l.depth.to_bits());
             h.u32(l.shade.to_bits());
             h.u32(l.outline.len() as u32);
@@ -304,8 +371,9 @@ pub trait SceneGenerator: Send + Sync {
 pub struct TestCard;
 
 impl TestCard {
-    /// 1: layers gained `shade` (always 0.5 here), which the checksum covers.
-    pub const VERSION: u32 = 1;
+    /// 1: layers gained `shade` (always 0.5 here); 2: and `plant` (always
+    /// `None`). The checksum covers both.
+    pub const VERSION: u32 = 2;
 }
 
 impl SceneGenerator for TestCard {
@@ -331,6 +399,7 @@ impl SceneGenerator for TestCard {
             role: LayerRole::Sky,
             depth: 1.0,
             shade: 0.5,
+            plant: Plant::None,
             outline: vec![
                 pt(-0.1, -0.1),
                 pt(w + 0.1, -0.1),
@@ -361,6 +430,7 @@ impl SceneGenerator for TestCard {
                 role,
                 depth,
                 shade: 0.5,
+                plant: Plant::None,
                 outline,
             });
         }
@@ -474,10 +544,10 @@ mod tests {
         assert_eq!(s.geometry_checksum(), TEST_CARD_SEED7_4K_CHECKSUM);
     }
 
-    // Captured on Linux x86_64 for TestCard v1 (v0 was 0x54e3_8098_64ea_446c,
-    // before layers had `shade`); portable CI re-checks it on Windows and
-    // macOS.
-    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0x2257_2651_a5cc_f378;
+    // Captured on Linux x86_64 for TestCard v2 (v0 0x54e3_8098_64ea_446c had
+    // no `shade`, v1 0x2257_2651_a5cc_f378 no `plant`); portable CI re-checks
+    // it on Windows and macOS.
+    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0x52b0_6c7e_571a_a4b4;
 
     #[test]
     fn invalid_scenes_are_rejected() {
@@ -486,6 +556,7 @@ mod tests {
             role: LayerRole::FarRidge,
             depth,
             shade: 0.5,
+            plant: Plant::None,
             outline: vec![
                 CanvasPoint { x, y: 0.0 },
                 CanvasPoint { x: 1.0, y: 0.0 },
