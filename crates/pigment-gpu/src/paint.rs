@@ -9,7 +9,7 @@
 //! Only `Domain::PaintDetail` and the appearance settings are read here; the
 //! scene is never modified, so paint settings cannot move geometry.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use pigment_core::error::RenderError;
@@ -23,9 +23,18 @@ use pigment_core::tiles::{Support, Tile, TileCostModel, TilePlan, apron_pixels};
 use pigment_core::version::RENDERER_VERSION;
 
 use crate::context::GpuContext;
-use crate::tiled::{TilePasses, drive, storage_buffer, texture};
+use crate::coverage::CoverageIndex;
+use crate::tiled::{TilePasses, drive, storage_buffer, storage_buffer_u32, texture};
 
 const PARAMS_BYTES: u64 = 96;
+
+// paint.wgsl measures wash/gouache character and texture strength from the
+// defaults (DEFAULT_WASH_GOUACHE, DEFAULT_TEXTURE).
+const _: () = {
+    use pigment_core::settings::{GRANULATION, PAPER_GRAIN, WASH_GOUACHE};
+    assert!(WASH_GOUACHE.default == 0.25);
+    assert!(PAPER_GRAIN.default == 0.3 && GRANULATION.default == 0.3);
+};
 
 /// Loose edges read up to this multiple of the edge-bleed radius from a
 /// pixel (the warp plus the softening disc).
@@ -36,6 +45,17 @@ pub struct PaintRenderer {
     ctx: Arc<GpuContext>,
     materials: wgpu::ComputePipeline,
     paint: wgpu::ComputePipeline,
+    /// The last scene's uploaded buffers, so renders that change only paint
+    /// settings or size (slider drags) skip the coverage index build.
+    last_scene: Mutex<Option<(Arc<Scene>, SceneBuffers)>>,
+}
+
+#[derive(Debug, Clone)]
+struct SceneBuffers {
+    layers: wgpu::Buffer,
+    verts: wgpu::Buffer,
+    bins: wgpu::Buffer,
+    entries: wgpu::Buffer,
 }
 
 impl PaintRenderer {
@@ -64,13 +84,32 @@ impl PaintRenderer {
             ctx,
             materials,
             paint,
+            last_scene: Mutex::new(None),
         })
     }
 
-    fn upload_scene(&self, scene: &Scene) -> (wgpu::Buffer, wgpu::Buffer) {
+    /// The scene's buffers, reused while the same `Arc<Scene>` is rendered.
+    fn scene_buffers(&self, scene: &Arc<Scene>) -> SceneBuffers {
+        let mut last = self
+            .last_scene
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some((s, b)) = last.as_ref()
+            && Arc::ptr_eq(s, scene)
+        {
+            return b.clone();
+        }
+        let b = self.upload_scene(scene);
+        *last = Some((scene.clone(), b.clone()));
+        b
+    }
+
+    /// Layer headers, vertices, coverage bins and bin entries.
+    fn upload_scene(&self, scene: &Scene) -> SceneBuffers {
+        let index = CoverageIndex::build(scene);
         let mut headers: Vec<f32> = Vec::new();
         let mut verts: Vec<f32> = Vec::new();
-        for l in scene.layers() {
+        for (l, lb) in scene.layers().iter().zip(&index.layers) {
             let first = (verts.len() / 2) as f32;
             let (mut minx, mut miny) = (f32::INFINITY, f32::INFINITY);
             let (mut maxx, mut maxy) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
@@ -84,11 +123,156 @@ impl PaintRenderer {
             headers.extend([first, l.outline.len() as f32, l.depth, l.shade]);
             headers.extend([minx, miny, maxx, maxy]);
             headers.extend([l.role as u8 as f32, l.plant as u8 as f32, 0.0, 0.0]);
+            headers.extend([lb.base as f32, lb.bins as f32, lb.inv_height, lb.min_y]);
         }
-        (
-            storage_buffer(&self.ctx, "layers", &headers),
-            storage_buffer(&self.ctx, "verts", &verts),
-        )
+        let bins: Vec<u32> = index.bins.iter().flatten().copied().collect();
+        let entries: Vec<u32> = index.entries.iter().flatten().copied().collect();
+        SceneBuffers {
+            layers: storage_buffer(&self.ctx, "layers", &headers),
+            verts: storage_buffer(&self.ctx, "verts", &verts),
+            bins: storage_buffer_u32(&self.ctx, "coverage bins", &bins),
+            entries: storage_buffer_u32(&self.ctx, "coverage entries", &entries),
+        }
+    }
+}
+
+/// A compositing operation of the reference model
+/// ([`pigment_core::composite`]), for [`PaintRenderer::evaluate_compositing`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompositeOp {
+    /// `glaze(under, color as transmittance, amount)`.
+    Glaze = 0,
+    /// `over(under, color, amount)`.
+    Over = 1,
+    /// `wash(under as paper, color, amount)`.
+    Wash = 2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CompositeCase {
+    pub op: CompositeOp,
+    pub under: [f32; 3],
+    pub color: [f32; 3],
+    pub amount: f32,
+}
+
+impl PaintRenderer {
+    /// Evaluates compositing cases with the painting shader's own functions,
+    /// so tests can compare the GPU against the reference model.
+    pub fn evaluate_compositing(
+        &self,
+        cases: &[CompositeCase],
+    ) -> Result<Vec<[f32; 3]>, RenderError> {
+        let ctx = &self.ctx;
+        let dev = &ctx.device;
+        ctx.check_alive()?;
+        if cases.is_empty() {
+            return Ok(Vec::new());
+        }
+        let input: Vec<f32> = cases
+            .iter()
+            .flat_map(|c| {
+                [
+                    c.under[0],
+                    c.under[1],
+                    c.under[2],
+                    c.op as u8 as f32,
+                    c.color[0],
+                    c.color[1],
+                    c.color[2],
+                    c.amount,
+                ]
+            })
+            .collect();
+        let bytes = cases.len() as u64 * 16;
+        let (pipeline, out, staging) = ctx.scoped("compositing reference", || {
+            let module = dev.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("paint.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("paint.wgsl").into()),
+            });
+            let pipeline = dev.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("composite_reference_main"),
+                layout: None,
+                module: &module,
+                entry_point: Some("composite_reference_main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+            let buf = |label, usage| {
+                dev.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some(label),
+                    size: bytes,
+                    usage,
+                    mapped_at_creation: false,
+                })
+            };
+            (
+                pipeline,
+                buf(
+                    "reference out",
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                ),
+                buf(
+                    "reference staging",
+                    wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                ),
+            )
+        })?;
+        let input = storage_buffer(ctx, "reference cases", &input);
+        let bg = dev.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: input.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 10,
+                    resource: out.as_entire_binding(),
+                },
+            ],
+        });
+        let mut enc = dev.create_command_encoder(&Default::default());
+        {
+            let mut pass = enc.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bg, &[]);
+            pass.dispatch_workgroups((cases.len() as u32).div_ceil(64), 1, 1);
+        }
+        enc.copy_buffer_to_buffer(&out, 0, &staging, 0, bytes);
+        ctx.queue.submit([enc.finish()]);
+        let (tx, rx) = std::sync::mpsc::channel();
+        staging.map_async(wgpu::MapMode::Read, .., move |r| {
+            let _ = tx.send(r);
+        });
+        dev.poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|e| RenderError::Gpu {
+                detail: format!("device poll: {e}"),
+            })?;
+        match rx.recv() {
+            Ok(Ok(())) => {}
+            _ => {
+                return Err(ctx.check_alive().err().unwrap_or(RenderError::Gpu {
+                    detail: "reference readback failed".into(),
+                }));
+            }
+        }
+        let data = staging.get_mapped_range(..).map_err(|e| RenderError::Gpu {
+            detail: format!("mapped range: {e:?}"),
+        })?;
+        let floats: Vec<f32> = data
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b))
+            .collect();
+        Ok(floats
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|v| [v[0], v[1], v[2]])
+            .collect())
     }
 }
 
@@ -213,7 +397,12 @@ impl Renderer for PaintRenderer {
             });
             (field, out, params)
         })?;
-        let (layers, verts) = self.upload_scene(&req.scene);
+        let SceneBuffers {
+            layers,
+            verts,
+            bins,
+            entries,
+        } = self.scene_buffers(&req.scene);
         let pal: Vec<f32> = palette(req.appearance.palette.id)
             .gpu()
             .into_iter()
@@ -238,6 +427,8 @@ impl Renderer for PaintRenderer {
                 entry(2, verts.as_entire_binding()),
                 entry(3, pal.as_entire_binding()),
                 entry(4, wgpu::BindingResource::TextureView(&field_v)),
+                entry(7, bins.as_entire_binding()),
+                entry(8, entries.as_entire_binding()),
             ],
         );
         let bg_paint = bind(

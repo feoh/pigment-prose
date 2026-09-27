@@ -10,6 +10,7 @@
 use std::sync::{Arc, OnceLock};
 
 use pigment_core::capability::AdapterPolicy;
+use pigment_core::composite;
 use pigment_core::frame::Frame;
 use pigment_core::job::{CancelToken, NoProgress, Progress};
 use pigment_core::request::{
@@ -18,9 +19,12 @@ use pigment_core::request::{
 use pigment_core::scene::lakeshore::LakeshoreGenerator;
 use pigment_core::scene::{SceneGenerator, TestCard, diagnostic_seeds, raster};
 use pigment_core::seed::{SeedBundle, TextDigest, Variation};
+use pigment_core::settings::PaletteId;
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
-use pigment_gpu::{DebugRenderer, DebugView, GpuContext, PaintRenderer, SmokeRenderer};
+use pigment_gpu::{
+    CompositeCase, CompositeOp, DebugRenderer, DebugView, GpuContext, PaintRenderer, SmokeRenderer,
+};
 
 fn context() -> Arc<GpuContext> {
     static C: OnceLock<Arc<GpuContext>> = OnceLock::new();
@@ -267,9 +271,13 @@ fn debug_views_are_identical_tiled_and_single() {
     }
 }
 
-fn render_paint(req: &RenderRequest) -> MemorySink {
+fn paint_renderer() -> &'static PaintRenderer {
     static R: OnceLock<PaintRenderer> = OnceLock::new();
-    let r = R.get_or_init(|| PaintRenderer::new(context()).expect("paint pipelines"));
+    R.get_or_init(|| PaintRenderer::new(context()).expect("paint pipelines"))
+}
+
+fn render_paint(req: &RenderRequest) -> MemorySink {
+    let r = paint_renderer();
     let mut sink = MemorySink::default();
     let rep = r
         .render(req, &CancelToken::new(), &mut NoProgress, &mut sink)
@@ -368,4 +376,108 @@ fn painting_agrees_across_resolutions() {
     let psnr = 10.0 * (255.0f64 * 255.0 / (se / n)).log10();
     eprintln!("480 vs downsampled 1920: PSNR {psnr:.1} dB");
     assert!(psnr > 24.0, "PSNR {psnr}");
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn compositing_matches_the_reference_model() {
+    // Opaque fill, partial coverage (edge blending), glazes and washes at
+    // the densities the painting uses, over paper and dark colors.
+    let colors = [
+        [0.905, 0.85, 0.74],
+        [0.05, 0.2, 0.07],
+        [0.6, 0.3, 0.1],
+        [0.2, 0.45, 0.6],
+        [0.0, 0.0, 0.0],
+        [1.0, 1.0, 1.0],
+    ];
+    let mut cases = Vec::new();
+    for under in colors {
+        for color in colors {
+            for amount in [0.0, 0.125, 0.5, 0.8, 1.0, 1.2] {
+                for op in [CompositeOp::Glaze, CompositeOp::Over, CompositeOp::Wash] {
+                    if op == CompositeOp::Over && amount > 1.0 {
+                        continue;
+                    }
+                    if op == CompositeOp::Wash && under.contains(&0.0) {
+                        continue; // paper is never black
+                    }
+                    cases.push(CompositeCase {
+                        op,
+                        under,
+                        color,
+                        amount,
+                    });
+                }
+            }
+        }
+    }
+    let gpu = paint_renderer()
+        .evaluate_compositing(&cases)
+        .expect("reference");
+    assert_eq!(gpu.len(), cases.len());
+    let mut worst = 0.0f32;
+    for (c, g) in cases.iter().zip(&gpu) {
+        let want = match c.op {
+            CompositeOp::Glaze => composite::glaze(c.under, c.color, c.amount),
+            CompositeOp::Over => composite::over(c.under, c.color, c.amount),
+            CompositeOp::Wash => composite::wash(c.under, c.color, c.amount),
+        };
+        for i in 0..3 {
+            assert!(g[i].is_finite(), "{c:?}: {g:?}");
+            // pow is not correctly rounded on GPUs; 1e-4 relative is far
+            // below one 8-bit output step (about 4e-3).
+            let err = (g[i] - want[i]).abs() / (1.0 + want[i].abs());
+            worst = worst.max(err);
+            assert!(err < 1e-4, "{c:?}: gpu {g:?}, model {want:?}");
+        }
+    }
+    eprintln!(
+        "{} compositing cases, worst relative error {worst:e}",
+        cases.len()
+    );
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn painting_is_valid_at_setting_extremes() {
+    // Every combination of paint-setting endpoints, for both palettes: an
+    // opaque, varied image with no black (NaN or collapsed) pixels, from the
+    // same scene every time.
+    let frame = Frame::new(320, 180).unwrap();
+    let base = lakeshore_request("A pebble rests by the shore.", frame, TilePolicy::Single);
+    let checksum = base.scene.geometry_checksum();
+    let mut n = 0;
+    for palette in [PaletteId::Lakeshore, PaletteId::GoldenEvening] {
+        for bits in 0u32..128 {
+            let pick = |k: u32, lo: f64, hi: f64| if bits >> k & 1 == 1 { hi } else { lo };
+            let mut req = base.clone();
+            let a = &mut req.appearance;
+            a.palette.id = palette;
+            a.painting.edge_looseness = pick(0, 0.0, 1.0);
+            a.painting.wash_gouache = pick(1, 0.0, 1.0);
+            a.painting.mark_scale = pick(2, 0.5, 2.0);
+            a.painting.granulation = pick(3, 0.0, 1.0);
+            a.painting.paper_grain = pick(4, 0.0, 1.0);
+            a.palette.intensity = pick(5, 0.0, 1.0);
+            a.atmosphere.haze = pick(6, 0.0, 1.0);
+            a.validate().unwrap();
+            let img = render_paint(&req);
+            let px = img.rgba8.as_chunks::<4>().0;
+            assert!(
+                px.iter().all(|p| p[3] == 255),
+                "{palette:?} {bits:07b}: not opaque"
+            );
+            let black = px.iter().filter(|p| p[..3] == [0, 0, 0]).count();
+            assert_eq!(black, 0, "{palette:?} {bits:07b}: {black} black pixels");
+            let (lo, hi) = px.iter().fold((255u8, 0u8), |(lo, hi), p| {
+                let v = p[1];
+                (lo.min(v), hi.max(v))
+            });
+            assert!(hi - lo > 60, "{palette:?} {bits:07b}: flat ({lo}..{hi})");
+            assert_eq!(req.scene.geometry_checksum(), checksum);
+            n += 1;
+        }
+    }
+    eprintln!("{n} setting combinations valid");
 }

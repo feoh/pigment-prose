@@ -9,10 +9,12 @@
 //!   used by `pigment-prose contact-sheet`.
 //! - `tiled` (private): the tile loop every renderer shares.
 //!
-//! - [`paint`]: the painting renderer (tasks 06–07).
+//! - [`paint`]: the painting renderer (tasks 06–07), with its
+//!   [`coverage`] index.
 
 pub mod adapter;
 pub mod context;
+pub mod coverage;
 pub mod debug;
 pub mod paint;
 pub mod smoke;
@@ -20,5 +22,5 @@ mod tiled;
 
 pub use context::GpuContext;
 pub use debug::{DebugRenderer, DebugView};
-pub use paint::PaintRenderer;
+pub use paint::{CompositeCase, CompositeOp, PaintRenderer};
 pub use smoke::SmokeRenderer;

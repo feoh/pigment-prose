@@ -38,7 +38,8 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | CPU reference raster | `scene::raster::{front_layers, role_coverage, empty_fraction, is_simple}` | `crates/pigment-core/src/scene/raster.rs` | exists |
 | Awe metrics | `scene::metrics::{measure, AweMetrics}` | `crates/pigment-core/src/scene/metrics.rs` | exists (task 05b; [rubric](art-direction.md#awe-metrics)) |
 | Scene debug views | `pigment_gpu::{DebugRenderer, DebugView}` (`Flat`, `Regions`, `LayerIds`) | `crates/pigment-gpu/src/debug.rs` + `debug.wgsl` | exists |
-| Painting renderer | `pigment_gpu::PaintRenderer` | `crates/pigment-gpu/src/paint.rs` + `paint.wgsl` | first cut (task 06, [spec](painting.md)); coverage acceleration open |
+| Painting renderer | `pigment_gpu::PaintRenderer`, coverage index `pigment_gpu::coverage` | `crates/pigment-gpu/src/paint.rs` + `paint.wgsl`, `coverage.rs` | exists (task 06, [spec](painting.md)); woodland, rocks and water → 07 |
+| Compositing model | `composite::{glaze, wash, over, edge_blend}` | `crates/pigment-core/src/composite.rs` | exists (task 06); GPU parity checked by the hardware suite |
 | Palettes | `palette::{Palette, palette, PALETTES, LAKESHORE, GOLDEN_EVENING}` | `crates/pigment-core/src/palette.rs` | exists (task 06) |
 | PaintingSettings | `settings::PaintingSettings` (+ `Appearance`, `PaletteSettings`, `AtmosphereSettings`) | `crates/pigment-core/src/settings.rs` | exists; effects → 06/07 |
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |
@@ -242,7 +243,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | --- | --- |
 | 04 seeds and recipe schema | **Done.** Spec: [seeds-and-recipes.md](seeds-and-recipes.md). `text::normalize`; `TextDigest::of`, `SeedBundle::derive`, `StreamSeed::rng` (xoshiro256\*\*); `Recipe::from_json`/`to_canonical_json`; vectors in `fixtures/seed-vectors.json` from `scripts/seed-vectors.py`. CPU generators (05, 07) draw from `seeds.stream(Domain::…).rng()`, one generator per domain |
 | 05 composition and landforms | **Done.** Spec: [scene-generation.md](scene-generation.md); evidence: [evidence/scene-05/](evidence/scene-05/README.md). `scene/lakeshore.rs` (`LakeshoreGenerator`), `scene/noise.rs`, `scene/raster.rs`; `SceneLayer::shade`, `LayerRole::Mountain`; `pigment-gpu/src/debug.rs` (views) over the shared `tiled.rs` loop; `pigment-prose contact-sheet` |
-| 06 color planes and washes | `pigment-gpu/src/paint.rs` + `paint.wgsl` (`PaintRenderer: Renderer`) on `tiled::drive`; palettes in `pigment-core/src/palette.rs`; control effects per the table above. Map `SceneLayer::shade` to plane value/temperature. Do **not** reuse the debug shader's per-pixel all-vertex coverage loop (84 ms per 4K frame for about 10k vertices); use per-row crossing tables or coverage masks |
+| 06 color planes and washes | `pigment-gpu/src/paint.rs` + `paint.wgsl` (`PaintRenderer: Renderer`) on `tiled::drive`; palettes in `pigment-core/src/palette.rs`; control effects per the table above. Map `SceneLayer::shade` to plane value/temperature. **Done:** coverage uses per-layer row bins of edges sorted by right-most x (`coverage.rs`), exact against brute force; timings in [painting.md](painting.md#measured-linux-vulkan-2026-09-27) |
 | 07 woodland, rocks, water | same renderer; placements are part of `Scene` (vegetation stream), never generated on the GPU per tile |
 | 08 visual gate | `docs/visual-review/`, contact sheets from `pigment-prose contact-sheet` |
 | 09 tiled PNG export | new `crates/pigment-io/src/png_sink.rs` (`PngSink: TileSink`, temp file + atomic rename, abort deletes); OOM retry around `Renderer::render`; export job in `pigment-io/src/export.rs` |

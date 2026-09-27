@@ -17,7 +17,10 @@ use pigment_core::request::{
     RequestIds,
 };
 use pigment_core::scene::lakeshore::{Composition, LakeshoreGenerator};
-use pigment_core::scene::{LayerRole, SceneGenerator, TestCard, diagnostic_seeds, metrics, raster};
+use pigment_core::scene::{
+    CanvasPoint, LayerRole, MAX_LAYERS, MAX_SCENE_VERTICES, Plant, Scene, SceneGenerator, SceneKey,
+    SceneLayer, TestCard, diagnostic_seeds, metrics, raster,
+};
 use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
@@ -43,6 +46,7 @@ pigment-prose <command> [options]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
             [--palette lakeshore|golden-evening] [--looseness L] [--wash W]
             [--haze H] [--intensity I] [--marks M] [--grain G] [--granulation G]
+            [--vary KEY=V1,V2,...]
       Render lakeshore scenes (painted, or the structure debug views) into a
       grid PNG, plus SHEET.txt listing each cell's passage id,
       variation, template, geometry checksum and visible coverage by role.
@@ -51,8 +55,19 @@ pigment-prose <command> [options]
       listed sample seeds in the given order (for rating rounds).
       Cells are numbered in their corner from --first (default 1), so
       numbers can run on across the sheets of one review round.
+      --vary renders every cell once per value of one paint setting (KEY is
+      a paint option name above, e.g. wash=0,1), one row per cell.
       Defaults: 16:9, paint, cell 480 px long side, variation 0, 5 columns,
       form and paint settings at their defaults.
+  paint-bench [--sizes 960,1920,3840] [--sample N] [--aspect W:H] [--runs R]
+            [--stress] [--adapter NAME]
+      Time scene generation and warm single-tile painting (render + readback)
+      of N sample seeds at each long-edge size, and report the median and
+      worst per-scene medians against the preview budgets. --stress times
+      one synthetic coverage worst case (every layer and vertex the scene
+      limits allow, every bounding box over the whole frame) instead.
+      Defaults: sizes 960,1920,3840, 12 samples, 16:9, 7 runs (first 2 are
+      warm-up).
 ";
 
 fn main() -> ExitCode {
@@ -61,6 +76,7 @@ fn main() -> ExitCode {
         Some("gpu-info") => parse(&args[1..]).and_then(|o| gpu_info(&o)),
         Some("gpu-smoke") => parse(&args[1..]).and_then(|o| gpu_smoke(&o)),
         Some("contact-sheet") => parse(&args[1..]).and_then(|o| contact_sheet(&o)),
+        Some("paint-bench") => parse(&args[1..]).and_then(|o| paint_bench(&o)),
         Some("--version") => {
             println!("pigment-prose {}", version::APP_VERSION);
             Ok(())
@@ -78,7 +94,7 @@ fn main() -> ExitCode {
 
 struct Opts(HashMap<String, String>);
 
-const BOOL_FLAGS: &[&str] = &["gl", "allow-software"];
+const BOOL_FLAGS: &[&str] = &["gl", "allow-software", "stress"];
 
 fn parse(args: &[String]) -> Result<Opts, String> {
     let mut m = HashMap::new();
@@ -391,7 +407,40 @@ fn gpu_smoke(o: &Opts) -> Result<(), String> {
 struct Cell {
     label: String,
     seeds: SeedBundle,
+    appearance: Appearance,
 }
+
+/// Applies one `contact-sheet` paint option (`--looseness` etc.) by name.
+fn set_paint(a: &mut Appearance, key: &str, v: &str) -> Result<(), String> {
+    let num =
+        || -> Result<f64, String> { v.parse().map_err(|_| format!("--{key}: bad number {v:?}")) };
+    match key {
+        "looseness" => a.painting.edge_looseness = num()?,
+        "wash" => a.painting.wash_gouache = num()?,
+        "marks" => a.painting.mark_scale = num()?,
+        "grain" => a.painting.paper_grain = num()?,
+        "granulation" => a.painting.granulation = num()?,
+        "haze" => a.atmosphere.haze = num()?,
+        "intensity" => a.palette.intensity = num()?,
+        "palette" => {
+            a.palette.id = serde_json::from_value(serde_json::Value::String(v.to_string()))
+                .map_err(|_| format!("--palette {v:?}: expected lakeshore or golden-evening"))?;
+        }
+        _ => return Err(format!("unknown paint setting {key:?}")),
+    }
+    Ok(())
+}
+
+const PAINT_KEYS: [&str; 8] = [
+    "looseness",
+    "wash",
+    "marks",
+    "grain",
+    "granulation",
+    "haze",
+    "intensity",
+    "palette",
+];
 
 fn corpus(path: &str) -> Result<Vec<(String, String)>, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
@@ -435,25 +484,14 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         v => return Err(format!("--view {v:?}: expected paint, flat or regions")),
     };
     let mut appearance = Appearance::default();
-    {
-        let p = &mut appearance.painting;
-        p.edge_looseness = o.num("looseness", p.edge_looseness)?;
-        p.wash_gouache = o.num("wash", p.wash_gouache)?;
-        p.mark_scale = o.num("marks", p.mark_scale)?;
-        p.paper_grain = o.num("grain", p.paper_grain)?;
-        p.granulation = o.num("granulation", p.granulation)?;
-        appearance.atmosphere.haze = o.num("haze", appearance.atmosphere.haze)?;
-        appearance.palette.intensity = o.num("intensity", appearance.palette.intensity)?;
-        if let Some(id) = o.0.get("palette") {
-            appearance.palette.id = serde_json::from_value(serde_json::Value::String(id.clone()))
-                .map_err(|_| {
-                format!("--palette {id:?}: expected lakeshore or golden-evening")
-            })?;
+    for key in PAINT_KEYS {
+        if let Some(v) = o.0.get(key) {
+            set_paint(&mut appearance, key, v)?;
         }
     }
     appearance.validate().map_err(|e| e.to_string())?;
     let cell: u32 = o.num("cell", 480)?;
-    let cols: usize = o.num("cols", 5)?;
+    let cols_opt: Option<usize> = o.0.get("cols").map(|_| o.num("cols", 5)).transpose()?;
     let first: usize = o.num("first", 1)?;
     let variation: u32 = o.num("variation", 0)?;
     let form = FormSettings {
@@ -480,6 +518,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             cells.push(Cell {
                 seeds: derive(&label, variation)?,
                 label,
+                appearance,
             });
         }
     } else if let Some(n) = o.0.get("sample") {
@@ -491,6 +530,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             cells.push(Cell {
                 seeds: derive(&label, variation)?,
                 label,
+                appearance,
             });
         }
     } else if let Some(id) = o.0.get("passage") {
@@ -503,6 +543,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             cells.push(Cell {
                 label: format!("{id} v{v}"),
                 seeds: derive(&text, v)?,
+                appearance,
             });
         }
     } else {
@@ -510,11 +551,35 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             cells.push(Cell {
                 label: format!("{id} v{variation}"),
                 seeds: derive(&text, variation)?,
+                appearance,
             });
         }
     }
     if cells.is_empty() {
         return Err("no cells to render".into());
+    }
+    // --vary KEY=V1,V2,...: each cell once per value, side by side.
+    let mut cols_default = 5;
+    if let Some(spec) = o.0.get("vary") {
+        let (key, values) = spec
+            .split_once('=')
+            .ok_or_else(|| format!("--vary {spec:?}: expected KEY=V1,V2,..."))?;
+        let values: Vec<&str> = values.split(',').map(str::trim).collect();
+        let mut varied = Vec::new();
+        for c in &cells {
+            for v in &values {
+                let mut appearance = c.appearance;
+                set_paint(&mut appearance, key, v)?;
+                appearance.validate().map_err(|e| e.to_string())?;
+                varied.push(Cell {
+                    label: format!("{} {key}={v}", c.label),
+                    seeds: c.seeds,
+                    appearance,
+                });
+            }
+        }
+        cells = varied;
+        cols_default = values.len();
     }
 
     let ext = aspect.extents();
@@ -528,7 +593,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         Some(v) => Box::new(DebugRenderer::new(ctx.clone(), v).map_err(|e| e.to_string())?),
         None => Box::new(PaintRenderer::new(ctx.clone()).map_err(|e| e.to_string())?),
     };
-    let cols = cols.clamp(1, cells.len());
+    let cols = cols_opt.unwrap_or(cols_default).clamp(1, cells.len());
     let rows = cells.len().div_ceil(cols);
     const GAP: u32 = 6;
     let (sw, sh) = (
@@ -567,7 +632,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             purpose: RenderPurpose::Preview,
             scene: scene.clone(),
             seeds: c.seeds,
-            appearance,
+            appearance: c.appearance,
             target: RenderTarget {
                 width: cw,
                 height: ch,
@@ -629,6 +694,159 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         txt.display()
     );
     Ok(())
+}
+
+fn paint_bench(o: &Opts) -> Result<(), String> {
+    let aspect = parse_aspect(o.0.get("aspect").map_or("16:9", String::as_str))?;
+    let n: u32 = o.num("sample", 12)?;
+    let runs: usize = o.num("runs", 7)?;
+    if runs < 3 {
+        return Err("--runs must be at least 3".into());
+    }
+    let sizes: Vec<u32> =
+        o.0.get("sizes")
+            .map_or("960,1920,3840", String::as_str)
+            .split(',')
+            .map(|s| {
+                s.trim()
+                    .parse()
+                    .map_err(|_| format!("--sizes: bad number {s:?}"))
+            })
+            .collect::<Result<_, _>>()?;
+    let ctx = Arc::new(GpuContext::new(&o.policy()).map_err(|e| e.to_string())?);
+    let renderer = PaintRenderer::new(ctx.clone()).map_err(|e| e.to_string())?;
+    println!(
+        "pigment-prose {} paint-bench: renderer v{}, generator v{}, aspect {}:{}, {n} sample seeds, {runs} runs (2 warm-up)\ndevice: {}",
+        version::APP_VERSION,
+        version::RENDERER_VERSION,
+        version::GENERATOR_VERSION,
+        aspect.width,
+        aspect.height,
+        ctx.capabilities.label()
+    );
+    if ctx.capabilities.adapter.software {
+        println!("WARNING: software adapter; results are NOT GPU evidence");
+    }
+    let form = FormSettings::default();
+    let appearance = Appearance::default();
+    let ids = RequestIds::default();
+    let mut scenes = Vec::new();
+    let mut gen_times = Vec::new();
+    for i in 0..n {
+        let digest =
+            TextDigest::from_source(&format!("sample passage {i}")).map_err(|e| e.to_string())?;
+        let seeds = SeedBundle::derive(digest, Variation(0));
+        let t = Instant::now();
+        let scene = LakeshoreGenerator
+            .generate(&seeds, &form, aspect)
+            .map_err(|e| e.to_string())?;
+        gen_times.push(t.elapsed());
+        scenes.push((seeds, Arc::new(scene)));
+    }
+    if o.0.contains_key("stress") {
+        scenes = vec![(diagnostic_seeds(1), Arc::new(stress_scene(aspect)?))];
+        println!(
+            "stress scene: {} layers, {} vertices",
+            MAX_LAYERS, MAX_SCENE_VERTICES
+        );
+    }
+    gen_times.sort();
+    println!(
+        "scene generation (CPU): median {}, max {}",
+        ms(gen_times[gen_times.len() / 2]),
+        ms(gen_times[gen_times.len() - 1])
+    );
+    let frame_of = |long: u32| {
+        let ext = aspect.extents();
+        if ext.width >= ext.height {
+            (long, ((long as f64) / ext.width).round() as u32)
+        } else {
+            (((long as f64) / ext.height).round() as u32, long)
+        }
+    };
+    for long in sizes {
+        let (w, h) = frame_of(long);
+        let mut medians = Vec::new();
+        for (seeds, scene) in &scenes {
+            let req = RenderRequest {
+                id: ids.next(),
+                purpose: RenderPurpose::Preview,
+                scene: scene.clone(),
+                seeds: *seeds,
+                appearance,
+                target: RenderTarget {
+                    width: w,
+                    height: h,
+                    policy: TilePolicy::Single,
+                },
+            };
+            let (mut t, mut total) = (Vec::new(), Vec::new());
+            for r in 0..runs {
+                let mut sink = MemorySink::default();
+                let rep = renderer
+                    .render(&req, &CancelToken::new(), &mut NoProgress, &mut sink)
+                    .map_err(|e| e.to_string())?;
+                if r >= 2 {
+                    t.push(rep.timings.render_readback);
+                    total.push(rep.timings.total);
+                }
+            }
+            t.sort();
+            total.sort();
+            medians.push((t[t.len() / 2], total[total.len() / 2]));
+        }
+        medians.sort();
+        let worst_total = medians.iter().map(|m| m.1).max().unwrap_or_default();
+        println!(
+            "{w}x{h} render + readback: median {}, worst scene {}; whole render call (setup, render, sink): worst scene {}",
+            ms(medians[medians.len() / 2].0),
+            ms(medians[medians.len() - 1].0),
+            ms(worst_total)
+        );
+    }
+    Ok(())
+}
+
+/// The coverage worst case: `MAX_LAYERS` layers at `MAX_SCENE_VERTICES`,
+/// each a sawtooth band whose teeth reach the top of the frame, so every
+/// layer's bounding box holds every pixel and a sky pixel tests every edge.
+fn stress_scene(aspect: AspectRatio) -> Result<Scene, String> {
+    let ext = aspect.extents();
+    let per = MAX_SCENE_VERTICES / MAX_LAYERS;
+    let teeth = per - 2;
+    let (w, h) = (ext.width as f32, ext.height as f32);
+    let layers = (0..MAX_LAYERS)
+        .map(|k| {
+            let level = h * (0.3 + 0.6 * k as f32 / MAX_LAYERS as f32);
+            let mut outline: Vec<CanvasPoint> = (0..teeth)
+                .map(|i| CanvasPoint {
+                    x: -0.01 + (w + 0.02) * i as f32 / (teeth - 1) as f32,
+                    y: if i % 2 == 1 { -0.01 } else { level },
+                })
+                .collect();
+            outline.push(CanvasPoint {
+                x: w + 0.01,
+                y: h + 0.01,
+            });
+            outline.push(CanvasPoint {
+                x: -0.01,
+                y: h + 0.01,
+            });
+            SceneLayer {
+                role: if k == 0 {
+                    LayerRole::Sky
+                } else {
+                    LayerRole::Mountain
+                },
+                depth: 1.0 - k as f32 / MAX_LAYERS as f32,
+                shade: 0.5,
+                plant: Plant::None,
+                outline,
+            }
+        })
+        .collect();
+    let key = SceneKey::new(0, &diagnostic_seeds(1), FormSettings::default(), aspect);
+    Scene::new(key, layers).map_err(|e| e.to_string())
 }
 
 /// 3×5 bitmap digits, one row per `u8` (bit 2 = left column).

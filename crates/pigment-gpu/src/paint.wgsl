@@ -31,13 +31,22 @@ struct Params {
 }
 
 @group(0) @binding(0) var<uniform> P: Params;
-// Per layer: (first, count, depth, shade), (bbox), (role, plant, 0, 0).
+// Per layer: (first, count, depth, shade), (bbox), (role, plant, 0, 0),
+// (coverage bin base, bin count, 1 / bin height, bbox min y).
 @group(0) @binding(1) var<storage, read> layers: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> verts: array<vec2<f32>>;
 @group(0) @binding(3) var<storage, read> pal: array<vec4<f32>>;
 @group(0) @binding(4) var field_w: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(5) var field_r: texture_2d<f32>;
 @group(0) @binding(6) var out_tex: texture_storage_2d<rgba8unorm, write>;
+// Coverage index (crates/pigment-gpu/src/coverage.rs): per bin (first
+// entry, count); per entry (edge's vertex, right-most x as f32 bits),
+// sorted by that x, descending.
+@group(0) @binding(7) var<storage, read> cov_bins: array<vec2<u32>>;
+@group(0) @binding(8) var<storage, read> cov_entries: array<vec2<u32>>;
+// Compositing reference cases (composite_reference_main only).
+@group(0) @binding(9) var<storage, read> ref_cases: array<vec4<f32>>;
+@group(0) @binding(10) var<storage, read_write> ref_out: array<vec4<f32>>;
 
 // ---------------------------------------------------------------- palette layout
 // (pigment_core::palette::Palette::gpu)
@@ -94,6 +103,41 @@ fn shaded(i: u32, shade: f32) -> vec3<f32> {
     return mix(col(i + 1u), col(i), smoothstep(0.08, 0.92, shade));
 }
 
+// ---------------------------------------------------------------- compositing
+// The reference model is pigment_core::composite (linear light).
+
+const MIN_TRANSMITTANCE = 1e-3;
+
+// A glaze of transmittance t at `density` over `under`: under * t^density.
+fn glaze(under: vec3<f32>, t: vec3<f32>, density: f32) -> vec3<f32> {
+    return under * pow(clamp(t, vec3<f32>(MIN_TRANSMITTANCE), vec3<f32>(1.0)), vec3<f32>(density));
+}
+
+// A wash of `pigment` over `paper` (the pigment's color at density 1).
+fn wash(paper: vec3<f32>, pigment: vec3<f32>, density: f32) -> vec3<f32> {
+    return glaze(paper, pigment / paper, density);
+}
+
+// Premultiplied "over" of an opaque color at coverage a.
+fn over(under: vec3<f32>, color: vec3<f32>, a: f32) -> vec3<f32> {
+    return mix(under, color, a);
+}
+
+// Wash/gouache character relative to the default balance
+// (settings::WASH_GOUACHE.default, 0.25; asserted in paint.rs): 0 at the
+// default, rising to 1 at pure wash (thinness) or pure gouache (thickness).
+const DEFAULT_WASH_GOUACHE = 0.25;
+// settings::PAPER_GRAIN.default and GRANULATION.default (asserted in paint.rs).
+const DEFAULT_TEXTURE = 0.3;
+
+fn thinness() -> f32 {
+    return max(0.0, DEFAULT_WASH_GOUACHE - P.handling.y) / DEFAULT_WASH_GOUACHE;
+}
+
+fn thickness() -> f32 {
+    return max(0.0, P.handling.y - DEFAULT_WASH_GOUACHE) / (1.0 - DEFAULT_WASH_GOUACHE);
+}
+
 // ---------------------------------------------------------------- noise
 
 fn pcg(v: u32) -> u32 {
@@ -141,38 +185,47 @@ fn luminance(c: vec3<f32>) -> f32 {
 
 // ---------------------------------------------------------------- coverage
 
+// Parity of the +x ray's crossings, over only the edges in the pixel's
+// coverage bin that reach right of it (coverage.rs proves this equals the
+// test over every edge).
 fn inside(l: u32, c: vec2<f32>) -> bool {
-    let h = layers[3u * l];
-    let bb = layers[3u * l + 1u];
+    let h = layers[4u * l];
+    let bb = layers[4u * l + 1u];
     if (c.x < bb.x || c.x > bb.z || c.y < bb.y || c.y > bb.w) {
         return false;
     }
     let first = u32(h.x);
-    let n = u32(h.y);
+    let last = first + u32(h.y) - 1u;
+    let cb = layers[4u * l + 3u];
+    let k = u32(clamp(floor((c.y - cb.w) * cb.z), 0.0, cb.y - 1.0));
+    let bin = cov_bins[u32(cb.x) + k];
+    let stop = c.x - 1e-5; // coverage::BREAK_MARGIN
     var in_poly = false;
-    var j = first + n - 1u;
-    for (var i = first; i < first + n; i++) {
-        let a = verts[i];
-        let b = verts[j];
+    for (var e = bin.x; e < bin.x + bin.y; e++) {
+        let ent = cov_entries[e];
+        if (bitcast<f32>(ent.y) < stop) {
+            break;
+        }
+        let a = verts[ent.x];
+        let b = verts[select(ent.x - 1u, last, ent.x == first)];
         if ((a.y > c.y) != (b.y > c.y)) {
             let x = (b.x - a.x) * (c.y - a.y) / (b.y - a.y) + a.x;
             if (c.x < x) {
                 in_poly = !in_poly;
             }
         }
-        j = i;
     }
     return in_poly;
 }
 
+// Layers are ordered back to front, so the first hit from the front wins.
 fn front_layer(c: vec2<f32>) -> i32 {
-    var front = -1;
-    for (var l = 0u; l < P.n_layers; l++) {
-        if (inside(l, c)) {
-            front = i32(l);
+    for (var l = i32(P.n_layers) - 1; l >= 0; l--) {
+        if (inside(u32(l), c)) {
+            return l;
         }
     }
-    return front;
+    return -1;
 }
 
 fn canvas_of_ext(t: vec2<u32>) -> vec2<f32> {
@@ -476,8 +529,8 @@ fn meadow_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
 }
 
 fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
-    let h = layers[3u * l];
-    let role = u32(layers[3u * l + 2u].x);
+    let h = layers[4u * l];
+    let role = u32(layers[4u * l + 2u].x);
     var depth = h.z;
     var shade = h.w;
     let horizon = P.frame.x;
@@ -499,7 +552,7 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
         // A ridge's light fades to neutral toward its foot (the bottom of
         // its bounding box), where it meets the neutral river bank.
         if (role == R_NEAR_RIDGE) {
-            let bb = layers[3u * l + 1u];
+            let bb = layers[4u * l + 1u];
             let rel = clamp((bb.w - c.y) / max(bb.w - bb.y, 1e-4), 0.0, 1.0);
             shade = mix(0.5, shade, smoothstep(0.05, 0.6, rel));
         }
@@ -537,20 +590,20 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
             }
         }
         case R_MID_RIDGE: {
-            rgb = mixed_forest(c, depth, shade, layers[3u * l + 1u]);
+            rgb = mixed_forest(c, depth, shade, layers[4u * l + 1u]);
         }
         case R_NEAR_RIDGE: {
             // Mixed forest with a few soft meadow clearings.
             let clearing = smoothstep(0.68, 0.8, fbm(c, 0.07, 3u, 61u));
-            rgb = mix(mixed_forest(c, depth, shade, layers[3u * l + 1u]),
+            rgb = mix(mixed_forest(c, depth, shade, layers[4u * l + 1u]),
                       meadow_color(c, depth, shade), 0.7 * clearing);
         }
         case R_WOODLAND: {
-            var plant = u32(layers[3u * l + 2u].y);
+            var plant = u32(layers[4u * l + 2u].y);
             if (plant == 0u) {
                 plant = stand_plant(c, depth);
             }
-            rgb = plant_color(plant, c, depth, shade, layers[3u * l + 1u]);
+            rgb = plant_color(plant, c, depth, shade, layers[4u * l + 1u]);
         }
         case R_WATER: {
             let t = clamp((c.y - horizon) / max(P.frame.w - horizon, 1e-3), 0.0, 1.0);
@@ -601,11 +654,20 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
     if (role != R_SKY && role != R_CLOUD && depth <= 0.25) {
         g = clamp(g + 0.35, 0.0, 1.0);
     }
-    let paper = col(PAPER);
-    let density = 0.8 + 0.4 * fbm(c, 0.14, 3u, 101u);
-    let wash = paper * pow(clamp(rgb / paper, vec3<f32>(1e-3), vec3<f32>(1.0)), vec3<f32>(density));
-    let body = rgb * (0.9 + 0.2 * fbm(c, 0.025 * P.handling.z, 3u, 102u));
-    return clamp(mix(wash, body, g), vec3<f32>(0.0), vec3<f32>(1.0));
+    // At the default balance this is the approved look. Thinner handling
+    // mottles the wash more (blooms); thicker handling strengthens brush
+    // marks and lifts the body color toward a chalky, matte opacity.
+    let thin = thinness();
+    let thick = thickness();
+    if (thin == 0.0 && thick == 0.0) {
+        let density = 0.8 + 0.4 * fbm(c, 0.14, 3u, 101u);
+        let body = rgb * (0.9 + 0.2 * fbm(c, 0.025 * P.handling.z, 3u, 102u));
+        return clamp(over(wash(col(PAPER), rgb, density), body, g), vec3<f32>(0.0), vec3<f32>(1.0));
+    }
+    let density = 1.0 + (fbm(c, 0.14, 3u, 101u) - 0.5) * 0.4 * (1.0 + 1.5 * thin);
+    var body = rgb * (1.0 + (fbm(c, 0.025 * P.handling.z, 3u, 102u) - 0.5) * 0.2 * (1.0 + thick));
+    body = mix(body, col(PAPER), 0.1 * thick);
+    return clamp(over(wash(col(PAPER), rgb, density), body, g), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 @compute @workgroup_size(8, 8)
@@ -652,7 +714,7 @@ fn paint_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let centre = load_clamped(t);
     var depth = 0.5;
     if (centre.a >= 0.0) {
-        depth = layers[3u * u32(round(centre.a))].z;
+        depth = layers[4u * u32(round(centre.a))].z;
     }
     // Looseness: edge wander and softness grow with distance; near forms
     // stay crisp (selective edges). The radius is in canvas units, so
@@ -675,17 +737,58 @@ fn paint_main(@builtin(global_invocation_id) id: vec3<u32>) {
         differ += select(0.0, 1.0, abs(s.a - base.a) > 0.5);
     }
     let edge = differ / 8.0;
-    var rgb = mix(base.rgb, sum / 8.0, edge);
-    // Watercolor pools pigment at wet edges.
-    let pool = edge * (1.0 - edge) * 4.0 * (1.0 - P.handling.y);
-    rgb *= 1.0 - 0.12 * pool;
-
+    // The disc's mean is the edge blend of opaque samples; it replaces the
+    // warped sample in proportion to how many taps crossed a boundary.
+    var rgb = over(base.rgb, sum / 8.0, edge);
+    // Watercolor pools pigment at wet edges (where two washes overlap).
     // Paper tooth and pigment granulation (canvas-space, band-limited).
+    // Both show through thin washes and are covered by opaque gouache. The
+    // default balance keeps the approved expressions exactly (a uniform
+    // branch, so no divergence).
+    let pool = edge * (1.0 - edge) * 4.0 * (1.0 - P.handling.y);
     let grain = fbm(c, 0.004, 2u, 121u) - 0.5;
-    rgb *= 1.0 + 0.14 * P.look.x * grain;
     let gran = fbm(c, 0.0025, 2u, 122u);
-    rgb *= 1.0 - 0.18 * P.handling.w * smoothstep(0.55, 0.8, gran) * (1.0 - luminance(rgb));
+    let thin = thinness();
+    let thick = thickness();
+    // Above their defaults (0.3), paper grain and granulation ramp up to a
+    // clearly rough tooth and strongly settled pigment.
+    let rough = max(0.0, P.look.x - DEFAULT_TEXTURE) / (1.0 - DEFAULT_TEXTURE);
+    let settled = max(0.0, P.handling.w - DEFAULT_TEXTURE) / (1.0 - DEFAULT_TEXTURE);
+    if (thin == 0.0 && thick == 0.0 && rough == 0.0 && settled == 0.0) {
+        rgb *= 1.0 - 0.12 * pool;
+        rgb *= 1.0 + 0.14 * P.look.x * grain;
+        rgb *= 1.0 - 0.18 * P.handling.w * smoothstep(0.55, 0.8, gran) * (1.0 - luminance(rgb));
+    } else {
+        rgb *= 1.0 - 0.12 * (1.0 + thin) * pool;
+        let tooth = (0.14 * P.look.x + 0.36 * rough) * (1.0 + 0.6 * thin) * (1.0 - 0.6 * thick);
+        rgb *= 1.0 + tooth * grain;
+        let settle = (0.18 * P.handling.w + 0.42 * settled) * (1.0 + 0.8 * thin) * (1.0 - 0.8 * thick);
+        rgb *= 1.0 - settle * smoothstep(0.55, 0.8, gran) * (1.0 - luminance(rgb));
+    }
 
     let enc = srgb_encode(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)));
     textureStore(out_tex, vec2<i32>(id.xy), vec4<f32>(enc, 1.0));
+}
+
+// ---------------------------------------------------------------- reference
+
+// One compositing case per invocation: (under.rgb, op), (color.rgb, amount).
+// op 0: glaze(under, color as transmittance, amount); 1: over(under, color,
+// amount); 2: wash(under as paper, color, amount). Checked against
+// pigment_core::composite by the hardware suite.
+@compute @workgroup_size(64)
+fn composite_reference_main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let i = id.x;
+    if (i >= arrayLength(&ref_out)) {
+        return;
+    }
+    let a = ref_cases[2u * i];
+    let b = ref_cases[2u * i + 1u];
+    var r = vec3<f32>(0.0);
+    switch u32(a.w) {
+        case 0u: { r = glaze(a.xyz, b.xyz, b.w); }
+        case 1u: { r = over(a.xyz, b.xyz, b.w); }
+        default: { r = wash(a.xyz, b.xyz, b.w); }
+    }
+    ref_out[i] = vec4<f32>(r, 0.0);
 }

@@ -14,6 +14,7 @@
 //! table and which task owns each unimplemented piece.
 
 pub mod capability;
+pub mod composite;
 pub mod error;
 pub mod frame;
 pub mod invalidate;

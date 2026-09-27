@@ -1,0 +1,37 @@
+# 2026-09-27T18:33:35Z Linux 7.2.7-1-cachyos x86_64
+rustc 1.98.1 (48a229cea 2026-09-01)
+renderer: commit c8b5dad (the first cut, before this session's changes), built with the paint-bench CLI from the task 06 working tree
+
+$ pigment-prose paint-bench --adapter NVIDIA --sample 30
+pigment-prose 0.1.0 paint-bench: renderer v0, generator v0, aspect 16:9, 30 sample seeds, 7 runs (2 warm-up)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+scene generation (CPU): median 0.51 ms, max 0.60 ms
+960x540 render + readback: median 2.90 ms, worst scene 3.87 ms; whole render call (setup, render, sink): worst scene 4.87 ms
+1920x1080 render + readback: median 11.16 ms, worst scene 15.94 ms; whole render call (setup, render, sink): worst scene 19.71 ms
+3840x2160 render + readback: median 33.71 ms, worst scene 49.56 ms; whole render call (setup, render, sink): worst scene 53.09 ms
+
+$ pigment-prose paint-bench --adapter NVIDIA --stress --runs 3
+pigment-prose 0.1.0 paint-bench: renderer v0, generator v0, aspect 16:9, 12 sample seeds, 3 runs (2 warm-up)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+stress scene: 96 layers, 32768 vertices
+scene generation (CPU): median 0.51 ms, max 0.58 ms
+960x540 render + readback: median 41.21 ms, worst scene 41.21 ms; whole render call (setup, render, sink): worst scene 42.58 ms
+1920x1080 render + readback: median 159.77 ms, worst scene 159.77 ms; whole render call (setup, render, sink): worst scene 164.18 ms
+3840x2160 render + readback: median 618.23 ms, worst scene 618.23 ms; whole render call (setup, render, sink): worst scene 624.51 ms
+
+$ pigment-prose paint-bench --adapter Intel --sample 30
+pigment-prose 0.1.0 paint-bench: renderer v0, generator v0, aspect 16:9, 30 sample seeds, 7 runs (2 warm-up)
+device: Intel(R) Graphics (RPL-S) (Vulkan)
+scene generation (CPU): median 0.48 ms, max 0.60 ms
+960x540 render + readback: median 112.66 ms, worst scene 169.16 ms; whole render call (setup, render, sink): worst scene 169.82 ms
+1920x1080 render + readback: median 441.34 ms, worst scene 666.97 ms; whole render call (setup, render, sink): worst scene 669.69 ms
+3840x2160 render + readback: median 1747.68 ms, worst scene 2644.75 ms; whole render call (setup, render, sink): worst scene 2655.54 ms
+
+$ pigment-prose paint-bench --adapter Intel --stress --runs 3
+pigment-prose 0.1.0 paint-bench: renderer v0, generator v0, aspect 16:9, 12 sample seeds, 3 runs (2 warm-up)
+device: Intel(R) Graphics (RPL-S) (Vulkan)
+stress scene: 96 layers, 32768 vertices
+scene generation (CPU): median 0.52 ms, max 0.63 ms
+960x540 render + readback: median 1854.58 ms, worst scene 1854.58 ms; whole render call (setup, render, sink): worst scene 1855.99 ms
+1920x1080 render + readback: median 7417.87 ms, worst scene 7417.87 ms; whole render call (setup, render, sink): worst scene 7421.18 ms
+3840x2160 render + readback: median 20015.94 ms, worst scene 20015.94 ms; whole render call (setup, render, sink): worst scene 20026.73 ms

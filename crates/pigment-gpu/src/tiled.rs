@@ -222,7 +222,23 @@ pub(crate) fn texture(
 
 /// A read-only storage buffer holding `data` (at least 16 bytes).
 pub(crate) fn storage_buffer(ctx: &GpuContext, label: &str, data: &[f32]) -> wgpu::Buffer {
-    let bytes: Vec<u8> = data.iter().flat_map(|f| f.to_le_bytes()).collect();
+    storage_buffer_bytes(
+        ctx,
+        label,
+        data.iter().flat_map(|f| f.to_le_bytes()).collect(),
+    )
+}
+
+/// [`storage_buffer`] for `u32` data.
+pub(crate) fn storage_buffer_u32(ctx: &GpuContext, label: &str, data: &[u32]) -> wgpu::Buffer {
+    storage_buffer_bytes(
+        ctx,
+        label,
+        data.iter().flat_map(|v| v.to_le_bytes()).collect(),
+    )
+}
+
+fn storage_buffer_bytes(ctx: &GpuContext, label: &str, bytes: Vec<u8>) -> wgpu::Buffer {
     let b = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
         size: (bytes.len() as u64).max(16),
