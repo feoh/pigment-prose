@@ -19,10 +19,31 @@ pub struct ValidationError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Problem {
     NotFinite,
-    OutOfRange { value: f64, min: f64, max: f64 },
-    TooSmall { value: u64, min: u64 },
-    TooLarge { value: u64, max: u64 },
-    AspectTooExtreme { long_over_short: f64, max: f64 },
+    OutOfRange {
+        value: f64,
+        min: f64,
+        max: f64,
+    },
+    TooSmall {
+        value: u64,
+        min: u64,
+    },
+    TooLarge {
+        value: u64,
+        max: u64,
+    },
+    AspectTooExtreme {
+        long_over_short: f64,
+        max: f64,
+    },
+    /// A render size whose reduced aspect ratio differs from the scene's.
+    /// Exports never stretch; a new aspect ratio is a new scene.
+    AspectMismatch {
+        got: (u32, u32),
+        scene: (u32, u32),
+    },
+    /// Buffer arithmetic for this size would overflow the platform.
+    Overflow,
 }
 
 impl fmt::Display for ValidationError {
@@ -42,6 +63,13 @@ impl fmt::Display for ValidationError {
                 f,
                 "{field}: aspect ratio {long_over_short:.3}:1 is more extreme than {max}:1"
             ),
+            Problem::AspectMismatch { got, scene } => write!(
+                f,
+                "{field}: aspect ratio {}:{} differs from the scene's {}:{}; \
+                 a different aspect ratio recomposes the painting",
+                got.0, got.1, scene.0, scene.1
+            ),
+            Problem::Overflow => write!(f, "{field} is too large for this platform's buffers"),
         }
     }
 }

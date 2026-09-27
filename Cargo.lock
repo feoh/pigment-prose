@@ -674,6 +674,7 @@ version = "0.1.0"
 dependencies = [
  "pigment-core",
  "pigment-gpu",
+ "pigment-io",
  "png",
  "serde_json",
 ]
@@ -695,6 +696,15 @@ dependencies = [
  "pigment-core",
  "pollster",
  "wgpu",
+]
+
+[[package]]
+name = "pigment-io"
+version = "0.1.0"
+dependencies = [
+ "pigment-core",
+ "pigment-gpu",
+ "png",
 ]
 
 [[package]]

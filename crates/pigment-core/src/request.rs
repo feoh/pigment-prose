@@ -14,7 +14,7 @@ use crate::job::{CancelToken, ProgressSink};
 use crate::scene::Scene;
 use crate::seed::SeedBundle;
 use crate::settings::Appearance;
-use crate::tiles::{Support, TileCostModel, TilePlan, TilePolicy};
+use crate::tiles::{Support, TileCostModel, TileOrder, TilePlan, TilePolicy};
 
 /// Monotonically increasing per process. Larger = newer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -49,6 +49,9 @@ pub struct RenderTarget {
     pub width: u32,
     pub height: u32,
     pub policy: TilePolicy,
+    /// Tile visiting order within a band. Never changes the pixels; seam
+    /// tests vary it.
+    pub order: TileOrder,
 }
 
 #[derive(Debug, Clone)]

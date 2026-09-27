@@ -2,7 +2,7 @@
 
 This document freezes the interfaces that tasks 04–23 build on. Where it says **exists**, the code is in the repository, tested, and runs today. Where it names a later task, that task implements the item at the stated path with the stated signature. Decision record: [ADR 0001](decisions/0001-renderer-and-desktop-shell.md). Spike evidence: [architecture-spike.md](architecture-spike.md). Build and test commands: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. There is no painting, no PNG export and no desktop UI yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
+**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. The painting renderer (tasks 06–07) and tiled PNG export (task 09, [export.md](export.md)) exist. There is no desktop UI yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
 
 ## Stack
 
@@ -18,12 +18,12 @@ This document freezes the interfaces that tasks 04–23 build on. Where it says 
 | `crates/pigment-core/` | lib | Portable contracts: text gate, seeds, settings and controls, frame and coordinates, scene, recipe, requests and sinks, tile planning, job model, invalidation, capability data, errors. **No GPU, window or filesystem dependency**, so its tests run in CI on Linux, Windows and macOS. | exists |
 | `crates/pigment-gpu/` | lib | wgpu adapter selection and capability reports, `GpuContext` (device, queue, device-lost and error scopes), the shared tile loop (`tiled.rs`), renderers implementing `pigment_core::request::Renderer`. | exists (smoke and scene debug renderers) |
 | `crates/pigment-gpu/tests/gpu_hardware.rs` | test | Hardware GPU suite, `#[ignore]` by default. | exists |
-| `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`, `contact-sheet` (task 05, debug views to PNG). Task 14 adds `bench`. | exists |
-| `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize (09), recipe files and the document model (10). | task 09 creates |
+| `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`, `contact-sheet` (task 05, debug views to PNG), `paint-bench`, `export` (task 09). Task 14 adds `bench`. | exists |
+| `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize, and the export job (09); recipe files and the document model (10). | exists (09); recipe files → 10 |
 | `crates/pigment-studio/` → binary `pigment-studio` | bin | eframe/egui desktop app (11–13). | task 11 creates |
 | `spikes/gpu-tiles/` | separate Cargo project | Task 02 throwaway spike, excluded from the workspace. | frozen |
 
-Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pigment-studio`. `pigment-cli` depends on `core` and `gpu` (and on `io` once it exists). `pigment-core` never depends on the others.
+Dependency direction: `pigment-core` ← `pigment-gpu`, `pigment-core` ← `pigment-io`, and both ← `pigment-studio`. `pigment-io` reaches the GPU only through the `Renderer` trait, so it builds without wgpu; its hardware tests use `pigment-gpu` as a dev-dependency. `pigment-cli` depends on `core`, `gpu` and `io`. `pigment-core` never depends on the others.
 
 ## Contract cross-reference
 
@@ -45,15 +45,16 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |
 | Control specification | `settings::CONTROLS`, `ControlSpec`, `Channel`, `Group` | same | exists; UI → 12 |
 | Frame / export dimensions | `frame::Frame`, `AspectRatio`, `CanvasExtents`, `CanvasMapping`, `UHD_4K`, `UHD_8K` | `crates/pigment-core/src/frame.rs` | exists |
-| RenderRequest | `request::RenderRequest`, `RenderTarget`, `RenderPurpose`, `RequestId`, `RequestIds` | `crates/pigment-core/src/request.rs` | exists |
+| RenderRequest | `request::RenderRequest`, `RenderTarget` (size, `TilePolicy`, `TileOrder`), `RenderPurpose`, `RequestId`, `RequestIds` | `crates/pigment-core/src/request.rs` | exists |
 | RenderResult | `request::RenderReport`, `RenderOutcome`, `RenderTimings`; pixels flow through `TileSink` | same | exists |
-| Output sink | `request::TileSink`, `MemorySink` | same | exists; `PngSink` → 09 in `crates/pigment-io/src/png_sink.rs` |
+| Output sink | `request::TileSink`, `MemorySink`; `pigment_io::PngSink` | same; `crates/pigment-io/src/png_sink.rs` | exists (task 09, [export.md](export.md)) |
+| Export job | `pigment_io::{export_png, ExportSize, ExportReport, validate_target}`, `AtomicFile` | `crates/pigment-io/src/export.rs`, `atomic.rs` | exists (task 09) |
 | Renderer | `request::Renderer` trait | same | exists; `SmokeRenderer` exists, `PaintRenderer` → 06/07 |
 | Cancellation | `job::CancelToken` | `crates/pigment-core/src/job.rs` | exists |
 | Progress | `job::Progress`, `Phase`, `ProgressSink` | same | exists |
 | Preview queue / stale results | `job::Mailbox`, `Submitted`, `PreviewState` | same | exists; wired by 11 |
 | Invalidation | `invalidate::Invalidation::between` | `crates/pigment-core/src/invalidate.rs` | exists |
-| Tiling and halo | `tiles::TilePlan`, `Tile`, `TilePolicy`, `Support`, `apron_pixels`, `TileCostModel` | `crates/pigment-core/src/tiles.rs` | exists |
+| Tiling and halo | `tiles::TilePlan`, `Tile`, `TilePolicy`, `TileOrder`, `Support`, `apron_pixels`, `TileCostModel` | `crates/pigment-core/src/tiles.rs` | exists |
 | Capability reporting | `capability::GpuCapabilities`, `AdapterReport`, `LimitsReport`, `AdapterPolicy`, `rank` | `crates/pigment-core/src/capability.rs` | exists |
 | GPU device | `pigment_gpu::GpuContext` (`new`, `check_alive`, `scoped`) | `crates/pigment-gpu/src/context.rs` | exists |
 | Adapter selection | `pigment_gpu::adapter::{enumerate, select, report, is_software}` | `crates/pigment-gpu/src/adapter.rs` | exists |
@@ -94,7 +95,7 @@ let request = RenderRequest {
 // 4. Render tile by tile into a sink; cancellation is checked between tiles.
 let ctx = Arc::new(pigment_gpu::GpuContext::new(&AdapterPolicy::default())?);
 let renderer = pigment_gpu::PaintRenderer::new(ctx)?;          // tasks 06–07 (SmokeRenderer today)
-let mut sink = pigment_io::PngSink::create(&destination)?;     // task 09 (MemorySink today)
+let mut sink = pigment_io::PngSink::create(&destination)?;     // exists (task 09); pigment_io::export_png wraps steps 4–5
 let cancel = CancelToken::new();
 let report: RenderReport = renderer.render(&request, &cancel, &mut |p: Progress| ui.show(p), &mut sink)?;
 match report.outcome {
@@ -111,7 +112,7 @@ match report.outcome {
 - **Canvas units:** the frame's **short side is 1.0**. The origin is the frame's top-left, +y down. `CanvasExtents` is `(aspect, 1)` for landscape and `(1, aspect)` for portrait. `CanvasMapping::pixel_centre` maps pixels to canvas **per axis**. A preview whose rounded pixel size only approximates the aspect ratio is therefore stretched by under one pixel, never cropped.
 - **Pixel footprint** (`CanvasMapping::pixel_footprint`) is for antialiasing, band-limiting and converting supports to pixels (`support_pixels`, rounded up). It must never place structure.
 - **Scene key:** the scene depends on the *reduced integer aspect ratio* (`AspectRatio`), never on pixel size. 3840×2160 and 7680×4320 share a scene. Changing the aspect ratio (portrait, square, custom) **recomposes** the scene. Task 13's export dialog must say so rather than presenting it as a resolution change.
-- **Frame bounds (provisional):** each edge 64–16384 px. `long/short ≤ 4`. 16384 is just above the largest size measured (15360×8640, task 02); raise it only with task 09 evidence. Integer pixel coordinates stay exact in `f32` far beyond that (2²⁴).
+- **Frame bounds:** each edge 64–16384 px. `long/short ≤ 4`. 16384×9216 was exported and inspected in task 09 ([export.md](export.md)); raise the bound only with new evidence. Integer pixel coordinates stay exact in `f32` far beyond that (2²⁴). Exports must match the scene's aspect ratio **exactly** (`pigment_io::validate_target`); presets pick the largest exact-ratio frame (`Frame::largest_with_aspect`).
 - **Depth:** `SceneLayer::depth`, 0 = nearest and 1 = farthest. Layers are stored back to front and depth never increases along the list.
 
 ## Color, alpha and output encoding
@@ -121,7 +122,7 @@ match report.outcome {
 - **Gouache and opaque marks** use premultiplied "over": `c = color·a + c·(1 − a)`. Any intermediate that stores color with coverage stores it **premultiplied**, so soft edges never show dark fringes.
 - **Paper is opaque.** Final alpha is always 1. `TileSink` receives RGBA8 rows with alpha 255.
 - **sRGB encoding happens once**, in the final compute pass, which writes `rgba8unorm`. `*-srgb` formats are not storage-capable in WebGPU core, so the encode is explicit in WGSL (`srgb_encode`).
-- **PNG (task 09):** 8-bit **RGB** (the constant alpha is dropped), an `sRGB` chunk (perceptual intent) and **no text, time or EXIF chunks**. No prose, no paths, no user identity, no watermark. 16-bit output is optional and decided by task 09; the pipeline already carries more than 8 bits.
+- **PNG (task 09, implemented):** 8-bit **RGB** (the constant alpha is dropped), an `sRGB` chunk (perceptual intent) and **no text, time, EXIF or physical-size chunks**. The file is exactly `IHDR`, `sRGB`, `IDAT`…, `IEND`. No prose, no paths, no user identity, no watermark. **16-bit output is not offered** (decided in task 09): the final pass writes `rgba8unorm`, and a second output path is not worth it for a painted image.
 
 ## Texture, brush sizing and halo accounting
 
@@ -142,8 +143,8 @@ match report.outcome {
 
 - **Preview:** `TilePolicy::Single`, one tile at preview size. A 1920×1080 test-card tile allocates 33.6 MB.
 - **Export:** `TilePolicy::Budget { gpu_bytes, host_bytes }` with defaults of **256 MiB** of renderer-owned GPU allocations and a **256 MiB** host band buffer. The planner takes the largest of 2048/1024/512/256 px that fits both budgets and the device texture limit. At 8K with the spike's cost model that is 2048 px (102.7 MiB). With a 28 MiB budget it is 1024 px (27.4 MiB, the task 02 measurement, reproduced by `tiles::tests`).
-- **Regression:** `TilePolicy::Fixed { edge }` forces a tile size, including non-divisors such as 333, for seam tests.
-- **Out of memory:** resource creation runs inside `GpuContext::scoped`, which turns an allocation failure into `RenderError::OutOfMemory`. Task 09 retries with half the GPU budget until the 256 px floor, then reports the error. It never silently falls back to a lower resolution.
+- **Regression:** `TilePolicy::Fixed { edge }` forces a tile size, including non-divisors such as 333, for seam tests. `TileOrder::ReverseInBand` visits each band right to left. Bands still complete top to bottom, and the output is byte-identical (task 09).
+- **Out of memory:** resource creation runs inside `GpuContext::scoped`, which turns an allocation failure into `RenderError::OutOfMemory`. `pigment_io::export_png` retries with half the GPU budget until no tile edge down to 256 px fits, then reports the error (task 09). It never silently falls back to a lower resolution.
 - **Host memory:** one band (`image_w × tile_h × 4` bytes) plus the PNG encoder's buffers. The full image is never held in memory or on the GPU. Exception: `MemorySink` is for previews and tests only.
 - **wgpu allocator:** nvidia-smi showed no increase over an empty context for tiled 8K/16K runs (task 02). Budgets govern *our* allocations, not driver reservations.
 
@@ -233,8 +234,8 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | Settled preview, ≤ 1920 px long edge | spike: 5.16 ms at 1080p; test card: 1.4 ms at 720p | ≤ 150 ms |
 | Prose edit → settled preview visible | — | ≤ 300 ms debounce + ≤ 250 ms |
 | UI frame time while rendering | — | never blocked by render work (worker thread) |
-| 4K export incl. PNG | spike: 72 ms | ≤ 5 s |
-| 8K export incl. PNG | spike: 241 ms | ≤ 20 s |
+| 4K export incl. PNG | spike: 72 ms; painting, 3840×3840: 104 ms (task 09) | ≤ 5 s |
+| 8K export incl. PNG | spike: 241 ms; painting: 272 ms (task 09) | ≤ 20 s |
 | Export cancel latency | one tile (spike: ≤ 10 ms per 2048 tile at 16K) | ≤ 250 ms |
 
 ## Downstream assignments
@@ -246,7 +247,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | 06 color planes and washes | `pigment-gpu/src/paint.rs` + `paint.wgsl` (`PaintRenderer: Renderer`) on `tiled::drive`; palettes in `pigment-core/src/palette.rs`; control effects per the table above. Map `SceneLayer::shade` to plane value/temperature. **Done:** coverage uses per-layer row bins of edges sorted by right-most x (`coverage.rs`), exact against brute force; timings in [painting.md](painting.md#measured-linux-vulkan-2026-09-27) |
 | 07 woodland, rocks, water | **Done** (round 6 review pending). Same renderer; placements are part of `Scene` (vegetation stream), never generated on the GPU per tile. Paint-level marks (stand ages, emergents) hash canvas lattices; reflections and rock accents evaluate the scene at offset points, so no halo |
 | 08 visual gate | `docs/visual-review/`, contact sheets from `pigment-prose contact-sheet` |
-| 09 tiled PNG export | new `crates/pigment-io/src/png_sink.rs` (`PngSink: TileSink`, temp file + atomic rename, abort deletes); OOM retry around `Renderer::render`; export job in `pigment-io/src/export.rs` |
+| 09 tiled PNG export | **Done.** Spec: [export.md](export.md); evidence: [evidence/export-09](evidence/export-09/README.md). `pigment-io/src/png_sink.rs` (`PngSink: TileSink`, streaming, `IEND` check), `atomic.rs` (`AtomicFile`, also for task 10), `export.rs` (`export_png`, `ExportSize`, OOM retry); `TileOrder` on `RenderTarget`; `pigment-prose export`; hardware suite `crates/pigment-io/tests/gpu_export.rs` |
 | 10 recipe persistence | `crates/pigment-io/src/recipe_file.rs`, `document.rs` (dirty state, path); privacy per `Recipe::source_text` |
 | 11 shell and preview | new `crates/pigment-studio/` (eframe/egui, `WgpuSetup::Existing` with `GpuContext`); render worker on `job::Mailbox`; `PreviewState`; diagnostics panel from `GpuCapabilities` |
 | 12 controls | `pigment-studio/src/controls.rs` generated from `settings::CONTROLS`; `Invalidation::between` decides what reruns |

@@ -26,14 +26,16 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | Painting benchmark | `cargo run --release -p pigment-cli -- paint-bench [--sizes 960,1920,3840] [--sample N] [--stress] [--adapter NAME]` |
 | Settings side-by-side | `contact-sheet ... --vary KEY=V1,V2` (paint or form keys, for example `--vary wash=0,0.25,1` or `--vary relief=0,1`) |
 | Individual images with recipes | `contact-sheet ... --cells DIR` writes `DIR/NN.png` and `DIR/NN.recipe.json` (no source text) |
+| Full-resolution PNG export | `cargo run --release -p pigment-cli -- export --out FILE.png (--recipe R.recipe.json \| --sample N \| --passage ID) [--size 4k\|8k\|WxH] [--tile T \| --gpu-budget MIB] [--order reverse] [--cancel-after N]`; see [docs/export.md](docs/export.md) |
 | Hardware test suite only | `cargo test --release --locked -p pigment-gpu --test gpu_hardware -- --ignored --test-threads=1` |
+| Hardware export suite only | `cargo test --release --locked -p pigment-io --test gpu_export -- --ignored --test-threads=1 --nocapture` |
 
 `scripts/gpu-tests.sh` builds the CLI, prints `gpu-info`, runs `gpu-smoke` and then the ignored hardware tests. It exits non-zero if any step fails. **A machine without a hardware GPU fails these checks; it never skips them into a pass.** A software rasterizer is refused by default. With `--allow-software` it runs, labelled SOFTWARE, and `gpu-smoke` still exits non-zero.
 
 ## Test layers
 
 1. **Portable unit tests** (`crates/*/src/**`, `#[cfg(test)]`): contracts, validation, tile planning, the job model, invalidation, and frozen seed and scene checksums. They run in CI on Linux, Windows and macOS (`.github/workflows/ci.yml`). Any exact-value fixture here must hold on all three platforms (tiers 0–1 in the architecture doc).
-2. **Hardware GPU tests** (`crates/pigment-gpu/tests/gpu_hardware.rs`, `#[ignore = "needs a hardware GPU…"]`): tiled vs single-tile byte identity, repeatability, cancellation, limits. Run them manually on real hardware and save the log under `docs/evidence/` with the date and OS in the file name.
+2. **Hardware GPU tests** (`crates/pigment-gpu/tests/gpu_hardware.rs` and `crates/pigment-io/tests/gpu_export.rs`, `#[ignore = "needs a hardware GPU…"]`): tiled vs single-tile byte identity, repeatability, cancellation, limits. Run them manually on real hardware and save the log under `docs/evidence/` with the date and OS in the file name.
 3. **Visual review** (task 08 onward): contact sheets judged by a person against [docs/art-direction.md](docs/art-direction.md). Automated checks never count as visual approval.
 
 ## Evidence and claims

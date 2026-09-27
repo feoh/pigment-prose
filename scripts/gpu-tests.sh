@@ -11,4 +11,5 @@ log="${1:-/dev/null}"
   ./target/release/pigment-prose gpu-info
   ./target/release/pigment-prose gpu-smoke
   cargo test --release --locked -p pigment-gpu --test gpu_hardware -- --ignored --test-threads=1
+  cargo test --release --locked -p pigment-io --test gpu_export -- --ignored --test-threads=1 --nocapture
 } 2>&1 | tee "$log"

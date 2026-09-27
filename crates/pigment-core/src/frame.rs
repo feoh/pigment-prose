@@ -18,8 +18,9 @@ use crate::error::{Problem, ValidationError};
 
 /// Smallest accepted edge, in pixels.
 pub const MIN_EDGE: u32 = 64;
-/// Largest accepted edge, in pixels. Provisional: 15360×8640 is the largest
-/// size measured (task 02). Raise only with task 09 evidence.
+/// Largest accepted edge, in pixels. Exported and inspected at 16384×9216
+/// on the RTX 4070 Ti (task 09, docs/export.md). Raise only with new
+/// evidence: the bound is what has been validated, not a memory limit.
 pub const MAX_EDGE: u32 = 16384;
 /// Most extreme accepted `long / short` ratio. Compositions are authored for
 /// ratios up to 4:1; beyond that the templates are untested.
@@ -106,6 +107,24 @@ impl Frame {
 
     pub fn aspect(&self) -> AspectRatio {
         AspectRatio::of(self.width, self.height)
+    }
+
+    /// Largest frame with *exactly* `aspect` whose long side is at most
+    /// `max_long`: the biggest whole multiple of the reduced ratio. Export
+    /// presets use it ("8K" of a 16:9 scene is 7680×4320, of a 7:5 scene
+    /// 7679×5485), so a preset never recomposes the scene.
+    pub fn largest_with_aspect(
+        aspect: AspectRatio,
+        max_long: u32,
+    ) -> Result<Frame, ValidationError> {
+        let long = aspect.width.max(aspect.height);
+        let k = max_long / long;
+        let f = Frame {
+            width: aspect.width.saturating_mul(k),
+            height: aspect.height.saturating_mul(k),
+        };
+        f.validate()?;
+        Ok(f)
     }
 
     /// Largest size with this frame's aspect ratio whose long side is at
@@ -282,6 +301,23 @@ mod tests {
         // 0.012 canvas units: 7 px at 540p, 52 px at 8K (task 02 blur radius).
         assert_eq!(small.support_pixels(0.012), 7);
         assert_eq!(big.support_pixels(0.012), 52);
+    }
+
+    #[test]
+    fn exact_aspect_presets() {
+        let a = |w, h| AspectRatio::of(w, h);
+        assert_eq!(Frame::largest_with_aspect(a(16, 9), 7680), Ok(UHD_8K));
+        assert_eq!(
+            Frame::largest_with_aspect(a(9, 16), 3840),
+            Ok(UHD_4K.rotated())
+        );
+        let f = Frame::largest_with_aspect(a(7, 5), 7680).unwrap();
+        assert_eq!((f.width, f.height), (7679, 5485));
+        assert_eq!(f.aspect(), a(7, 5));
+        let sq = Frame::largest_with_aspect(a(1, 1), 3840).unwrap();
+        assert_eq!((sq.width, sq.height), (3840, 3840));
+        // A ratio whose smallest exact multiple exceeds the bound is refused.
+        assert!(Frame::largest_with_aspect(a(4001, 1000), 3840).is_err());
     }
 
     #[test]

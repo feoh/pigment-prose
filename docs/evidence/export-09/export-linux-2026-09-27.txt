@@ -1,0 +1,98 @@
+# 2026-09-27T22:16:14Z Linux 7.2.7-1-cachyos x86_64; rustc 1.98.1 (48a229cea 2026-09-01); driver 615.71.09
+
+$ pigment-prose export --out 8k.png --sample 15   # default export budget
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
+timings: device+pipelines 176.21 ms, scene 0.56 ms, setup 8.63 ms, render+readback 60.62 ms, PNG encode+write 202.58 ms, export total 271.95 ms
+measured peak host memory (VmHWM, whole process): 291.4 MiB
+wrote 8k.png (22.1 MiB)
+
+$ pigment-prose export --out 8k-alt.png --sample 15 --tile 333 --order reverse
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Fixed { edge: 333 }, ReverseInBand, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 24x13 tiles of 333x333 px, apron 50 px; estimated renderer GPU allocations 2.3 MiB per tile set, host band 9.8 MiB (cost model, not measured)
+timings: device+pipelines 96.05 ms, scene 0.56 ms, setup 7.88 ms, render+readback 73.96 ms, PNG encode+write 176.49 ms, export total 258.55 ms
+measured peak host memory (VmHWM, whole process): 242.1 MiB
+wrote 8k-tile333orderreverse.png (22.1 MiB)
+
+$ pigment-prose export --out 8k-alt.png --sample 15 --tile 1000
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Fixed { edge: 1000 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 8x5 tiles of 1000x1000 px, apron 50 px; estimated renderer GPU allocations 17.0 MiB per tile set, host band 29.3 MiB (cost model, not measured)
+timings: device+pipelines 94.86 ms, scene 0.56 ms, setup 8.09 ms, render+readback 52.06 ms, PNG encode+write 178.06 ms, export total 238.34 ms
+measured peak host memory (VmHWM, whole process): 260.3 MiB
+wrote 8k-tile1000.png (22.1 MiB)
+
+$ pigment-prose export --out 8k-alt.png --sample 15 --gpu-budget 16
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 16777216, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 15x9 tiles of 512x512 px, apron 50 px; estimated renderer GPU allocations 4.9 MiB per tile set, host band 15.0 MiB (cost model, not measured)
+timings: device+pipelines 102.32 ms, scene 0.55 ms, setup 8.09 ms, render+readback 59.34 ms, PNG encode+write 174.75 ms, export total 242.31 ms
+measured peak host memory (VmHWM, whole process): 247.0 MiB
+wrote 8k-gpubudget16.png (22.1 MiB)
+
+$ sha256sum 8k*.png   # every tiling and order must give the same file
+ce5eff39b5b5bf25c42b48904157c41fbcea3de092563d775731209355ff5276  8k-gpubudget16.png
+ce5eff39b5b5bf25c42b48904157c41fbcea3de092563d775731209355ff5276  8k.png
+ce5eff39b5b5bf25c42b48904157c41fbcea3de092563d775731209355ff5276  8k-tile1000.png
+ce5eff39b5b5bf25c42b48904157c41fbcea3de092563d775731209355ff5276  8k-tile333orderreverse.png
+
+$ pigment-prose export --out 16k.png --sample 15 --size 16384x9216   # the largest accepted edge
+pigment-prose 0.1.0 export: generator v1, renderer v1, 16384x9216 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 8x5 tiles of 2048x2048 px, apron 105 px; estimated renderer GPU allocations 70.9 MiB per tile set, host band 128.0 MiB (cost model, not measured)
+timings: device+pipelines 98.73 ms, scene 0.56 ms, setup 8.01 ms, render+readback 227.18 ms, PNG encode+write 704.01 ms, export total 939.33 ms
+measured peak host memory (VmHWM, whole process): 360.2 MiB
+wrote 16k.png (72.3 MiB)
+
+$ pigment-prose export --out portrait.png --sample 0 --aspect 3:4 --size 3000x4000
+pigment-prose 0.1.0 export: generator v1, renderer v1, 3000x4000 (aspect 3:4), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 2x2 tiles of 2048x2048 px, apron 35 px; estimated renderer GPU allocations 66.2 MiB per tile set, host band 23.4 MiB (cost model, not measured)
+timings: device+pipelines 93.23 ms, scene 0.32 ms, setup 7.26 ms, render+readback 14.50 ms, PNG encode+write 64.71 ms, export total 86.59 ms
+measured peak host memory (VmHWM, whole process): 255.9 MiB
+wrote portrait.png (9.6 MiB)
+
+$ pigment-prose export --out square-4k.png --sample 8 --aspect 1:1 --size 4k
+pigment-prose 0.1.0 export: generator v1, renderer v1, 3840x3840 (aspect 1:1), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 2x2 tiles of 2048x2048 px, apron 45 px; estimated renderer GPU allocations 66.9 MiB per tile set, host band 30.0 MiB (cost model, not measured)
+timings: device+pipelines 90.00 ms, scene 0.32 ms, setup 7.20 ms, render+readback 19.28 ms, PNG encode+write 77.39 ms, export total 104.05 ms
+measured peak host memory (VmHWM, whole process): 262.2 MiB
+wrote square.png (9.8 MiB)
+
+$ pigment-prose export --out small.png --sample 15 --size 1024x576   # host-memory baseline
+pigment-prose 0.1.0 export: generator v1, renderer v1, 1024x576 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 1x1 tiles of 1024x576 px, apron 8 px; estimated renderer GPU allocations 9.2 MiB per tile set, host band 2.2 MiB (cost model, not measured)
+timings: device+pipelines 87.84 ms, scene 0.56 ms, setup 8.05 ms, render+readback 1.58 ms, PNG encode+write 3.33 ms, export total 13.13 ms
+measured peak host memory (VmHWM, whole process): 235.3 MiB
+wrote small.png (0.7 MiB)
+
+$ echo previous > keep.png; pigment-prose export --out keep.png --sample 15 --tile 512 --cancel-after 5; cat keep.png; ls -a
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Fixed { edge: 512 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 15x9 tiles of 512x512 px, apron 50 px; estimated renderer GPU allocations 4.9 MiB per tile set, host band 15.0 MiB (cost model, not measured)
+timings: device+pipelines 89.50 ms, scene 0.56 ms, setup 7.92 ms, render+readback 2.52 ms, PNG encode+write 0.00 ms, export total 10.48 ms
+measured peak host memory (VmHWM, whole process): 245.3 MiB
+cancelled after 5 of 135 tiles; keep.png exists (kept from before)
+previous
+temporary files left: 0
+
+$ pigment-prose export --out 8k-bad.png --sample 15 --size 7680x4321
+error: frame: aspect ratio 7680:4321 differs from the scene's 16:9; a different aspect ratio recomposes the painting
+exit 1
+
+$ pigment-prose export --out 8k-bad.png --sample 15 --size 20000x11250
+error: frame.width = 20000 is above 16384
+exit 1
+
+$ pigment-prose export --out /nonexistent-dir/x.png --sample 15
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+error: output failed (Io): cannot write /nonexistent-dir/x.png: No such file or directory (os error 2)
+exit 1
+
+$ pngcheck-style chunk list of 8k.png (python)
+Counter({'IDAT': 89, 'IHDR': 1, 'sRGB': 1, 'IEND': 1}) order: ['IHDR', 'sRGB', 'IDAT', 'IEND']

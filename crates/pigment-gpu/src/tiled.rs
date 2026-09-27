@@ -73,8 +73,11 @@ pub(crate) fn drive(
     let row_bytes = plan.image_w as usize * 4;
     let mut band = vec![0u8; row_bytes * plan.tile_h as usize];
     let mut done = 0u32;
+    // Tiles of the current band read back so far; the band goes to the sink
+    // when all `plan.cols` are in, whatever order they arrived in.
+    let mut in_band = 0u32;
 
-    for tile in plan.tiles() {
+    for tile in plan.tiles_in(req.target.order) {
         if cancel.is_cancelled() {
             sink.abort();
             timings.total = t0.elapsed();
@@ -169,7 +172,9 @@ pub(crate) fn drive(
             total: plan.len(),
         });
 
-        if tile.x + tile.w == plan.image_w {
+        in_band += 1;
+        if in_band == plan.cols {
+            in_band = 0;
             let t_sink = Instant::now();
             let rows = tile.h as usize;
             if let Err(e) = sink.band(tile.y, tile.h, &band[..rows * row_bytes]) {

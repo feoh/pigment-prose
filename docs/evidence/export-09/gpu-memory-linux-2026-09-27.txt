@@ -1,0 +1,5 @@
+# 2026-09-27T22:16:26Z per-process GPU memory from nvidia-smi --query-compute-apps (sampled every 20 ms), RTX 4070 Ti, driver 615.71.09. Peak used_memory is the driver's accounting for the whole process (context, pipelines, allocator pools), a measurement; the export line's 'estimated renderer GPU allocations' is the cost model.
+1024x576: measured peak 200 MiB; cost-model allocations 9.2 MiB
+3840x2160: measured peak 200 MiB; cost-model allocations 65.6 MiB
+7680x4320: measured peak 200 MiB; cost-model allocations 67.2 MiB
+16384x9216: measured peak 200 MiB; cost-model allocations 70.9 MiB

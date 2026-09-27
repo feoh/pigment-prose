@@ -66,6 +66,17 @@ pub enum TilePolicy {
     Fixed { edge: u32 },
 }
 
+/// Order in which a render visits the tiles of each band. Bands always
+/// complete top to bottom (a PNG writer streams them), but tile content must
+/// not depend on the order within a band; the seam tests render both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TileOrder {
+    #[default]
+    RowMajor,
+    /// Right to left within each band.
+    ReverseInBand,
+}
+
 impl TilePolicy {
     pub fn default_export() -> TilePolicy {
         TilePolicy::Budget {
@@ -230,8 +241,19 @@ impl TilePlan {
     /// Tiles in row-major order. Bands of `tile_h` rows complete in order,
     /// which lets a PNG writer stream them.
     pub fn tiles(&self) -> impl Iterator<Item = Tile> + '_ {
-        (0..self.len()).map(move |i| {
-            let (c, r) = (i % self.cols, i / self.cols);
+        self.tiles_in(TileOrder::RowMajor)
+    }
+
+    /// Tiles band by band, top to bottom, visiting each band in `order`.
+    /// `Tile::index` stays the row-major index.
+    pub fn tiles_in(&self, order: TileOrder) -> impl Iterator<Item = Tile> + '_ {
+        (0..self.len()).map(move |n| {
+            let r = n / self.cols;
+            let c = match order {
+                TileOrder::RowMajor => n % self.cols,
+                TileOrder::ReverseInBand => self.cols - 1 - n % self.cols,
+            };
+            let i = r * self.cols + c;
             let (x, y) = (c * self.tile_w, r * self.tile_h);
             let (w, h) = (
                 self.tile_w.min(self.image_w - x),
@@ -297,6 +319,30 @@ mod tests {
             assert!(covered.iter().all(|&c| c == 1), "{w}x{h} tile {edge}");
             assert_eq!(p.tiles().count() as u32, p.len());
         }
+    }
+
+    #[test]
+    fn reverse_order_visits_the_same_tiles_band_by_band() {
+        let p = TilePlan::new(
+            1000,
+            700,
+            10,
+            TilePolicy::Fixed { edge: 300 },
+            WEBGPU_DEFAULT,
+            SPIKE_COST,
+        )
+        .unwrap();
+        let fwd: Vec<Tile> = p.tiles().collect();
+        let rev: Vec<Tile> = p.tiles_in(TileOrder::ReverseInBand).collect();
+        assert_eq!(rev.len(), fwd.len());
+        // Same band sequence, reversed within each band.
+        for (band_f, band_r) in fwd.chunks(p.cols as usize).zip(rev.chunks(p.cols as usize)) {
+            let mut back = band_r.to_vec();
+            back.reverse();
+            assert_eq!(band_f, &back[..]);
+        }
+        assert_eq!(rev[0].x, 900);
+        assert_eq!(rev[0].index, 3);
     }
 
     #[test]

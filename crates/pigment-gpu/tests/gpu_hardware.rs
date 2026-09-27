@@ -21,7 +21,7 @@ use pigment_core::scene::{SceneGenerator, TestCard, diagnostic_seeds, raster};
 use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::PaletteId;
 use pigment_core::settings::{Appearance, FormSettings};
-use pigment_core::tiles::TilePolicy;
+use pigment_core::tiles::{TileOrder, TilePolicy};
 use pigment_gpu::{
     CompositeCase, CompositeOp, DebugRenderer, DebugView, GpuContext, PaintRenderer, SmokeRenderer,
 };
@@ -65,6 +65,7 @@ fn request(frame: Frame, seed: u64, looseness: f64, policy: TilePolicy) -> Rende
             width: frame.width,
             height: frame.height,
             policy,
+            order: TileOrder::RowMajor,
         },
     }
 }
@@ -197,6 +198,7 @@ fn lakeshore_request(text: &str, frame: Frame, policy: TilePolicy) -> RenderRequ
             width: frame.width,
             height: frame.height,
             policy,
+            order: TileOrder::RowMajor,
         },
     }
 }

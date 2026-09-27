@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/pigment-core", "crates/pigment-gpu", "crates/pigment-cli"]
+members = ["crates/pigment-core", "crates/pigment-gpu", "crates/pigment-io", "crates/pigment-cli"]
 # The task 02 spike is a separate, throwaway Cargo project with its own lock.
 exclude = ["spikes/gpu-tiles"]
 
@@ -14,6 +14,7 @@ publish = false
 [workspace.dependencies]
 pigment-core = { path = "crates/pigment-core" }
 pigment-gpu = { path = "crates/pigment-gpu" }
+pigment-io = { path = "crates/pigment-io" }
 png = "0.18.1"
 pollster = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }

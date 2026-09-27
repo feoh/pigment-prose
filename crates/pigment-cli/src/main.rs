@@ -1,6 +1,7 @@
 //! `pigment-prose`: diagnostics CLI. Reads no user prose: `gpu-*` seeds are
 //! numbers, and `contact-sheet` reads only the synthetic fixture corpus or
-//! generated sample labels.
+//! generated sample labels. `export --recipe` uses a recipe's digest and
+//! settings; a recipe's optional `source_text` is never printed or used.
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
 use std::collections::HashMap;
@@ -24,9 +25,10 @@ use pigment_core::scene::{
 };
 use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
-use pigment_core::tiles::TilePolicy;
+use pigment_core::tiles::{TileOrder, TilePolicy};
 use pigment_core::version;
 use pigment_gpu::{DebugRenderer, DebugView, GpuContext, PaintRenderer, SmokeRenderer, adapter};
+use pigment_io::{ExportSize, PngCompression, export_png};
 
 const USAGE: &str = "\
 pigment-prose <command> [options]
@@ -72,6 +74,21 @@ pigment-prose <command> [options]
       limits allow, every bounding box over the whole frame) instead.
       Defaults: sizes 960,1920,3840, 12 samples, 16:9, 7 runs (first 2 are
       warm-up).
+  export --out FILE.png (--recipe R.recipe.json | --sample N | --passage ID)
+            [--passages FILE] [--variation V] [--aspect W:H]
+            [--size 4k|8k|WxH] [--tile T | --gpu-budget MIB] [--order reverse]
+            [--compression fast|balanced] [--cancel-after TILES]
+            [--adapter NAME] [form and paint options as for contact-sheet]
+      Paint one scene at full resolution, tile by tile, straight into a PNG
+      (bounded GPU and host memory; written beside FILE and renamed into
+      place only when complete). A recipe supplies seed, variation, form,
+      paint settings and aspect ratio; its frame is the default size. Sizes
+      must match the scene's aspect ratio exactly; 4k/8k pick the largest
+      exact-aspect frame with a long edge of 3840/7680. Prints the tile plan,
+      timings, the cost model's GPU/host estimates and the measured peak
+      host memory. --cancel-after cancels once that many tiles are done
+      (the partial file must disappear). Defaults: --sample 0, 16:9, 8k,
+      the export memory budget, fast compression.
 ";
 
 fn main() -> ExitCode {
@@ -81,6 +98,7 @@ fn main() -> ExitCode {
         Some("gpu-smoke") => parse(&args[1..]).and_then(|o| gpu_smoke(&o)),
         Some("contact-sheet") => parse(&args[1..]).and_then(|o| contact_sheet(&o)),
         Some("paint-bench") => parse(&args[1..]).and_then(|o| paint_bench(&o)),
+        Some("export") => parse(&args[1..]).and_then(|o| export(&o)),
         Some("--version") => {
             println!("pigment-prose {}", version::APP_VERSION);
             Ok(())
@@ -241,6 +259,7 @@ fn gpu_smoke(o: &Opts) -> Result<(), String> {
             width: w,
             height: h,
             policy,
+            order: TileOrder::RowMajor,
         },
     };
     let run = |req: &RenderRequest| -> Result<(RenderReport, MemorySink), String> {
@@ -658,6 +677,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
                 width: cw,
                 height: ch,
                 policy: TilePolicy::Single,
+                order: TileOrder::RowMajor,
             },
         };
         let mut sink = MemorySink::default();
@@ -794,6 +814,7 @@ fn paint_bench(o: &Opts) -> Result<(), String> {
                     width: w,
                     height: h,
                     policy: TilePolicy::Single,
+                    order: TileOrder::RowMajor,
                 },
             };
             let (mut t, mut total) = (Vec::new(), Vec::new());
@@ -958,6 +979,233 @@ fn draw_label(sheet: &mut [u8], sw: u32, x: u32, y: u32, n: usize, scale: u32) {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Peak resident set size of this process, from `/proc/self/status`
+/// (`VmHWM`). Linux only; a measurement, unlike the cost model's estimates.
+fn peak_rss_bytes() -> Option<u64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|l| l.starts_with("VmHWM:"))?;
+    let kib: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+    Some(kib * 1024)
+}
+
+fn mib(bytes: u64) -> String {
+    format!("{:.1} MiB", bytes as f64 / (1u64 << 20) as f64)
+}
+
+fn export(o: &Opts) -> Result<(), String> {
+    let out = std::path::Path::new(o.0.get("out").ok_or("export needs --out FILE.png")?);
+    let variation: u32 = o.num("variation", 0)?;
+    // Seeds, form, appearance and aspect: from a recipe, or a synthetic
+    // sample/fixture passage with command-line settings.
+    let (seeds, mut form, mut appearance, aspect, recipe_frame) =
+        if let Some(path) = o.0.get("recipe") {
+            let json = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
+            let r = Recipe::from_json(&json).map_err(|e| format!("{path}: {e}"))?;
+            for n in r.version_notices() {
+                eprintln!("note: {n}");
+            }
+            (
+                r.seeds(),
+                r.form,
+                r.appearance(),
+                r.frame.aspect(),
+                Some(r.frame),
+            )
+        } else {
+            let text = if let Some(id) = o.0.get("passage") {
+                let passages =
+                    o.0.get("passages")
+                        .map_or("fixtures/passages.json", String::as_str);
+                corpus(passages)?
+                    .into_iter()
+                    .find(|(pid, _)| pid == id)
+                    .map(|(_, t)| t)
+                    .ok_or_else(|| format!("no passage {id:?} in {passages}"))?
+            } else {
+                format!("sample passage {}", o.num::<u32>("sample", 0)?)
+            };
+            let digest = TextDigest::from_source(&text).map_err(|e| e.to_string())?;
+            let aspect = parse_aspect(o.0.get("aspect").map_or("16:9", String::as_str))?;
+            (
+                SeedBundle::derive(digest, Variation(variation)),
+                FormSettings::default(),
+                Appearance::default(),
+                aspect,
+                None,
+            )
+        };
+    for key in ["faceting", "relief", "density"] {
+        if let Some(v) = o.0.get(key) {
+            set_form(&mut form, key, v)?;
+        }
+    }
+    for key in PAINT_KEYS {
+        if let Some(v) = o.0.get(key) {
+            set_paint(&mut appearance, key, v)?;
+        }
+    }
+    form.validate().map_err(|e| e.to_string())?;
+    appearance.validate().map_err(|e| e.to_string())?;
+    let size = match o.0.get("size").map(String::as_str) {
+        None if recipe_frame.is_some() => None,
+        None | Some("8k") => Some(ExportSize::Uhd8k),
+        Some("4k") => Some(ExportSize::Uhd4k),
+        Some(s) => {
+            let (w, h) = s
+                .split_once('x')
+                .ok_or_else(|| format!("--size {s:?}: expected 4k, 8k or WxH"))?;
+            let bad = |_| format!("--size {s:?}: bad number");
+            Some(ExportSize::Custom {
+                width: w.parse().map_err(bad)?,
+                height: h.parse().map_err(bad)?,
+            })
+        }
+    };
+    let frame = match (size, recipe_frame) {
+        (Some(size), _) => size.frame(aspect).map_err(|e| e.to_string())?,
+        (None, Some(f)) => f,
+        (None, None) => unreachable!("a size is always chosen without a recipe"),
+    };
+    let policy = if o.0.contains_key("tile") {
+        TilePolicy::Fixed {
+            edge: o.num("tile", 2048)?,
+        }
+    } else if o.0.contains_key("gpu-budget") {
+        TilePolicy::Budget {
+            gpu_bytes: o.num::<u64>("gpu-budget", 256)? << 20,
+            host_bytes: pigment_core::tiles::DEFAULT_HOST_BAND_BUDGET,
+        }
+    } else {
+        TilePolicy::default_export()
+    };
+    let order = match o.0.get("order").map(String::as_str) {
+        None | Some("row-major") => TileOrder::RowMajor,
+        Some("reverse") => TileOrder::ReverseInBand,
+        Some(v) => return Err(format!("--order {v:?}: expected row-major or reverse")),
+    };
+    let compression = match o.0.get("compression").map(String::as_str) {
+        None | Some("fast") => PngCompression::Fast,
+        Some("balanced") => PngCompression::Balanced,
+        Some(v) => return Err(format!("--compression {v:?}: expected fast or balanced")),
+    };
+    let cancel_after: Option<u32> =
+        o.0.get("cancel-after")
+            .map(|_| o.num("cancel-after", 1))
+            .transpose()?;
+
+    let t_ctx = Instant::now();
+    let ctx = Arc::new(GpuContext::new(&o.policy()).map_err(|e| e.to_string())?);
+    let renderer = PaintRenderer::new(ctx.clone()).map_err(|e| e.to_string())?;
+    let t_ctx = t_ctx.elapsed();
+    println!(
+        "pigment-prose {} export: generator v{}, renderer v{}, {}x{} (aspect {}:{}), {policy:?}, {order:?}, {compression:?}\ndevice: {} (wgpu {})",
+        version::APP_VERSION,
+        version::GENERATOR_VERSION,
+        version::RENDERER_VERSION,
+        frame.width,
+        frame.height,
+        aspect.width,
+        aspect.height,
+        ctx.capabilities.label(),
+        pigment_gpu::context::WGPU_VERSION,
+    );
+    if ctx.capabilities.adapter.software {
+        println!("WARNING: software adapter; results are NOT GPU evidence");
+    }
+    let t_scene = Instant::now();
+    let scene = Arc::new(
+        LakeshoreGenerator
+            .generate(&seeds, &form, aspect)
+            .map_err(|e| e.to_string())?,
+    );
+    let t_scene = t_scene.elapsed();
+    let req = RenderRequest {
+        id: RequestIds::default().next(),
+        purpose: RenderPurpose::Export,
+        scene,
+        seeds,
+        appearance,
+        target: RenderTarget {
+            width: frame.width,
+            height: frame.height,
+            policy,
+            order,
+        },
+    };
+    let cancel = CancelToken::new();
+    let c2 = cancel.clone();
+    let mut last_band = Instant::now();
+    let mut on_progress = move |p: Progress| {
+        if cancel_after.is_some_and(|n| p.done >= n) {
+            c2.cancel();
+        }
+        if p.phase == pigment_core::job::Phase::Tiles
+            && last_band.elapsed() > Duration::from_secs(1)
+        {
+            eprintln!("  {} / {} tiles", p.done, p.total);
+            last_band = Instant::now();
+        }
+    };
+    let rep = export_png(&renderer, &req, out, compression, &cancel, &mut on_progress)
+        .map_err(|e| e.to_string())?;
+    let r = &rep.render;
+    let p = &r.plan;
+    for a in &rep.attempts {
+        if let Some(stage) = a.out_of_memory {
+            println!(
+                "attempt {:?}: GPU out of memory during {stage}; retried",
+                a.policy
+            );
+        }
+    }
+    println!(
+        "plan: {}x{} tiles of {}x{} px, apron {} px; estimated renderer GPU allocations {} per tile set, host band {} (cost model, not measured)",
+        p.cols,
+        p.rows,
+        p.tile_w,
+        p.tile_h,
+        p.apron,
+        mib(p.gpu_bytes),
+        mib(p.host_band_bytes),
+    );
+    println!(
+        "timings: device+pipelines {}, scene {}, setup {}, render+readback {}, PNG encode+write {}, export total {}",
+        ms(t_ctx),
+        ms(t_scene),
+        ms(r.timings.setup),
+        ms(r.timings.render_readback),
+        ms(r.timings.sink),
+        ms(r.timings.total),
+    );
+    match peak_rss_bytes() {
+        Some(b) => println!(
+            "measured peak host memory (VmHWM, whole process): {}",
+            mib(b)
+        ),
+        None => println!("measured peak host memory: unavailable on this OS"),
+    }
+    match r.outcome {
+        RenderOutcome::Completed => {
+            println!("wrote {} ({})", out.display(), mib(rep.bytes));
+            Ok(())
+        }
+        RenderOutcome::Cancelled { tiles_done } => {
+            let left = out.exists();
+            println!(
+                "cancelled after {tiles_done} of {} tiles; {} {}",
+                p.len(),
+                out.display(),
+                if left {
+                    "exists (kept from before)"
+                } else {
+                    "was not written"
+                }
+            );
+            Ok(())
         }
     }
 }

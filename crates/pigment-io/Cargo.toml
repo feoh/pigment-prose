@@ -1,0 +1,19 @@
+[package]
+name = "pigment-io"
+description = "Pigment Prose file output: streaming PNG export with atomic finalize (task 09)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+pigment-core.workspace = true
+png.workspace = true
+
+[dev-dependencies]
+# The hardware export suite (tests/gpu_export.rs) renders with the painter.
+pigment-gpu.workspace = true
+
+[lints]
+workspace = true
