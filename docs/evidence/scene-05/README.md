@@ -1,5 +1,7 @@
 # Task 05 contact sheets: structure only, not paintings
 
+> **Superseded by task 05b.** These sheets show the task 05 generator before the vista rework (new templates, clouds, light pool, scale). They are kept as the record of that review, which read "some hills and some scrub". Current candidates are in [docs/visual-review/](../../visual-review/).
+
 These sheets show the **scene geometry** from the lakeshore generator (v0, pre-approval) through the debug renderer. `regions` colors each role, shades it by its structural `shade` and outlines every region boundary. `flat` shows neutral values with depth lightening. **There is no painting here.** Colors are debug codes, not a palette, and these images are not candidates for the task 08 visual review. The specification is [docs/scene-generation.md](../../scene-generation.md).
 
 Region colors: sky pale blue, distant range lavender, mountain gray, foothills olive, framing ridges brown, water blue, shore tan, woodland green, rocks orange. Lighter or darker versions of a color are its `shade`, i.e. which way that plane faces the light.

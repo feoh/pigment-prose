@@ -1,6 +1,8 @@
-# Scene generation (task 05)
+# Scene generation (tasks 05 and 05b)
 
 This document specifies the structural scene for the first painting, a rocky wooded lakeshore below a mountain ridge. The code is `crates/pigment-core/src/scene/` (`lakeshore.rs`, `noise.rs`, `raster.rs`). The debug views are in `crates/pigment-gpu/src/debug.rs`. Contact sheets and their notes are in [evidence/scene-05/](evidence/scene-05/README.md). The contracts it builds on are in [architecture.md](architecture.md), and the seed streams are in [seeds-and-recipes.md](seeds-and-recipes.md).
+
+**Task 05b (vistas for awe)** added two templates (`tower-peak`, `high-vantage`), cloud masses, a structural light pool, distance-scaled trees and awe metrics. It followed the user's review that the task 05 scenes read as "some hills and some scrub". Sections marked 05b below describe the additions, and [art-direction.md](art-direction.md#awe-metrics) describes the metrics. Round-by-round ratings are in [visual-review/](visual-review/).
 
 The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **0 (pre-approval)**. Everything here, including the frozen checksums, may change freely until the task 08 visual gate. After approval, any checksum change requires a version bump.
 
@@ -18,6 +20,7 @@ Layers produced, back to front:
 | Layer | Role | Depth | Notes |
 | --- | --- | --- | --- |
 | Sky | `Sky` | 1.0 | a rectangle past the frame on every side, so no pixel is ever uncovered |
+| Clouds (05b) | `Cloud` | 0.98 | an optional storm deck with a break, then 1–3 cumulus banks, each with a body, a sunlit crown and a shadowed base; behind all terrain, so the peaks stand in front of the sky |
 | Distant range | `FarRidge` | 0.95 | 38 ± 22 % of the summit height, low detail |
 | Main massif | `Mountain` | 0.85 | the silhouette body, shade 0.5 |
 | Mountain facets | `Mountain` | 0.85 | up to 24 planes laid over the body; shade from facing |
@@ -29,10 +32,12 @@ Layers produced, back to front:
 | Near shore | `Shore` | 0.25 | foreground land; the near shoreline is its top edge |
 | Near woods | `Woodland` | 0.20 | up to 3 clusters on the near shore |
 | Rocks | `ForegroundRock` | 0.15 → 0.03 | 3–6 boulders, each a body plus three planes (two flanks and a top cap), sorted far to near |
+| Valley spurs (05b, `high-vantage`) | `NearRidge` | 0.44 → 0.14 | 4–7 ridges from alternating sides, far to near, each with a band of trees sized for its distance; the lake winds between them |
+| Cliff edge (05b, `high-vantage`) | `ForegroundRock` | 0.08 | the ledge the viewer stands on, high at one side, with a lit rim and a stand of trees there (replaces the near shore, near woods and rocks) |
 
 The two `Woodland` kinds are **placement regions** for task 07's trees. The debug views show them as flat masses, and their scalloped outlines are only a rough canopy envelope. The water's top edge (far shoreline), the near shore's top edge (near shoreline) and the rock bases give task 07 the reflection line and the shore contact.
 
-**Bounds:** at most 96 layers, 4096 vertices per layer and 32,768 per scene (validated by `Scene::new`). The densest case, 4:1 at maximum faceting, relief and density, stays under 72 layers and 24,000 vertices (tested). The corpus at 16:9 uses 35–49 layers and 7,979–11,203 vertices.
+**Bounds:** at most 96 layers, 4096 vertices per layer and 32,768 per scene (validated by `Scene::new`). The densest case, `high-vantage` at 4:1 with maximum faceting, relief and density, stays under 90 layers and 30,000 vertices (tested; the worst of 180 extreme scenes measured 28,284). Distant spurs are sampled at up to 2 × `PROFILE_STEP`, and far woods at `PROFILE_STEP`, to stay within that bound.
 
 ## Topology: x-monotone bands
 
@@ -60,8 +65,10 @@ The draw order is fixed, and **the number of values drawn never depends on form 
 | `peak-over-water` | one dominant summit at 24–40 % of the width, secondary summits at 30–60 % of its height | a corner in the lower corner opposite the summit, with the rocks on it |
 | `framing-ridges` | ridges descend to the lake from both sides (35–60 % of the sky space high, feet at 22–36 % of the width from each edge), framing a summit at 40–60 %; the lake's edge bends forward under the ridges | a bay across the whole width |
 | `twin-summits` | two summits at 22–36 % and 62–78 %, the second 80–97 % as high | a corner (60 %) or a bay (40 %) |
+| `tower-peak` (05b) | "high distance": a low horizon (66–74 % of the frame height in portrait and square frames, up to 70–78 % at 2:1 and wider), one steep summit at 35–62 % with two shoulders at 50–82 % of its height, 1.4× detail. The summit reaches 0.56–0.9 of the sky space (up to `MAX_TOWER` = 1.3), with half-width (1.25 − 0.5 × relief) × height | a small corner. Far trees are 0.35× normal size (0.5× under `high-vantage`), near woods stay at the frame edge, rocks are 0.6× |
+| `high-vantage` (05b) | "level distance" from above: a high horizon (28–40 %) with a distant massif at 0.45–0.85 of the small sky space | a cliff edge; valley spurs descend from the horizon (spacing ∝ t^1.5, size (0.05 + 0.32 t²) × (0.6 + 0.8 × relief)) |
 
-Mirroring flips every horizontal placement. The light comes from the upper left or the upper right. Secondary summits continue outward from the focal ones every 0.3–0.6 canvas units until past the frame, so a wide frame shows more of the range instead of stretched summits.
+Template weights (05b): `tower-peak` 25 %, `high-vantage` 25 %, `peak-over-water` 17 %, `twin-summits` 17 %, `framing-ridges` 16 %. Mirroring flips every horizontal placement. The light comes from the upper left or the upper right. Secondary summits continue outward from the focal ones every 0.3–0.6 canvas units until past the frame, so a wide frame shows more of the range instead of stretched summits.
 
 **Horizon:** 52–60 % of the frame height for portrait and square frames, rising linearly to 60–68 % at 2:1 and wider. Everything above it is the *sky space* that summit heights are measured against.
 
@@ -86,6 +93,12 @@ Mirroring flips every horizontal placement. The light comes from the upper left 
 **Rocks.** There are 3–6 rocks, clustered around a composed position along the visible near shoreline. Their width is (0.06 + 0.16 × size) × (0.5 + 0.8 × nearness). Most sit on the waterline (a base offset of −0.25 to +0.4 widths, where negative means standing in water). A few stand further forward and larger (cubed placement). The profile blends a dome with a seven-knot polygon that has a broad top (`faceting`). The planes are two flanks with creases falling from the apex, and a top cap facing the sky (shade from facing, slightly lifted).
 
 **Woodland.** The far woods are clusters stratified along the width. Each is active with probability 0.15 + 0.8 × density, has a half-width of (0.06–0.24) × (0.6 + 0.8 × density), and stands 0.012–0.047 × (0.6 + 0.8 × density) tall on the waterline. The near woods are up to 3 clusters on the near shore toward the frame edge, each active with probability 0.1 + 0.9 × density, standing up to (0.1–0.35) × sky space × (0.5 + 0.7 × density) tall. Density 0 leaves under 5 % woodland coverage, and density 1 always gives more than density 0 (tested).
+
+## Sky, light and scale (05b)
+
+- **Clouds.** 75 % of skies are *dramatic*. A dramatic sky gets a storm deck with a probability of 65 % (calm skies 15 %). The deck's lower edge is at 12–30 % of the sky space, lumpy, and lifts by 40–80 % inside a break 0.3–0.7 wide near the focal summit. Every sky has 1–3 cumulus banks 0.25–0.7 × the width (capped at 1.8 canvas units) wide, with billows 0.1–0.22 across. Cloud outlines use `CLOUD_STEP` = 1/120.
+- **Light pool.** This is a sun break: a disc of radius 0.25–0.5 on the primary summit, or (for `high-vantage`, 60 %) in the valley. Each layer's `shade` is scaled between `1 − 0.45 s` (outside, in cloud shadow) and `1 + 0.4 s` (inside), weighted by how much of the layer lies inside the pool. The strength `s` is 0.5–0.9 in dramatic skies and 0.1–0.25 otherwise. Like everything in the scene, it depends only on the seed and form, never on paint settings.
+- **Scale.** Trees are the ruler. Far trees are scaled by template. Near woods are capped at 0.35 × the summit's rise, so they can never rival the mountain. Spur trees grow with nearness, from 0.003 to 0.033 × (0.6 + 0.8 × density). Whenever density > 0, at least one far wood always exists.
 
 ## Noise algorithm and limits
 
@@ -147,7 +160,8 @@ Measured on the RTX 4070 Ti (Vulkan), for one debug cell of `shore-a` (40 layers
 | Pixel size keeps the scene; aspect ratio recomposes it | `pixel_size_keeps_the_scene_and_aspect_recomposes_it` |
 | Variation changes the composition; all templates occur in the corpus | `variation_changes_the_composition` |
 | Form morphs without recomposing; relief, faceting and density effects | `form_morphs_the_same_composition`, `relief_raises_the_mountain`, `faceting_changes_shape_and_planes`, `woodland_density_scales_the_woodland_regions` |
-| Visible depth order by role | `layers_run_back_to_front_by_role` |
+| Visible depth order by role (clouds directly in front of the sky) | `layers_run_back_to_front_by_role` |
+| Vista templates beat the classic ones on their own devices (rise and scale for the tower, planes and expanse for the high vantage); dramatic skies stage more contrast (05b) | `vista_templates_score_higher_on_their_devices`, `dramatic_light_stages_contrast` |
 | Exact arithmetic only | `generators_use_only_exact_arithmetic` |
 | Noise values frozen, band-limited, normalized | `noise::tests` |
 | Rasterizer and simplicity checker | `raster::tests` |

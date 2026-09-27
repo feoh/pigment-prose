@@ -19,6 +19,7 @@
 //! rasterizer and topology checker for tests and diagnostics.
 
 pub mod lakeshore;
+pub mod metrics;
 mod noise;
 pub mod raster;
 
@@ -77,10 +78,12 @@ pub enum LayerRole {
     ForegroundRock = 7,
     /// The main mountain massif and its facet planes.
     Mountain = 8,
+    /// Cloud masses in the sky (behind all terrain).
+    Cloud = 9,
 }
 
 impl LayerRole {
-    pub const ALL: [LayerRole; 9] = [
+    pub const ALL: [LayerRole; 10] = [
         LayerRole::Sky,
         LayerRole::FarRidge,
         LayerRole::MidRidge,
@@ -90,6 +93,7 @@ impl LayerRole {
         LayerRole::Woodland,
         LayerRole::ForegroundRock,
         LayerRole::Mountain,
+        LayerRole::Cloud,
     ];
 
     pub fn name(self) -> &'static str {
@@ -103,6 +107,7 @@ impl LayerRole {
             LayerRole::Woodland => "woodland",
             LayerRole::ForegroundRock => "foreground-rock",
             LayerRole::Mountain => "mountain",
+            LayerRole::Cloud => "cloud",
         }
     }
 }

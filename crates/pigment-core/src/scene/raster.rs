@@ -63,8 +63,8 @@ pub fn front_layers(scene: &Scene, w: usize, h: usize) -> Vec<u16> {
 
 /// Visible fraction of the frame covered by each role (front-most layer
 /// only), from a `w × h` sample grid, in [`LayerRole::ALL`] order.
-pub fn role_coverage(scene: &Scene, w: usize, h: usize) -> [f64; 9] {
-    let mut counts = [0usize; 9];
+pub fn role_coverage(scene: &Scene, w: usize, h: usize) -> [f64; 10] {
+    let mut counts = [0usize; 10];
     for id in front_layers(scene, w, h) {
         if id != NONE {
             let role = scene.layers()[id as usize].role;

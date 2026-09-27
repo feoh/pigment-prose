@@ -31,10 +31,17 @@ pub const PROFILE_STEP: f64 = 1.0 / 320.0;
 pub const MIN_WAVELENGTH: f64 = 1.0 / 160.0;
 /// Every full-width layer extends this far past the frame on all sides.
 pub const MARGIN: f64 = 0.1;
+/// Vertex spacing of cloud outlines (soft masses, billows ≥ 0.1 across).
+pub const CLOUD_STEP: f64 = 1.0 / 120.0;
 /// Highest primary summit above the horizon, canvas units (short side = 1).
 pub const MAX_SUMMIT: f64 = 0.75;
 
+/// Highest summit of the `TowerPeak` template, canvas units.
+pub const MAX_TOWER: f64 = 1.3;
+
 pub const MAX_ROCKS: usize = 6;
+pub const MAX_CUMULUS: usize = 3;
+pub const MAX_SPURS: usize = 7;
 pub const MAX_FAR_WOODS: usize = 6;
 pub const MAX_NEAR_WOODS: usize = 3;
 pub const MAX_MOUNTAIN_PLANES: usize = 24;
@@ -42,6 +49,7 @@ pub const MAX_MOUNTAIN_PLANES: usize = 24;
 /// Layer depths, back to front.
 pub mod depth {
     pub const SKY: f32 = 1.0;
+    pub const CLOUDS: f32 = 0.98;
     pub const FAR_RANGE: f32 = 0.95;
     pub const MOUNTAIN: f32 = 0.85;
     pub const FOOTHILLS: f32 = 0.66;
@@ -54,6 +62,11 @@ pub mod depth {
     /// Rocks run from this (farthest) toward [`ROCK_NEAREST`].
     pub const ROCK_FARTHEST: f32 = 0.15;
     pub const ROCK_NEAREST: f32 = 0.03;
+    /// Valley spurs (`HighVantage`) run from this toward [`SPUR_NEAREST`].
+    pub const SPUR_FARTHEST: f32 = 0.44;
+    pub const SPUR_NEAREST: f32 = 0.14;
+    /// The cliff edge the viewer stands on (`HighVantage`).
+    pub const LEDGE: f32 = 0.08;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -66,13 +79,22 @@ pub enum Template {
     FramingRidges,
     /// A long ridge with two summits of similar height.
     TwinSummits,
+    /// "High distance": a low horizon and one steep giant summit rising
+    /// over a tiny forested shore, so the trees measure the mountain.
+    TowerPeak,
+    /// "Level distance" from above: a high horizon, ridge spurs stepping
+    /// down from both sides with the lake winding between them, seen from
+    /// a cliff edge in the foreground.
+    HighVantage,
 }
 
 impl Template {
-    pub const ALL: [Template; 3] = [
+    pub const ALL: [Template; 5] = [
         Template::PeakOverWater,
         Template::FramingRidges,
         Template::TwinSummits,
+        Template::TowerPeak,
+        Template::HighVantage,
     ];
 
     pub fn name(self) -> &'static str {
@@ -80,6 +102,8 @@ impl Template {
             Template::PeakOverWater => "peak-over-water",
             Template::FramingRidges => "framing-ridges",
             Template::TwinSummits => "twin-summits",
+            Template::TowerPeak => "tower-peak",
+            Template::HighVantage => "high-vantage",
         }
     }
 }
@@ -90,6 +114,58 @@ pub enum ShoreKind {
     Corner { right: bool },
     /// The shoreline crosses the whole width with a central bay.
     Bay,
+    /// No near shore: the viewer stands on a cliff edge (`HighVantage`),
+    /// higher on the right or the left.
+    Ledge { high_right: bool },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Cumulus {
+    /// Canvas x of the centre and full width.
+    pub x: f64,
+    pub width: f64,
+    /// Canvas y of the flat base, and billow height above it.
+    pub base: f64,
+    pub height: f64,
+    /// Billow wavelength, canvas units.
+    pub billow: f64,
+}
+
+/// A storm deck across the top of the frame with a break in it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Deck {
+    /// Canvas y of the deck's lower edge.
+    pub base: f64,
+    /// Centre and width of the break, canvas units.
+    pub gap_x: f64,
+    pub gap_width: f64,
+    /// How far the lower edge lifts inside the break, canvas units.
+    pub lift: f64,
+}
+
+/// Where the light falls: a sun break through the clouds. Layers inside the
+/// pool are lifted in `shade`, the rest sink into cloud shadow.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LightPool {
+    /// Centre on the primary summit (true) or at `(x, y)` in the valley.
+    pub on_summit: bool,
+    pub x: f64,
+    pub y: f64,
+    pub radius: f64,
+    /// 0 = even light, 1 = strongest contrast.
+    pub strength: f64,
+}
+
+/// One valley spur of `HighVantage`, far to near.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Spur {
+    pub from_right: bool,
+    /// 0 (at the horizon) to 1 (at the frame bottom): how near it is.
+    pub nearness: f64,
+    /// How far across the width its tip reaches, fraction of the width.
+    pub reach: f64,
+    pub height: f64,
+    pub thickness: f64,
 }
 
 /// One summit of the main massif. Heights are relative to the primary.
@@ -134,6 +210,17 @@ pub struct Composition {
     pub framing_bend: f64,
     /// Where along the visible near shore the rocks cluster, 0–1.
     pub rock_cluster: f64,
+    /// Sky structure. `dramatic` scenes get a storm deck more often and a
+    /// stronger light pool.
+    pub dramatic: bool,
+    pub cumulus: Vec<Cumulus>,
+    pub deck: Option<Deck>,
+    pub light: LightPool,
+    /// `HighVantage` only (empty otherwise).
+    pub spurs: Vec<Spur>,
+    /// `HighVantage` cliff edge: base height, rise at the high side, and
+    /// how far the high side reaches (fraction of the width).
+    pub ledge: [f64; 3],
 }
 
 impl Composition {
@@ -141,13 +228,25 @@ impl Composition {
         let ext = aspect.extents();
         let (w, h) = (ext.width, ext.height);
         let mut r = seeds.stream(Domain::Composition).rng();
-        let template = Template::ALL[r.below(3) as usize];
+        // The vista templates (tower and high vantage) take half the draws.
+        let template = match r.below(100) {
+            0..25 => Template::TowerPeak,
+            25..50 => Template::HighVantage,
+            50..67 => Template::PeakOverWater,
+            67..84 => Template::TwinSummits,
+            _ => Template::FramingRidges,
+        };
         let mirrored = r.below(2) == 1;
         let light_from_left = r.below(2) == 1;
         // Wider frames get a higher horizon share (less sky); portrait and
-        // square frames keep more sky for a taller mountain.
+        // square frames keep more sky for a taller mountain. The tower sits
+        // on a low horizon; the high vantage looks down on a high one.
         let wide = (w / h - 1.0).clamp(0.0, 1.0);
-        let lo = 0.52 + 0.08 * wide;
+        let lo = match template {
+            Template::TowerPeak => 0.66 + 0.04 * wide,
+            Template::HighVantage => 0.28 + 0.04 * wide,
+            _ => 0.52 + 0.08 * wide,
+        };
         let horizon = h * r.range_f64(lo, lo + 0.08);
         let peak_scale = r.next_f64();
 
@@ -179,6 +278,26 @@ impl Composition {
                 humps.push(hump(&mut r, x2, rel));
                 (0.3, 0.6)
             }
+            Template::TowerPeak => {
+                let x = fx(r.range_f64(0.35, 0.62));
+                let mut main = hump(&mut r, x, 1.0);
+                main.left = r.range_f64(0.6, 1.5);
+                main.right = r.range_f64(0.6, 1.5);
+                humps.push(main);
+                // Shoulders and a subsidiary top make a massif, not a
+                // pyramid.
+                for side in [-1.0, 1.0] {
+                    let dx = side * r.range_f64(0.1, 0.3) * w.min(1.0);
+                    let rel = r.range_f64(0.5, 0.82);
+                    humps.push(hump(&mut r, x + dx, rel));
+                }
+                (0.15, 0.4)
+            }
+            Template::HighVantage => {
+                let x = fx(r.range_f64(0.3, 0.7));
+                humps.push(hump(&mut r, x, 1.0));
+                (0.35, 0.7)
+            }
         };
         // Secondary summits walk outward in canvas units, so wider frames
         // carry more of the range rather than stretched summits.
@@ -203,8 +322,11 @@ impl Composition {
         let shore_roll = r.next_f64();
         let corner_right = humps[0].x < 0.5 * w;
         let shore = match template {
-            Template::PeakOverWater => ShoreKind::Corner {
+            Template::PeakOverWater | Template::TowerPeak => ShoreKind::Corner {
                 right: corner_right,
+            },
+            Template::HighVantage => ShoreKind::Ledge {
+                high_right: !corner_right,
             },
             Template::FramingRidges => ShoreKind::Bay,
             Template::TwinSummits if shore_roll < 0.6 => ShoreKind::Corner {
@@ -213,6 +335,13 @@ impl Composition {
             Template::TwinSummits => ShoreKind::Bay,
         };
         let shore_params = match shore {
+            // The tower's foreground stays small so the summit dominates.
+            ShoreKind::Corner { .. } if template == Template::TowerPeak => [
+                r.range_f64(0.35, 0.65),
+                r.range_f64(0.3, 0.55),
+                r.range_f64(0.2, 0.7),
+                r.next_f64(),
+            ],
             ShoreKind::Corner { .. } => [
                 r.range_f64(0.15, 0.45),
                 r.range_f64(0.55, 0.85),
@@ -225,6 +354,7 @@ impl Composition {
                 r.range_f64(0.35, 0.6),
                 r.range_f64(0.08, 0.25),
             ],
+            ShoreKind::Ledge { .. } => [0.0; 4],
         };
         let framing = [
             r.range_f64(0.35, 0.6),
@@ -234,6 +364,72 @@ impl Composition {
         ];
         let framing_bend = r.range_f64(0.02, 0.05);
         let rock_cluster = r.next_f64();
+
+        // Sky: cumulus banks sit in the sky space (often behind the peaks);
+        // dramatic skies usually add a storm deck with a break near the
+        // focal summit, and the light pool falls through it.
+        let dramatic = r.next_f64() < 0.75;
+        let n_cumulus = 1 + r.below(MAX_CUMULUS as u64) as usize;
+        let mut cumulus = Vec::with_capacity(MAX_CUMULUS);
+        for _ in 0..MAX_CUMULUS {
+            cumulus.push(Cumulus {
+                x: r.range_f64(-0.05, 1.05) * w,
+                width: r.range_f64(0.25, 0.7) * w.clamp(1.0, 1.8),
+                base: horizon * r.range_f64(0.3, 0.8),
+                height: r.range_f64(0.08, 0.22) * h.min(w).max(horizon.min(1.0)),
+                billow: r.range_f64(0.1, 0.22),
+            });
+        }
+        cumulus.truncate(n_cumulus);
+        let deck_roll = r.next_f64();
+        let deck_params = Deck {
+            base: horizon * r.range_f64(0.12, 0.3),
+            gap_x: humps[0].x + r.range_f64(-0.2, 0.2),
+            gap_width: r.range_f64(0.3, 0.7) * w.min(1.5),
+            lift: r.range_f64(0.4, 0.8),
+        };
+        let deck = (deck_roll < if dramatic { 0.65 } else { 0.15 }).then_some(Deck {
+            lift: deck_params.base * deck_params.lift,
+            ..deck_params
+        });
+        let on_summit = template != Template::HighVantage || r.next_f64() < 0.4;
+        let light = LightPool {
+            on_summit,
+            x: r.range_f64(0.2, 0.8) * w,
+            y: horizon + (h - horizon) * r.range_f64(0.1, 0.4),
+            radius: r.range_f64(0.25, 0.5),
+            strength: if dramatic {
+                r.range_f64(0.5, 0.9)
+            } else {
+                r.range_f64(0.1, 0.25)
+            },
+        };
+
+        let mut spurs = Vec::new();
+        let mut ledge = [0.0; 3];
+        if template == Template::HighVantage {
+            let n = 4 + r.below((MAX_SPURS - 3) as u64) as usize;
+            let mut side = r.below(2) == 1;
+            for k in 0..n {
+                let t = (k + 1) as f64 / (n + 1) as f64;
+                spurs.push(Spur {
+                    from_right: side,
+                    nearness: t,
+                    reach: r.range_f64(0.35, 0.72),
+                    height: r.range_f64(0.6, 1.4),
+                    thickness: r.range_f64(0.5, 1.2),
+                });
+                // Mostly alternate so the lake winds between the spurs.
+                if r.next_f64() < 0.8 {
+                    side = !side;
+                }
+            }
+            ledge = [
+                r.range_f64(0.05, 0.1),
+                r.range_f64(0.12, 0.3),
+                r.range_f64(0.25, 0.5),
+            ];
+        }
         Composition {
             template,
             mirrored,
@@ -246,6 +442,12 @@ impl Composition {
             framing,
             framing_bend,
             rock_cluster,
+            dramatic,
+            cumulus,
+            deck,
+            light,
+            spurs,
+            ledge,
         }
     }
 }
@@ -364,6 +566,10 @@ struct Builder<'a> {
     terrain: Rng,
     vegetation: Rng,
     layers: Vec<SceneLayer>,
+    /// Height of the primary summit above the horizon.
+    primary: f64,
+    /// Canvas position of the highest visible summit.
+    summit: (f64, f64),
 }
 
 /// Noise seeds drawn once from the terrain stream, in a fixed order.
@@ -377,6 +583,9 @@ struct TerrainSeeds {
     beach: u64,
     planes: u64,
     rocks: u64,
+    clouds: u64,
+    spurs: u64,
+    ledge: u64,
 }
 
 impl<'a> Builder<'a> {
@@ -397,6 +606,8 @@ impl<'a> Builder<'a> {
             terrain: seeds.stream(Domain::Terrain).rng(),
             vegetation: seeds.stream(Domain::Vegetation).rng(),
             layers: Vec::new(),
+            primary: primary_height(form, comp),
+            summit: (0.5 * ext.width, comp.horizon),
         }
     }
 
@@ -431,6 +642,9 @@ impl<'a> Builder<'a> {
             beach: t.next_u64(),
             planes: t.next_u64(),
             rocks: t.next_u64(),
+            clouds: t.next_u64(),
+            spurs: t.next_u64(),
+            ledge: t.next_u64(),
         };
         let (w, bottom) = (self.w, self.h + MARGIN);
         let sky = [
@@ -452,6 +666,7 @@ impl<'a> Builder<'a> {
             },
         ];
         self.push(LayerRole::Sky, depth::SKY, 0.5, sky.to_vec());
+        self.clouds(&ts);
 
         let ridge = self.mountain_ridge(&ts);
         let far = self.far_range(&ts, &ridge);
@@ -461,6 +676,12 @@ impl<'a> Builder<'a> {
         self.push(LayerRole::FarRidge, depth::FAR_RANGE, 0.5, outline);
 
         let sil: Vec<f64> = ridge.iter().map(|r| cap(self.sky - r)).collect();
+        if let Some(i) = (0..self.xs.len())
+            .filter(|&i| (0.0..=w).contains(&self.xs[i]))
+            .min_by(|&i, &j| sil[i].total_cmp(&sil[j]))
+        {
+            self.summit = (self.xs[i], sil[i]);
+        }
         let outline = band(&self.xs, &sil, Bottom::Flat(bottom));
         self.push(LayerRole::Mountain, depth::MOUNTAIN, 0.5, outline);
         self.mountain_planes(&ts, &ridge, &sil);
@@ -489,22 +710,336 @@ impl<'a> Builder<'a> {
         let outline = band(&self.xs, &waterline, Bottom::Flat(bottom));
         self.push(LayerRole::Water, depth::WATER, 0.5, outline);
 
-        let run = self.near_shore(&ts);
-        self.near_woods(&ts, run);
-        self.rocks(&ts, run);
+        if let ShoreKind::Ledge { high_right } = self.comp.shore {
+            self.spurs(&ts);
+            self.ledge(&ts, high_right);
+        } else {
+            let run = self.near_shore(&ts);
+            self.near_woods(&ts, run);
+            self.rocks(&ts, run);
+        }
+        self.apply_light();
         self.layers
+    }
+
+    /// Storm deck, then cumulus banks, each a band with structural planes.
+    fn clouds(&mut self, ts: &TerrainSeeds) {
+        let c = self.comp;
+        let (w, top) = (self.w, -MARGIN);
+        if let Some(d) = c.deck {
+            let fb = self.fbm(ts.clouds, 0.4, 1.0 / 60.0, 0.5, 0.3);
+            let bottom: Vec<f64> = self
+                .xs
+                .iter()
+                .map(|&x| {
+                    let g = (x - d.gap_x) / (0.5 * d.gap_width);
+                    let q = (1.0 - g * g).max(0.0);
+                    // A sagging, lumpy underside that lifts in the break.
+                    let lumps = crowns(ts.clouds ^ 7, x, 0.05) - 0.65;
+                    let y = d.base * (1.0 + 0.2 * fb.eval(x)) - d.lift * q * q + 0.012 * lumps;
+                    y.max(top + 0.02)
+                })
+                .collect();
+            let pt = |x: f64, y: f64| CanvasPoint {
+                x: x as f32,
+                y: y as f32,
+            };
+            let mut outline = vec![pt(-MARGIN, top), pt(w + MARGIN, top)];
+            for i in (0..self.xs.len()).rev() {
+                outline.push(pt(self.xs[i], bottom[i]));
+            }
+            self.push(LayerRole::Cloud, depth::CLOUDS, 0.3, outline);
+        }
+        for (k, cu) in c.cumulus.iter().enumerate() {
+            let (a, b) = (
+                (cu.x - 0.5 * cu.width).max(-MARGIN),
+                (cu.x + 0.5 * cu.width).min(w + MARGIN),
+            );
+            if b - a < 0.05 {
+                continue;
+            }
+            let seed = ts.clouds.wrapping_add(k as u64 + 1);
+            // Billows are at least 0.1 across, so a coarser grid suffices.
+            let xs = samples(a, b, CLOUD_STEP);
+            let env: Vec<f64> = xs.iter().map(|&x| envelope((x - a) / (b - a))).collect();
+            let top: Vec<f64> = xs
+                .iter()
+                .zip(&env)
+                .map(|(&x, &e)| {
+                    let billow = (crowns(seed, x, cu.billow) - 0.65) / 0.35;
+                    cu.base - cu.height * e * (0.45 + 0.55 * billow)
+                })
+                .collect();
+            let bottom: Vec<f64> = env
+                .iter()
+                .map(|e| cu.base + 0.004 + 0.05 * cu.height * e)
+                .collect();
+            self.push(
+                LayerRole::Cloud,
+                depth::CLOUDS,
+                0.62,
+                band(&xs, &top, Bottom::Open(&bottom)),
+            );
+            // Sunlit crown and shadowed base.
+            let cap: Vec<f64> = top
+                .iter()
+                .zip(&bottom)
+                .map(|(t, b)| t + 0.4 * (b - t))
+                .collect();
+            self.push(
+                LayerRole::Cloud,
+                depth::CLOUDS,
+                0.88,
+                band(&xs, &top, Bottom::Open(&cap)),
+            );
+            let base_top: Vec<f64> = env.iter().map(|e| cu.base - 0.18 * cu.height * e).collect();
+            self.push(
+                LayerRole::Cloud,
+                depth::CLOUDS,
+                0.34,
+                band(&xs, &base_top, Bottom::Open(&bottom)),
+            );
+        }
+    }
+
+    /// `HighVantage`: ridge spurs from the sides, far to near, each with a
+    /// band of trees sized for its distance, so the eye steps down the
+    /// valley and the trees measure it.
+    fn spurs(&mut self, ts: &TerrainSeeds) {
+        let f = *self.form;
+        let fg = self.h - self.sky;
+        let spurs = self.comp.spurs.clone();
+        for (k, sp) in spurs.iter().enumerate() {
+            let v = &mut self.vegetation;
+            let (wood_roll, wood_at, wood_len, wood_wl, wood_seed) = (
+                v.next_f64(),
+                v.range_f64(0.05, 0.45),
+                v.range_f64(0.2, 0.5),
+                v.next_f64(),
+                v.next_u64(),
+            );
+            let t = sp.nearness;
+            // Perspective: spurs bunch up toward the horizon.
+            let y_base = self.sky + fg * t * t.sqrt();
+            let size = (0.05 + 0.32 * t * t) * (0.6 + 0.8 * f.relief);
+            let (height, thick) = (size * sp.height, 0.8 * size * sp.thickness);
+            let reach = sp.reach * self.w;
+            let span = reach + MARGIN;
+            let sw = self.w;
+            let dist = move |x: f64| {
+                if sp.from_right {
+                    sw + MARGIN - x
+                } else {
+                    x + MARGIN
+                }
+            };
+            // Distant spurs are small and low in contrast: sample them more
+            // coarsely (twice the grid spacing at the horizon, the full grid
+            // in the foreground) and band-limit their detail to match.
+            let step = PROFILE_STEP * (2.0 - t);
+            let xs = if sp.from_right {
+                samples(self.w - reach, self.w + MARGIN, step)
+            } else {
+                samples(-MARGIN, reach, step)
+            };
+            if xs.len() < 4 {
+                continue;
+            }
+            let detail = self.fbm(
+                ts.spurs.wrapping_add(k as u64),
+                0.15 * (0.5 + t),
+                2.0 * step,
+                0.5,
+                f.faceting,
+            );
+            // Falls from the frame edge to the tip, with a rounded or
+            // faceted hill along the way so the spur has volume.
+            let profile = |x: f64| {
+                let u = (dist(x) / span).clamp(0.0, 1.0);
+                let fall = 1.0 - ease(u, f.faceting);
+                let hill = 1.0 - (2.0 * u - 0.7) * (2.0 * u - 0.7);
+                fall * (0.65 + 0.35 * hill.max(0.0))
+            };
+            let top: Vec<f64> = xs
+                .iter()
+                .map(|&x| y_base - height * profile(x) * (1.0 + 0.4 * detail.eval(x)))
+                .collect();
+            let bottom: Vec<f64> = xs
+                .iter()
+                .map(|&x| y_base + 0.003 + thick * (1.0 - dist(x) / span).max(0.0))
+                .collect();
+            let d = depth::SPUR_FARTHEST - (depth::SPUR_FARTHEST - depth::SPUR_NEAREST) * t as f32;
+            let (x_edge, x_tip) = if sp.from_right {
+                (self.w + MARGIN, self.w - reach)
+            } else {
+                (-MARGIN, reach)
+            };
+            let shade = face_shade(x_tip - x_edge, height, self.comp.light_from_left);
+            self.push(
+                LayerRole::NearRidge,
+                d,
+                shade,
+                band(&xs, &top, Bottom::Open(&bottom)),
+            );
+            // Trees along the spur's upper slope.
+            if wood_roll >= 0.2 + 0.7 * f.woodland_density {
+                continue;
+            }
+            let (s0, s1) = (wood_at, (wood_at + wood_len).min(0.95));
+            let sel: Vec<usize> = (0..xs.len())
+                .filter(|&i| {
+                    let s = dist(xs[i]) / span;
+                    s >= s0 && s <= s1
+                })
+                .collect();
+            if sel.len() < 4 {
+                continue;
+            }
+            let tree = (0.003 + 0.03 * t * t) * (0.6 + 0.8 * f.woodland_density);
+            let wl = (0.004 + 0.02 * t) * (0.8 + 0.4 * wood_wl);
+            let (a, b) = (xs[sel[0]], xs[sel[sel.len() - 1]]);
+            let wxs: Vec<f64> = sel.iter().map(|&i| xs[i]).collect();
+            let wtop: Vec<f64> = sel
+                .iter()
+                .map(|&i| {
+                    let x = xs[i];
+                    top[i] - tree * envelope((x - a) / (b - a)) * crowns(wood_seed, x, wl)
+                })
+                .collect();
+            let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.8 * tree + 0.001).collect();
+            self.push(
+                LayerRole::Woodland,
+                d,
+                0.5,
+                band(&wxs, &wtop, Bottom::Open(&wbot)),
+            );
+        }
+    }
+
+    /// `HighVantage`: the cliff edge the viewer stands on, higher at one
+    /// side (a dark frame), with a lit rim and a stand of trees on the
+    /// high side.
+    fn ledge(&mut self, ts: &TerrainSeeds, high_right: bool) {
+        let f = *self.form;
+        let [base, rise, reach] = self.comp.ledge;
+        let bottom = self.h + MARGIN;
+        let v = &mut self.vegetation;
+        let (wood_roll, wood_len, wood_tall, wood_wl, wood_seed) = (
+            v.next_f64(),
+            v.range_f64(0.3, 0.8),
+            v.next_f64(),
+            v.range_f64(0.02, 0.035),
+            v.next_u64(),
+        );
+        let reach_x = reach * self.w;
+        let sw = self.w;
+        let from_high = move |x: f64| if high_right { sw - x } else { x };
+        let detail = self.fbm(ts.ledge, 0.12, MIN_WAVELENGTH, 0.55, f.faceting);
+        let lift = |x: f64| {
+            let r = (1.0 - from_high(x) / reach_x).max(0.0);
+            base + rise * lerp(r * r * (3.0 - 2.0 * r), r, f.faceting)
+        };
+        let top: Vec<f64> = self
+            .xs
+            .iter()
+            .map(|&x| {
+                let l = lift(x);
+                (self.h - l * (1.0 + 0.25 * detail.eval(x))).min(bottom - 0.01)
+            })
+            .collect();
+        self.push(
+            LayerRole::ForegroundRock,
+            depth::LEDGE,
+            0.35,
+            band(&self.xs, &top, Bottom::Flat(bottom)),
+        );
+        let rim: Vec<f64> = self
+            .xs
+            .iter()
+            .zip(&top)
+            .map(|(&x, &y)| (y + 0.012 + 0.03 * (lift(x) - base) / rise).min(bottom - 0.005))
+            .collect();
+        self.push(
+            LayerRole::ForegroundRock,
+            depth::LEDGE,
+            0.8,
+            band(&self.xs, &top, Bottom::Open(&rim)),
+        );
+        if wood_roll >= 0.2 + 0.8 * f.woodland_density {
+            return;
+        }
+        let len = wood_len * reach_x;
+        let sel: Vec<usize> = (0..self.xs.len())
+            .filter(|&i| from_high(self.xs[i]) <= len)
+            .collect();
+        if sel.len() < 4 {
+            return;
+        }
+        let tall = (0.12 + 0.2 * wood_tall) * (0.6 + 0.6 * f.woodland_density);
+        let (a, b) = (self.xs[sel[0]], self.xs[sel[sel.len() - 1]]);
+        let wxs: Vec<f64> = sel.iter().map(|&i| self.xs[i]).collect();
+        let wtop: Vec<f64> = sel
+            .iter()
+            .map(|&i| {
+                let x = self.xs[i];
+                // Full height toward the frame edge, thinning inward.
+                let s = (x - a) / (b - a);
+                let s = if high_right { s } else { 1.0 - s };
+                top[i] - tall * (0.25 + 0.75 * s) * crowns(wood_seed, x, wood_wl)
+            })
+            .collect();
+        let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.02).collect();
+        self.push(
+            LayerRole::Woodland,
+            depth::LEDGE,
+            0.5,
+            band(&wxs, &wtop, Bottom::Open(&wbot)),
+        );
+    }
+
+    /// Structural light: layers inside the light pool are lifted, the rest
+    /// sink into cloud shadow, by the pool's strength. The pool is judged
+    /// from each layer's vertices inside the frame.
+    fn apply_light(&mut self) {
+        let lp = self.comp.light;
+        let (cx, cy) = if lp.on_summit {
+            (self.summit.0, self.summit.1 + 0.3 * lp.radius)
+        } else {
+            (lp.x, lp.y)
+        };
+        let (w, h, r2) = (self.w, self.h, lp.radius * lp.radius);
+        for l in self.layers.iter_mut().skip(1) {
+            let (mut acc, mut n) = (0.0, 0usize);
+            for p in &l.outline {
+                let (x, y) = (p.x as f64, p.y as f64);
+                if (0.0..=w).contains(&x) && (-0.05..=h + 0.05).contains(&y) {
+                    let d2 = ((x - cx) * (x - cx) + (y - cy) * (y - cy)) / r2;
+                    let g = (1.0 - d2).max(0.0);
+                    acc += g * g;
+                    n += 1;
+                }
+            }
+            let lit = if n > 0 {
+                (3.0 * acc / n as f64).min(1.0)
+            } else {
+                0.0
+            };
+            let factor = lerp(1.0 - 0.45 * lp.strength, 1.0 + 0.4 * lp.strength, lit);
+            l.shade = ((l.shade as f64) * factor).clamp(0.03, 0.97) as f32;
+        }
     }
 
     /// Height above the horizon of the main massif at every grid sample.
     fn mountain_ridge(&self, ts: &TerrainSeeds) -> Vec<f64> {
         let f = self.form;
         let c = self.comp;
-        // Capped in short-side units too, so tall portrait frames keep sky
-        // above the summit instead of a mountain filling the frame.
-        let primary = (self.sky * (0.3 + 0.5 * f.relief) * (0.85 + 0.3 * c.peak_scale))
-            .min(0.85 * self.sky)
-            .min(MAX_SUMMIT);
-        let ratio = 3.0 - 1.8 * f.relief; // half-width / height
+        let primary = self.primary;
+        // Half-width / height: the tower is steep.
+        let ratio = if c.template == Template::TowerPeak {
+            1.25 - 0.5 * f.relief
+        } else {
+            3.0 - 1.8 * f.relief
+        };
         let k = primary * (0.25 * (1.0 - f.faceting) + 0.02);
         let shoulder = self.fbm(ts.mountain ^ 1, 0.9, 0.2, 0.5, f.faceting);
         let detail = self.fbm(
@@ -514,7 +1049,12 @@ impl<'a> Builder<'a> {
             0.45 + 0.13 * f.faceting,
             f.faceting,
         );
-        let amp = 0.14 + 0.16 * f.relief;
+        let amp = (0.14 + 0.16 * f.relief)
+            * if c.template == Template::TowerPeak {
+                1.4
+            } else {
+                1.0
+            };
         self.xs
             .iter()
             .map(|&x| {
@@ -801,22 +1341,39 @@ impl<'a> Builder<'a> {
     fn far_woods(&mut self, ts: &TerrainSeeds) {
         let density = self.form.woodland_density;
         let span = self.w + 2.0 * MARGIN;
-        for j in 0..MAX_FAR_WOODS {
-            let v = &mut self.vegetation;
-            let (jit, width, height, roll, crown, seed) = (
-                v.range_f64(0.1, 0.9),
-                v.next_f64(),
-                v.next_f64(),
-                v.next_f64(),
-                v.range_f64(0.008, 0.016),
-                v.next_u64(),
-            );
-            if roll >= 0.15 + 0.8 * density {
+        let v = &mut self.vegetation;
+        let params: Vec<(f64, f64, f64, f64, f64, u64)> = (0..MAX_FAR_WOODS)
+            .map(|_| {
+                (
+                    v.range_f64(0.1, 0.9),
+                    v.next_f64(),
+                    v.next_f64(),
+                    v.next_f64(),
+                    v.range_f64(0.008, 0.016),
+                    v.next_u64(),
+                )
+            })
+            .collect();
+        // Any woodland at all means at least one far wood: the trees at the
+        // mountain's foot are its scale.
+        let surest = (0..MAX_FAR_WOODS)
+            .min_by(|&a, &b| params[a].3.total_cmp(&params[b].3))
+            .unwrap();
+        for (j, &(jit, width, height, roll, crown, seed)) in params.iter().enumerate() {
+            let forced = density > 0.0 && j == surest;
+            if roll >= 0.15 + 0.8 * density && !forced {
                 continue;
             }
             let centre = -MARGIN + (j as f64 + jit) / MAX_FAR_WOODS as f64 * span;
             let hw = (0.06 + 0.18 * width) * (0.6 + 0.8 * density);
-            let tall = (0.012 + 0.035 * height) * (0.6 + 0.8 * density);
+            // Trees at the mountain's foot are its scale: tiny under the
+            // tower and seen from the high vantage.
+            let scale = match self.comp.template {
+                Template::TowerPeak => 0.35,
+                Template::HighVantage => 0.5,
+                _ => 1.0,
+            };
+            let tall = (0.012 + 0.035 * height) * (0.6 + 0.8 * density) * scale;
             let (a, b) = (
                 (centre - hw).max(-MARGIN),
                 (centre + hw).min(self.w + MARGIN),
@@ -824,7 +1381,7 @@ impl<'a> Builder<'a> {
             if b - a < 0.02 {
                 continue;
             }
-            let xs = samples(a, b, PROFILE_STEP * 0.5);
+            let xs = samples(a, b, PROFILE_STEP);
             let wl: Vec<f64> = xs.iter().map(|&x| self.waterline(ts, x)).collect();
             let top: Vec<f64> = xs
                 .iter()
@@ -859,6 +1416,7 @@ impl<'a> Builder<'a> {
                 let headland = edge(x) * edge(x) + edge(self.w - x) * edge(self.w - x);
                 self.sky + fg * (mid + depth * q * q - 0.2 * headland)
             }
+            ShoreKind::Ledge { .. } => self.h + MARGIN,
         };
         base + 0.012 * detail.eval(x)
     }
@@ -895,6 +1453,7 @@ impl<'a> Builder<'a> {
                 self.xs.clone(),
                 ys.iter().map(|y| y.min(bottom - 0.01)).collect(),
             ),
+            ShoreKind::Ledge { .. } => return None,
         };
         if xs.len() >= 3 {
             let outline = match self.comp.shore {
@@ -911,7 +1470,7 @@ impl<'a> Builder<'a> {
                     }
                     o
                 }
-                ShoreKind::Bay => band(&xs, &top, Bottom::Flat(bottom)),
+                ShoreKind::Bay | ShoreKind::Ledge { .. } => band(&xs, &top, Bottom::Flat(bottom)),
             };
             self.push(LayerRole::Shore, depth::NEAR_SHORE, 0.5, outline);
         }
@@ -948,7 +1507,7 @@ impl<'a> Builder<'a> {
     fn edge_side_is_left(&self, run: (f64, f64)) -> bool {
         match self.comp.shore {
             ShoreKind::Corner { right } => !right,
-            ShoreKind::Bay => run.0 < self.w - run.1,
+            ShoreKind::Bay | ShoreKind::Ledge { .. } => run.0 < self.w - run.1,
         }
     }
 
@@ -969,13 +1528,20 @@ impl<'a> Builder<'a> {
                 continue;
             }
             let len = run.1 - run.0;
+            let pos = if self.comp.template == Template::TowerPeak {
+                0.35 * pos
+            } else {
+                pos
+            };
             let centre = if self.edge_side_is_left(run) {
                 run.0 + pos * len
             } else {
                 run.1 - pos * len
             };
             let hw = 0.5 * (0.12 + 0.25 * width) * (0.6 + 0.6 * density);
-            let tall = (0.1 + 0.25 * height) * (0.5 + 0.7 * density) * self.sky;
+            // Near trees must not rival the mountain, or it reads as a hill.
+            let tall = ((0.06 + 0.16 * height) * (0.5 + 0.7 * density) * self.sky)
+                .min(0.35 * self.primary);
             let (a, b) = (
                 (centre - hw).max(-MARGIN),
                 (centre + hw).min(self.w + MARGIN),
@@ -1036,7 +1602,12 @@ impl<'a> Builder<'a> {
             let x = ra + (rb - ra) * s;
             let shore = self.shore_y(ts, x);
             let near = ((shore - self.sky) / fg).clamp(0.0, 1.0);
-            let width = (0.06 + 0.16 * p.size) * (0.5 + 0.8 * near);
+            let small = if self.comp.template == Template::TowerPeak {
+                0.6
+            } else {
+                1.0
+            };
+            let width = (0.06 + 0.16 * p.size) * (0.5 + 0.8 * near) * small;
             // Most rocks sit on the waterline; a few stand further forward.
             let forward = (self.h - shore).max(0.0) * p.row * p.row * p.row;
             let y_base = shore + width * p.offset + forward;
@@ -1198,6 +1769,24 @@ struct RockParams {
     cap: f64,
 }
 
+/// Height of the primary summit above the horizon. Capped in short-side
+/// units too, so tall portrait frames keep sky above the summit; the tower
+/// may rise higher than the other templates.
+fn primary_height(f: &FormSettings, c: &Composition) -> f64 {
+    let sky = c.horizon;
+    match c.template {
+        Template::TowerPeak => (sky * (0.62 + 0.28 * f.relief) * (0.9 + 0.1 * c.peak_scale))
+            .min(0.9 * sky)
+            .min(MAX_TOWER),
+        Template::HighVantage => (sky * (0.45 + 0.4 * f.relief) * (0.85 + 0.3 * c.peak_scale))
+            .min(0.85 * sky)
+            .min(MAX_SUMMIT),
+        _ => (sky * (0.3 + 0.5 * f.relief) * (0.85 + 0.3 * c.peak_scale))
+            .min(0.85 * sky)
+            .min(MAX_SUMMIT),
+    }
+}
+
 /// Rises from 0 at both ends to 1 in the middle, flat-topped.
 fn envelope(s: f64) -> f64 {
     let q = (2.0 * s - 1.0) * (2.0 * s - 1.0);
@@ -1263,8 +1852,21 @@ mod tests {
 
     const ASPECTS: [(u32, u32); 6] = [(16, 9), (9, 16), (1, 1), (3, 2), (4, 1), (1, 4)];
 
+    /// Sample grid following the frame's aspect, fine enough for small
+    /// trees even in 1:4 frames.
+    fn grid(s: &Scene) -> (usize, usize) {
+        let e = s.extents();
+        let (w, h) = if e.width >= e.height {
+            (128.0 * e.width / e.height, 128.0)
+        } else {
+            (128.0, 128.0 * e.height / e.width)
+        };
+        (w as usize, h as usize)
+    }
+
     fn coverage(s: &Scene, role: LayerRole) -> f64 {
-        let cov = raster::role_coverage(s, 96, 96);
+        let (gw, gh) = grid(s);
+        let cov = raster::role_coverage(s, gw, gh);
         cov[LayerRole::ALL.iter().position(|r| *r == role).unwrap()]
     }
 
@@ -1285,22 +1887,23 @@ mod tests {
             return Err(format!("{empty} of the frame is uncovered"));
         }
         let min = [
-            (LayerRole::Sky, 0.10),
-            (LayerRole::Mountain, 0.015),
-            (LayerRole::Water, 0.05),
-            (LayerRole::Shore, 0.01),
-            (LayerRole::ForegroundRock, 0.0005),
+            (&[LayerRole::Sky, LayerRole::Cloud][..], 0.10),
+            (&[LayerRole::Mountain][..], 0.015),
+            (&[LayerRole::Water][..], 0.05),
+            (&[LayerRole::Shore, LayerRole::ForegroundRock][..], 0.01),
+            (&[LayerRole::ForegroundRock][..], 0.0005),
         ];
-        for (role, at_least) in min {
-            let c = coverage(s, role);
+        for (roles, at_least) in min {
+            let c: f64 = roles.iter().map(|r| coverage(s, *r)).sum();
             if c < at_least {
-                return Err(format!("{role:?} covers {c:.4}, below {at_least}"));
+                return Err(format!("{roles:?} cover {c:.4}, below {at_least}"));
             }
         }
         if form.woodland_density > 0.0 && coverage(s, LayerRole::Woodland) == 0.0 {
             return Err("no visible woodland".into());
         }
-        let cov = raster::role_coverage(s, 96, 96);
+        let (gw, gh) = grid(s);
+        let cov = raster::role_coverage(s, gw, gh);
         if let Some(c) = cov.iter().find(|&&c| c > 0.7) {
             return Err(format!("one role covers {c} of the frame"));
         }
@@ -1349,8 +1952,8 @@ mod tests {
         for i in 0..40 {
             let s = scene(&sample(i), form, AspectRatio::of(4, 1));
             let verts: usize = s.layers().iter().map(|l| l.outline.len()).sum();
-            assert!(s.layers().len() <= 72, "{} layers", s.layers().len());
-            assert!(verts <= 24_000, "{verts} vertices");
+            assert!(s.layers().len() <= 90, "{} layers", s.layers().len());
+            assert!(verts <= 30_000, "{verts} vertices");
             let planes = s
                 .layers()
                 .iter()
@@ -1435,9 +2038,9 @@ mod tests {
     }
 
     const FROZEN: [u64; 3] = [
-        0x6642_bf77_051c_6628,
-        0xb901_91ba_3313_0211,
-        0xbe12_e3c8_9af0_fc93,
+        0xa045_37ec_b34c_c5d8,
+        0x63b8_9a73_f8a3_c28e,
+        0xe54e_29c1_e332_9256,
     ];
 
     #[test]
@@ -1503,10 +2106,9 @@ mod tests {
         }
         assert!(templates.len() >= 2, "{templates:?}");
         assert_eq!(sums.len(), 12);
-        // Across the corpus every template appears.
-        let all: std::collections::HashSet<_> = corpus()
-            .iter()
-            .map(|(_, s)| Composition::draw(s, aspect).template)
+        // Across a seed sample every template appears.
+        let all: std::collections::HashSet<_> = (0..60)
+            .map(|i| Composition::draw(&sample(i), aspect).template)
             .collect();
         assert_eq!(all.len(), Template::ALL.len());
     }
@@ -1649,7 +2251,7 @@ mod tests {
     #[test]
     fn layers_run_back_to_front_by_role() {
         let order = |r: LayerRole| match r {
-            LayerRole::Sky => 0,
+            LayerRole::Sky | LayerRole::Cloud => 0,
             LayerRole::FarRidge => 1,
             LayerRole::Mountain => 2,
             LayerRole::MidRidge => 3,
@@ -1662,7 +2264,7 @@ mod tests {
             let roles: Vec<LayerRole> = s.layers().iter().map(|l| l.role).collect();
             let water = roles.iter().position(|r| *r == LayerRole::Water).unwrap();
             // Before the water everything is behind it; after it, only the
-            // near shore, near woods and rocks.
+            // near shore, valley spurs, near woods and rocks.
             for r in &roles[..water] {
                 assert!(order(*r) <= 4, "{id}: {r:?} before the water");
             }
@@ -1670,11 +2272,20 @@ mod tests {
                 assert!(
                     matches!(
                         r,
-                        LayerRole::Shore | LayerRole::Woodland | LayerRole::ForegroundRock
+                        LayerRole::Shore
+                            | LayerRole::Woodland
+                            | LayerRole::ForegroundRock
+                            | LayerRole::NearRidge
                     ),
                     "{id}: {r:?} in front of the water"
                 );
             }
+            // Clouds only ever sit directly in front of the sky.
+            let clouds = roles.iter().filter(|r| **r == LayerRole::Cloud).count();
+            assert!(
+                roles[1..=clouds].iter().all(|r| *r == LayerRole::Cloud),
+                "{id}"
+            );
             assert!(
                 roles[..water]
                     .windows(2)
@@ -1682,6 +2293,66 @@ mod tests {
                 "{id}"
             );
         }
+    }
+
+    #[test]
+    fn vista_templates_score_higher_on_their_devices() {
+        // Averages over a seed sample at 16:9, default form. The tower must
+        // win on height and scale, the high vantage on planes and expanse.
+        use crate::scene::metrics::measure;
+        let aspect = UHD_4K.aspect();
+        let mut by: std::collections::HashMap<Template, Vec<crate::scene::metrics::AweMetrics>> =
+            Default::default();
+        for i in 0..80 {
+            let seeds = sample(i);
+            let t = Composition::draw(&seeds, aspect).template;
+            let m = measure(&scene(&seeds, FormSettings::default(), aspect));
+            by.entry(t).or_default().push(m);
+        }
+        let mean = |ts: &[Template], f: &dyn Fn(&crate::scene::metrics::AweMetrics) -> f64| {
+            let v: Vec<f64> = ts
+                .iter()
+                .flat_map(|t| by.get(t).into_iter().flatten())
+                .map(f)
+                .collect();
+            v.iter().sum::<f64>() / v.len() as f64
+        };
+        let classic = [
+            Template::PeakOverWater,
+            Template::FramingRidges,
+            Template::TwinSummits,
+        ];
+        let tower = [Template::TowerPeak];
+        let high = [Template::HighVantage];
+        let rise = |m: &crate::scene::metrics::AweMetrics| m.summit_rise;
+        let scale = |m: &crate::scene::metrics::AweMetrics| m.scale_ratio.unwrap_or(0.0);
+        let planes = |m: &crate::scene::metrics::AweMetrics| m.planes as f64;
+        let expanse = |m: &crate::scene::metrics::AweMetrics| m.expanse;
+        assert!(mean(&tower, &rise) > 1.3 * mean(&classic, &rise));
+        assert!(mean(&tower, &scale) > 2.5 * mean(&classic, &scale));
+        assert!(mean(&high, &planes) > mean(&classic, &planes) + 3.0);
+        assert!(mean(&high, &expanse) > 1.5 * mean(&classic, &expanse));
+    }
+
+    #[test]
+    fn dramatic_light_stages_contrast() {
+        use crate::scene::metrics::measure;
+        let aspect = UHD_4K.aspect();
+        let (mut calm, mut drama) = (Vec::new(), Vec::new());
+        for i in 0..60 {
+            let seeds = sample(i);
+            let c = Composition::draw(&seeds, aspect);
+            let m = measure(&scene(&seeds, FormSettings::default(), aspect));
+            if c.dramatic { &mut drama } else { &mut calm }.push(m.light_contrast);
+        }
+        let avg = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+        assert!(!calm.is_empty() && !drama.is_empty());
+        assert!(
+            avg(&drama) > avg(&calm),
+            "{} vs {}",
+            avg(&drama),
+            avg(&calm)
+        );
     }
 
     #[test]

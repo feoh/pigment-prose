@@ -1,0 +1,17 @@
+cell	label	template	rise	scale	planes	expanse	clutter	sky	light
+0	sample passage 10	tower-peak	0.54	45	3	0.20	0.00	0.18	0.74
+1	sample passage 3	high-vantage	0.23	17	10	0.50	0.09	0.10	0.65
+2	sample passage 6	peak-over-water	0.33	11	3	0.28	0.08	0.08	0.53
+3	sample passage 21	tower-peak	0.48	35	3	0.25	0.00	0.04	0.63
+4	sample passage 12	high-vantage	0.21	15	10	0.56	0.05	0.09	0.59
+5	sample passage 1	framing-ridges	0.36	9	4	0.20	0.03	0.09	0.63
+6	sample passage 30	tower-peak	0.58	71	3	0.25	0.00	0.04	0.74
+7	sample passage 17	high-vantage	0.26	18	8	0.51	0.09	0.17	0.75
+8	sample passage 9	twin-summits	0.36	9	2	0.19	0.03	0.21	0.74
+9	sample passage 0	tower-peak	0.59	74	3	0.20	0.01	0.09	0.60
+10	sample passage 26	high-vantage	0.26	17	8	0.49	0.08	0.08	0.73
+11	sample passage 16	peak-over-water	0.30	6	3	0.30	0.03	0.05	0.53
+12	sample passage 8	framing-ridges	0.36	8	4	0.22	0.00	0.15	0.73
+13	sample passage 33	high-vantage	0.27	10	10	0.56	0.10	0.08	0.75
+14	sample passage 14	twin-summits	0.38	13	2	0.27	0.03	0.06	0.72
+15	sample passage 41	tower-peak	0.53	29	3	0.23	0.00	0.19	0.72

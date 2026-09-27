@@ -33,9 +33,10 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | Normalized text | `text::NormalizedText` (length-only `Debug`) | same | exists (`text::normalize`, `nfc-lf-utf8/1`, task 04) |
 | SeedBundle | `seed::SeedBundle`, `TextDigest` (256-bit, hex), `Variation(u32)`, `Domain`, `StreamSeed(u64)` | `crates/pigment-core/src/seed.rs` | exists (`TextDigest::of`/`from_source`, `SeedBundle::derive`, `StreamSeed::rng` → `Rng`, `pigment-seed/1`, task 04) |
 | Recipe | `recipe::Recipe`, `RecipeVersions`, `RecipeSeed` | `crates/pigment-core/src/recipe.rs` | exists (`from_json`, `to_canonical_json`, `validate`, `seeds`, `version_notices`, `SCHEMA`; task 04); files → 10 |
-| Scene | `scene::Scene`, `SceneKey`, `SceneLayer` (with structural `shade`), `LayerRole` (incl. `Mountain`), `CanvasPoint`, `SceneGenerator` | `crates/pigment-core/src/scene/mod.rs` | exists (plus diagnostic `TestCard` v1) |
+| Scene | `scene::Scene`, `SceneKey`, `SceneLayer` (with structural `shade`), `LayerRole` (incl. `Mountain`, `Cloud`), `CanvasPoint`, `SceneGenerator` | `crates/pigment-core/src/scene/mod.rs` | exists (plus diagnostic `TestCard` v1) |
 | Scene generator | `scene::lakeshore::{LakeshoreGenerator, Composition, Template}` | `crates/pigment-core/src/scene/lakeshore.rs` (+ `noise.rs`) | exists (task 05, [spec](scene-generation.md)) |
 | CPU reference raster | `scene::raster::{front_layers, role_coverage, empty_fraction, is_simple}` | `crates/pigment-core/src/scene/raster.rs` | exists |
+| Awe metrics | `scene::metrics::{measure, AweMetrics}` | `crates/pigment-core/src/scene/metrics.rs` | exists (task 05b; [rubric](art-direction.md#awe-metrics)) |
 | Scene debug views | `pigment_gpu::{DebugRenderer, DebugView}` (`Flat`, `Regions`, `LayerIds`) | `crates/pigment-gpu/src/debug.rs` + `debug.wgsl` | exists |
 | PaintingSettings | `settings::PaintingSettings` (+ `Appearance`, `PaletteSettings`, `AtmosphereSettings`) | `crates/pigment-core/src/settings.rs` | exists; effects → 06/07 |
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |

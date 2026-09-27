@@ -17,7 +17,7 @@ use pigment_core::request::{
     RequestIds,
 };
 use pigment_core::scene::lakeshore::{Composition, LakeshoreGenerator};
-use pigment_core::scene::{LayerRole, SceneGenerator, TestCard, diagnostic_seeds, raster};
+use pigment_core::scene::{LayerRole, SceneGenerator, TestCard, diagnostic_seeds, metrics, raster};
 use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
@@ -38,13 +38,15 @@ pigment-prose <command> [options]
       Defaults: 1920x1080, tile 512, seed 7, looseness 0.4.
   contact-sheet --out SHEET.png [--aspect W:H] [--view flat|regions]
             [--cell PX] [--cols N] [--variation V]
-            [--passages FILE | --passage ID --variations N | --sample N]
+            [--passages FILE | --passage ID --variations N | --sample N
+             | --samples I,J,...]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
       Render lakeshore scenes (task 05 geometry, debug views, no painting)
       into a grid PNG, plus SHEET.txt listing each cell's passage id,
       variation, template, geometry checksum and visible coverage by role.
       Cells: the corpus (default fixtures/passages.json) at one variation,
-      one passage's variations 0..N-1, or N generated sample seeds.
+      one passage's variations 0..N-1, N generated sample seeds, or the
+      listed sample seeds in the given order (for rating rounds).
       Defaults: 16:9, regions, cell 480 px long side, variation 0, 5 columns,
       form settings at their defaults.
 ";
@@ -444,7 +446,19 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         o.0.get("passages")
             .map_or("fixtures/passages.json", String::as_str);
     let mut cells = Vec::new();
-    if let Some(n) = o.0.get("sample") {
+    if let Some(list) = o.0.get("samples") {
+        for part in list.split(',') {
+            let i: u32 = part
+                .trim()
+                .parse()
+                .map_err(|_| format!("--samples {list:?}: bad number {part:?}"))?;
+            let label = format!("sample passage {i}");
+            cells.push(Cell {
+                seeds: derive(&label, variation)?,
+                label,
+            });
+        }
+    } else if let Some(n) = o.0.get("sample") {
         let n: u32 = n
             .parse()
             .map_err(|_| format!("--sample {n:?}: bad number"))?;
@@ -499,7 +513,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     let mut notes = format!(
         "pigment-prose {} contact-sheet: lakeshore generator v{}, debug view {view:?}, aspect {}:{}, \
          cell {cw}x{ch}, form faceting={} relief={} woodland_density={}\ndevice: {}\n\
-         cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\tcoverage % ({})\n",
+         cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\t{}\tcoverage % ({})\n",
         version::APP_VERSION,
         version::GENERATOR_VERSION,
         aspect.width,
@@ -508,6 +522,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         form.relief,
         form.woodland_density,
         ctx.capabilities.label(),
+        metrics::COLUMNS,
         LayerRole::ALL.map(|r| r.name()).join(" "),
     );
     let t0 = Instant::now();
@@ -546,12 +561,13 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         let cov = raster::role_coverage(&scene, 160, 160);
         let verts: usize = scene.layers().iter().map(|l| l.outline.len()).sum();
         notes.push_str(&format!(
-            "{i}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\n",
+            "{i}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\t{}\n",
             c.label,
             comp.template.name(),
             comp.mirrored,
             scene.layers().len(),
             scene.geometry_checksum(),
+            metrics::measure(&scene).columns(),
             cov.map(|v| format!("{:.1}", v * 100.0)).join(" "),
         ));
     }

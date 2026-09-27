@@ -90,6 +90,7 @@ fn role_value(role: u32) -> f32 {
         case 5u: { return 0.60; }  // shore
         case 6u: { return 0.10; }  // woodland
         case 7u: { return 0.40; }  // foreground rock
+        case 9u: { return 0.70; }  // cloud
         default: { return 0.45; }  // mountain
     }
 }
@@ -104,6 +105,7 @@ fn role_color(role: u32) -> vec3<f32> {
         case 5u: { return vec3<f32>(0.70, 0.58, 0.36); }
         case 6u: { return vec3<f32>(0.04, 0.26, 0.06); }
         case 7u: { return vec3<f32>(0.78, 0.36, 0.10); }
+        case 9u: { return vec3<f32>(0.90, 0.90, 0.86); }
         default: { return vec3<f32>(0.52, 0.52, 0.56); }
     }
 }
@@ -135,7 +137,7 @@ fn composite_main(@builtin(global_invocation_id) id: vec3<u32>) {
         let lit = 0.4 + 1.2 * h.w;
         if (P.view == 0u) {
             var v = role_value(role) * lit;
-            if (role != 0u) {
+            if (role != 0u && role != 9u) {
                 v = mix(v, 0.78, 0.45 * depth);
             }
             rgb = vec3<f32>(v);
