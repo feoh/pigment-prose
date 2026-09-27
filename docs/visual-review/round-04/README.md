@@ -10,12 +10,14 @@ This round responds to the round 3 criticism: "the extreme zig zag of the river 
 
 ## What changed
 
+- **Update (2026-09-27, before rating):** you asked what the purple sections with green and a beige border were in round 3 image 19. They were the cliff edge the viewer stood on, and at your request **it is removed**. High-vantage views now end on the valley's nearest forested spur, which sits on the frame's bottom edge, with the river running out of the frame. The sheets here were regenerated with that change.
+
 - **A meandering channel:** the water follows a smooth, sine-like centreline with evenly spaced bends. The bends swing wider toward the viewer and the channel widens gradually, as with perspective and a river downstream.
 - **Spurs from the inside of each bend:** each spur grows from the bank the channel swings away from, where land builds up, and ends at the channel's edge, so the tips line up along continuous banks.
 - **Eroded, blunt tips:** spur ends close on a rounded cap instead of a point, and the water line curves gently.
 - **Tests:** the channel's wave is continuous in value and slope (no kinks), and every spur keeps at least 30 % of its mid thickness at 85 % of the way to its tip (a wedge would be nearly closed).
 
-Only high-vantage scenes changed (the other templates' geometry checksums are identical to round 3).
+Only high-vantage scenes changed (the other templates' geometry checksums are identical to round 3; checked against the notes).
 
 ## What I'd like to know
 

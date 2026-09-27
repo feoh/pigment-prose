@@ -33,7 +33,7 @@ Layers produced, back to front:
 | Near woods | `Woodland` | 0.20 | up to 5 stands along the near shore, each one plant (see [painting.md](painting.md#plants)) |
 | Rocks | `ForegroundRock` | 0.15 → 0.03 | 3–6 boulders, each a body plus three planes (two flanks and a top cap), sorted far to near |
 | Valley spurs (05b, `high-vantage`) | `NearRidge` | 0.44 → 0.14 | 4–7 ridges from alternating sides, far to near, each with a band of trees sized for its distance; the lake winds between them |
-| Cliff edge (05b, `high-vantage`) | `ForegroundRock` | 0.08 | the ledge the viewer stands on, high at one side, with a lit rim and a stand of trees there (replaces the near shore, near woods and rocks) |
+| (removed) cliff edge | — | — | `high-vantage` once framed the view with a ledge the viewer stood on. Removed at the user's request (2026-09-27): the view now ends on the valley's nearest spur, which sits on the frame's bottom edge (nearness 1). There is no near shore, near woods or rocks in this template. |
 
 The two `Woodland` kinds are **placement regions** for task 07's trees. The debug views show them as flat masses, and their scalloped outlines are only a rough canopy envelope. The water's top edge (far shoreline), the near shore's top edge (near shoreline) and the rock bases give task 07 the reflection line and the shore contact.
 
@@ -66,7 +66,7 @@ The draw order is fixed, and **the number of values drawn never depends on form 
 | `framing-ridges` | ridges descend to the lake from both sides (35–60 % of the sky space high, feet at 22–36 % of the width from each edge), framing a summit at 40–60 %; the lake's edge bends forward under the ridges | a bay across the whole width |
 | `twin-summits` | two summits at 22–36 % and 62–78 %, the second 80–97 % as high | a corner (60 %) or a bay (40 %) |
 | `tower-peak` (05b) | "high distance": a low horizon (66–74 % of the frame height in portrait and square frames, up to 70–78 % at 2:1 and wider), one steep summit at 35–62 % with two shoulders at 50–82 % of its height, 1.4× detail. The summit reaches 0.56–0.9 of the sky space (up to `MAX_TOWER` = 1.3), with half-width (1.25 − 0.5 × relief) × height | a small corner. Far trees are 0.35× normal size (0.5× under `high-vantage`), near woods stay at the frame edge, rocks are 0.6× |
-| `high-vantage` (05b) | "level distance" from above: a high horizon (28–40 %) with a distant massif at 0.45–0.85 of the small sky space | a cliff edge; valley spurs descend from the horizon (spacing ∝ t^1.5, size (0.05 + 0.32 t²) × (0.6 + 0.8 × relief)) |
+| `high-vantage` (05b) | "level distance" from above: a high horizon (28–40 %) with a distant massif at 0.45–0.85 of the small sky space | none. Valley spurs descend from the horizon to the frame's bottom edge (nearness k/n, spacing ∝ t^1.5, size (0.05 + 0.32 t²) × (0.6 + 0.8 × relief)) along a meander |
 
 Template weights (05b): `tower-peak` 25 %, `high-vantage` 25 %, `peak-over-water` 17 %, `twin-summits` 17 %, `framing-ridges` 16 %. Mirroring flips every horizontal placement. The light comes from the upper left or the upper right. Secondary summits continue outward from the focal ones every 0.3–0.6 canvas units until past the frame, so a wide frame shows more of the range instead of stretched summits.
 

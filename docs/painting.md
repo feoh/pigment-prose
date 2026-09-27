@@ -23,7 +23,7 @@ Each palette has a light and a shadow color per material (cloud, far range, rock
 | Spurs and framing ridges | forest with soft meadow clearings |
 | Water | sky-lit toward the far shore, deep near the viewer; horizontal ripples with sheen |
 | Shore | sand for the far beach; meadow with sand patches for the near shore |
-| Rocks and cliff edge | rock with steeper plane contrast; moss in the shadowed parts |
+| Rocks | rock with steeper plane contrast; moss in the shadowed parts |
 
 - **Forest:** a cellular field of rounded crowns at two scales. Crowns are lit on top (warm) and dark in the gaps (cool). Crowns shrink with distance (0.003 + 0.03 × nearness² canvas units, × mark scale) and fade to their mean color below a few pixels. Stands vary between dark conifer and bright deciduous, but only nearby, so distant slopes read by their planes. Near forest is deeper in value.
 - **Meadow:** horizontal grass strokes. Near meadows get sparse wildflowers (gold, white, violet), only where they are big enough to read.

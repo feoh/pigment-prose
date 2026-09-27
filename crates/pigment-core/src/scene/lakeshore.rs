@@ -65,8 +65,6 @@ pub mod depth {
     /// Valley spurs (`HighVantage`) run from this toward [`SPUR_NEAREST`].
     pub const SPUR_FARTHEST: f32 = 0.44;
     pub const SPUR_NEAREST: f32 = 0.14;
-    /// The cliff edge the viewer stands on (`HighVantage`).
-    pub const LEDGE: f32 = 0.08;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -83,8 +81,8 @@ pub enum Template {
     /// over a tiny forested shore, so the trees measure the mountain.
     TowerPeak,
     /// "Level distance" from above: a high horizon, ridge spurs stepping
-    /// down from both sides with the lake winding between them, seen from
-    /// a cliff edge in the foreground.
+    /// down from both sides with the lake winding between them, ending on
+    /// the valley's nearest spur.
     HighVantage,
 }
 
@@ -114,9 +112,9 @@ pub enum ShoreKind {
     Corner { right: bool },
     /// The shoreline crosses the whole width with a central bay.
     Bay,
-    /// No near shore: the viewer stands on a cliff edge (`HighVantage`),
-    /// higher on the right or the left.
-    Ledge { high_right: bool },
+    /// No near shore (`HighVantage`): the valley runs to the frame's edge,
+    /// ending on its nearest spur.
+    Valley,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -221,9 +219,6 @@ pub struct Composition {
     pub river: [f64; 4],
     /// `HighVantage` only (empty otherwise).
     pub spurs: Vec<Spur>,
-    /// `HighVantage` cliff edge: base height, rise at the high side, and
-    /// how far the high side reaches (fraction of the width).
-    pub ledge: [f64; 3],
 }
 
 impl Composition {
@@ -328,9 +323,7 @@ impl Composition {
             Template::PeakOverWater | Template::TowerPeak => ShoreKind::Corner {
                 right: corner_right,
             },
-            Template::HighVantage => ShoreKind::Ledge {
-                high_right: !corner_right,
-            },
+            Template::HighVantage => ShoreKind::Valley,
             Template::FramingRidges => ShoreKind::Bay,
             Template::TwinSummits if shore_roll < 0.6 => ShoreKind::Corner {
                 right: corner_right,
@@ -357,7 +350,7 @@ impl Composition {
                 r.range_f64(0.35, 0.6),
                 r.range_f64(0.08, 0.25),
             ],
-            ShoreKind::Ledge { .. } => [0.0; 4],
+            ShoreKind::Valley => [0.0; 4],
         };
         let framing = [
             r.range_f64(0.35, 0.6),
@@ -409,7 +402,6 @@ impl Composition {
         };
 
         let mut spurs = Vec::new();
-        let mut ledge = [0.0; 3];
         let mut river = [0.0; 4];
         if template == Template::HighVantage {
             // A meandering channel: smooth bends of even wavelength that
@@ -424,7 +416,9 @@ impl Composition {
             ];
             let n = 4 + r.below((MAX_SPURS - 3) as u64) as usize;
             for k in 0..n {
-                let t = (k + 1) as f64 / (n + 1) as f64;
+                // The nearest spur sits on the frame's bottom edge, so the
+                // view ends on the valley's nearest ridge.
+                let t = (k + 1) as f64 / n as f64;
                 let jitter = r.range_f64(-0.03, 0.03);
                 let height = r.range_f64(0.6, 1.4);
                 let thickness = r.range_f64(0.5, 1.2);
@@ -439,11 +433,6 @@ impl Composition {
                     thickness,
                 });
             }
-            ledge = [
-                r.range_f64(0.05, 0.1),
-                r.range_f64(0.12, 0.3),
-                r.range_f64(0.25, 0.5),
-            ];
         }
         Composition {
             river,
@@ -463,7 +452,6 @@ impl Composition {
             deck,
             light,
             spurs,
-            ledge,
         }
     }
 }
@@ -601,7 +589,6 @@ struct TerrainSeeds {
     rocks: u64,
     clouds: u64,
     spurs: u64,
-    ledge: u64,
 }
 
 impl<'a> Builder<'a> {
@@ -671,8 +658,10 @@ impl<'a> Builder<'a> {
             rocks: t.next_u64(),
             clouds: t.next_u64(),
             spurs: t.next_u64(),
-            ledge: t.next_u64(),
         };
+        // Reserved: formerly the cliff-edge seed. Still drawn so the rock
+        // draws that follow, and so every other template, stay unchanged.
+        let _reserved = t.next_u64();
         let (w, bottom) = (self.w, self.h + MARGIN);
         let sky = [
             CanvasPoint {
@@ -737,9 +726,8 @@ impl<'a> Builder<'a> {
         let outline = band(&self.xs, &waterline, Bottom::Flat(bottom));
         self.push(LayerRole::Water, depth::WATER, 0.5, outline);
 
-        if let ShoreKind::Ledge { high_right } = self.comp.shore {
+        if self.comp.shore == ShoreKind::Valley {
             self.spurs(&ts);
-            self.ledge(&ts, high_right);
         } else {
             let run = self.near_shore(&ts);
             self.near_woods(&ts, run);
@@ -965,85 +953,6 @@ impl<'a> Builder<'a> {
             let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.8 * tree + 0.001).collect();
             self.push_woods(plant, d, band(&wxs, &wtop, Bottom::Open(&wbot)));
         }
-    }
-
-    /// `HighVantage`: the cliff edge the viewer stands on, higher at one
-    /// side (a dark frame), with a lit rim and a stand of trees on the
-    /// high side.
-    fn ledge(&mut self, ts: &TerrainSeeds, high_right: bool) {
-        let f = *self.form;
-        let [base, rise, reach] = self.comp.ledge;
-        let bottom = self.h + MARGIN;
-        let v = &mut self.vegetation;
-        let (wood_roll, wood_len, wood_tall, wood_wl, wood_seed) = (
-            v.next_f64(),
-            v.range_f64(0.3, 0.8),
-            v.next_f64(),
-            v.range_f64(0.02, 0.035),
-            v.next_u64(),
-        );
-        let reach_x = reach * self.w;
-        let sw = self.w;
-        let from_high = move |x: f64| if high_right { sw - x } else { x };
-        let detail = self.fbm(ts.ledge, 0.12, MIN_WAVELENGTH, 0.55, f.faceting);
-        let lift = |x: f64| {
-            let r = (1.0 - from_high(x) / reach_x).max(0.0);
-            base + rise * lerp(r * r * (3.0 - 2.0 * r), r, f.faceting)
-        };
-        let top: Vec<f64> = self
-            .xs
-            .iter()
-            .map(|&x| {
-                let l = lift(x);
-                (self.h - l * (1.0 + 0.25 * detail.eval(x))).min(bottom - 0.01)
-            })
-            .collect();
-        self.push(
-            LayerRole::ForegroundRock,
-            depth::LEDGE,
-            0.35,
-            band(&self.xs, &top, Bottom::Flat(bottom)),
-        );
-        let rim: Vec<f64> = self
-            .xs
-            .iter()
-            .zip(&top)
-            .map(|(&x, &y)| (y + 0.012 + 0.03 * (lift(x) - base) / rise).min(bottom - 0.005))
-            .collect();
-        self.push(
-            LayerRole::ForegroundRock,
-            depth::LEDGE,
-            0.8,
-            band(&self.xs, &top, Bottom::Open(&rim)),
-        );
-        if wood_roll >= 0.2 + 0.8 * f.woodland_density {
-            return;
-        }
-        let len = wood_len * reach_x;
-        let sel: Vec<usize> = (0..self.xs.len())
-            .filter(|&i| from_high(self.xs[i]) <= len)
-            .collect();
-        if sel.len() < 4 {
-            return;
-        }
-        let plant = Plant::pick(unit(wood_seed, 0));
-        let (tall_mul, wl_mul) = plant_shape(plant);
-        let tall = (0.12 + 0.2 * wood_tall) * (0.6 + 0.6 * f.woodland_density) * tall_mul;
-        let wood_wl = wood_wl * wl_mul;
-        let (a, b) = (self.xs[sel[0]], self.xs[sel[sel.len() - 1]]);
-        let wxs: Vec<f64> = sel.iter().map(|&i| self.xs[i]).collect();
-        let wtop: Vec<f64> = sel
-            .iter()
-            .map(|&i| {
-                let x = self.xs[i];
-                // Full height toward the frame edge, thinning inward.
-                let s = (x - a) / (b - a);
-                let s = if high_right { s } else { 1.0 - s };
-                top[i] - tall * (0.25 + 0.75 * s) * canopy(plant, wood_seed, x, wood_wl)
-            })
-            .collect();
-        let wbot: Vec<f64> = sel.iter().map(|&i| top[i] + 0.02).collect();
-        self.push_woods(plant, depth::LEDGE, band(&wxs, &wtop, Bottom::Open(&wbot)));
     }
 
     /// Structural light: layers inside the light pool are lifted, the rest
@@ -1470,7 +1379,7 @@ impl<'a> Builder<'a> {
                 let headland = edge(x) * edge(x) + edge(self.w - x) * edge(self.w - x);
                 self.sky + fg * (mid + depth * q * q - 0.2 * headland)
             }
-            ShoreKind::Ledge { .. } => self.h + MARGIN,
+            ShoreKind::Valley => self.h + MARGIN,
         };
         base + 0.012 * detail.eval(x)
     }
@@ -1507,7 +1416,7 @@ impl<'a> Builder<'a> {
                 self.xs.clone(),
                 ys.iter().map(|y| y.min(bottom - 0.01)).collect(),
             ),
-            ShoreKind::Ledge { .. } => return None,
+            ShoreKind::Valley => return None,
         };
         if xs.len() >= 3 {
             let outline = match self.comp.shore {
@@ -1524,7 +1433,7 @@ impl<'a> Builder<'a> {
                     }
                     o
                 }
-                ShoreKind::Bay | ShoreKind::Ledge { .. } => band(&xs, &top, Bottom::Flat(bottom)),
+                ShoreKind::Bay | ShoreKind::Valley => band(&xs, &top, Bottom::Flat(bottom)),
             };
             self.push(LayerRole::Shore, depth::NEAR_SHORE, 0.5, outline);
         }
@@ -1561,7 +1470,7 @@ impl<'a> Builder<'a> {
     fn edge_side_is_left(&self, run: (f64, f64)) -> bool {
         match self.comp.shore {
             ShoreKind::Corner { right } => !right,
-            ShoreKind::Bay | ShoreKind::Ledge { .. } => run.0 < self.w - run.1,
+            ShoreKind::Bay | ShoreKind::Valley => run.0 < self.w - run.1,
         }
     }
 
@@ -2015,8 +1924,19 @@ mod tests {
             (&[LayerRole::Sky, LayerRole::Cloud][..], 0.10),
             (&[LayerRole::Mountain][..], 0.015),
             (&[LayerRole::Water][..], 0.05),
-            (&[LayerRole::Shore, LayerRole::ForegroundRock][..], 0.01),
-            (&[LayerRole::ForegroundRock][..], 0.0005),
+            // Foreground: a near shore with rocks, or the valley's spurs.
+            (
+                &[
+                    LayerRole::Shore,
+                    LayerRole::ForegroundRock,
+                    LayerRole::NearRidge,
+                ][..],
+                0.01,
+            ),
+            (
+                &[LayerRole::ForegroundRock, LayerRole::NearRidge][..],
+                0.0005,
+            ),
         ];
         for (roles, at_least) in min {
             let c: f64 = roles.iter().map(|r| coverage(s, *r)).sum();
@@ -2165,7 +2085,7 @@ mod tests {
     const FROZEN: [u64; 3] = [
         0x91a2_336a_07d0_1989,
         0x9143_581e_72ed_10df,
-        0x8d72_6063_3f95_e0c3,
+        0xba92_4177_4bd8_86d9,
     ];
 
     #[test]
