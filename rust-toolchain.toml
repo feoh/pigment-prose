@@ -1,0 +1,5 @@
+# Pinned for reproducible builds; eframe/egui 0.36 (task 11) needs >= 1.95.
+[toolchain]
+channel = "1.98"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

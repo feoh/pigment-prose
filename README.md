@@ -7,5 +7,14 @@ A local-first desktop painting studio in planning. Arbitrary prose supplies **no
 - [Milestones, gates and architecture questions](docs/milestones.md)
 - [Public synthetic seed passages](fixtures/README.md)
 - [Architecture spike: GPU painting and tiled rendering](docs/architecture-spike.md)
+- [Architecture and module contracts](docs/architecture.md) and [ADR 0001: Rust + wgpu renderer, eframe/egui shell](docs/decisions/0001-renderer-and-desktop-shell.md)
+- [Build, test and contribution rules](CONTRIBUTING.md)
 
-This repository contains specifications, test passages and a throwaway architecture spike ([`spikes/gpu-tiles/`](spikes/gpu-tiles/)). The spike validated Rust/wgpu compute painting and seam-free tiled export on Linux (Vulkan, RTX 4070 Ti), and that stack is the recommended backend. Windows and macOS are unverified. There is no product renderer, application or published release yet.
+The Cargo workspace has three crates: `crates/pigment-core` (portable, tested contracts), `crates/pigment-gpu` (wgpu device, capability report and a tiled diagnostic renderer) and `crates/pigment-cli` (the `pigment-prose gpu-info` / `gpu-smoke` diagnostics). The GPU smoke path runs on Linux (Vulkan) on the RTX 4070 Ti and the Intel iGPU ([evidence](docs/evidence/gpu-smoke-linux-2026-09-26.txt)). Windows and macOS are unverified. There is still no painting renderer, text seeding, image export, desktop application or published release.
+
+```sh
+scripts/check.sh       # portable format, lint and tests (no GPU needed)
+scripts/gpu-tests.sh   # hardware GPU smoke run and test suite
+```
+
+The task 02 spike ([`spikes/gpu-tiles/`](spikes/gpu-tiles/)) is kept as a separate, throwaway Cargo project.

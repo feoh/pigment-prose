@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "versions": {
+    "normalization": "nfc-lf-utf8/1",
+    "seed_algorithm": "pigment-seed/1",
+    "generator": 0,
+    "renderer": 0
+  },
+  "seed": {
+    "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "variation": 2
+  },
+  "frame": { "width": 7680, "height": 4320 },
+  "form": { "faceting": 0.55, "relief": 0.5, "woodland_density": 0.5 },
+  "painting": {
+    "edge_looseness": 0.4,
+    "wash_gouache": 0.25,
+    "mark_scale": 1.0,
+    "granulation": 0.3,
+    "paper_grain": 0.3
+  },
+  "palette": { "id": "lakeshore", "intensity": 0.6 },
+  "atmosphere": { "haze": 0.4 }
+}

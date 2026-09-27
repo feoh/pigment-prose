@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["crates/pigment-core", "crates/pigment-gpu", "crates/pigment-cli"]
+# The task 02 spike is a separate, throwaway Cargo project with its own lock.
+exclude = ["spikes/gpu-tiles"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+# No project license has been chosen; task 15 asks the user.
+
+[workspace.dependencies]
+pigment-core = { path = "crates/pigment-core" }
+pigment-gpu = { path = "crates/pigment-gpu" }
+pollster = "1.0.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+wgpu = "30.0.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
+[profile.release]
+debug = "line-tables-only"

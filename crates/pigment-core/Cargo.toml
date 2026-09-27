@@ -1,0 +1,16 @@
+[package]
+name = "pigment-core"
+description = "Portable Pigment Prose contracts: seeds, recipes, scenes, settings, tiling and jobs. No GPU dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

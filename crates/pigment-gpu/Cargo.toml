@@ -1,0 +1,15 @@
+[package]
+name = "pigment-gpu"
+description = "wgpu capability reporting, device context and tiled renderers for Pigment Prose."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+pigment-core.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+
+[lints]
+workspace = true
