@@ -22,7 +22,7 @@ use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
 use pigment_core::version;
-use pigment_gpu::{DebugRenderer, DebugView, GpuContext, SmokeRenderer, adapter};
+use pigment_gpu::{DebugRenderer, DebugView, GpuContext, PaintRenderer, SmokeRenderer, adapter};
 
 const USAGE: &str = "\
 pigment-prose <command> [options]
@@ -36,19 +36,21 @@ pigment-prose <command> [options]
       tiled; require byte-identical output, test cancellation and time a warm
       preview. Exit status 0 only if every check passes on a hardware GPU.
       Defaults: 1920x1080, tile 512, seed 7, looseness 0.4.
-  contact-sheet --out SHEET.png [--aspect W:H] [--view flat|regions]
+  contact-sheet --out SHEET.png [--aspect W:H] [--view paint|flat|regions]
             [--cell PX] [--cols N] [--variation V]
             [--passages FILE | --passage ID --variations N | --sample N
              | --samples I,J,...]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
-      Render lakeshore scenes (task 05 geometry, debug views, no painting)
-      into a grid PNG, plus SHEET.txt listing each cell's passage id,
+            [--palette lakeshore|golden-evening] [--looseness L] [--wash W]
+            [--haze H] [--intensity I] [--marks M] [--grain G] [--granulation G]
+      Render lakeshore scenes (painted, or the structure debug views) into a
+      grid PNG, plus SHEET.txt listing each cell's passage id,
       variation, template, geometry checksum and visible coverage by role.
       Cells: the corpus (default fixtures/passages.json) at one variation,
       one passage's variations 0..N-1, N generated sample seeds, or the
       listed sample seeds in the given order (for rating rounds).
-      Defaults: 16:9, regions, cell 480 px long side, variation 0, 5 columns,
-      form settings at their defaults.
+      Defaults: 16:9, paint, cell 480 px long side, variation 0, 5 columns,
+      form and paint settings at their defaults.
 ";
 
 fn main() -> ExitCode {
@@ -424,11 +426,30 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         o.0.get("out")
             .ok_or("contact-sheet needs --out SHEET.png")?;
     let aspect = parse_aspect(o.0.get("aspect").map_or("16:9", String::as_str))?;
-    let view = match o.0.get("view").map_or("regions", String::as_str) {
-        "flat" => DebugView::Flat,
-        "regions" => DebugView::Regions,
-        v => return Err(format!("--view {v:?}: expected flat or regions")),
+    let view = match o.0.get("view").map_or("paint", String::as_str) {
+        "paint" => None,
+        "flat" => Some(DebugView::Flat),
+        "regions" => Some(DebugView::Regions),
+        v => return Err(format!("--view {v:?}: expected paint, flat or regions")),
     };
+    let mut appearance = Appearance::default();
+    {
+        let p = &mut appearance.painting;
+        p.edge_looseness = o.num("looseness", p.edge_looseness)?;
+        p.wash_gouache = o.num("wash", p.wash_gouache)?;
+        p.mark_scale = o.num("marks", p.mark_scale)?;
+        p.paper_grain = o.num("grain", p.paper_grain)?;
+        p.granulation = o.num("granulation", p.granulation)?;
+        appearance.atmosphere.haze = o.num("haze", appearance.atmosphere.haze)?;
+        appearance.palette.intensity = o.num("intensity", appearance.palette.intensity)?;
+        if let Some(id) = o.0.get("palette") {
+            appearance.palette.id = serde_json::from_value(serde_json::Value::String(id.clone()))
+                .map_err(|_| {
+                format!("--palette {id:?}: expected lakeshore or golden-evening")
+            })?;
+        }
+    }
+    appearance.validate().map_err(|e| e.to_string())?;
     let cell: u32 = o.num("cell", 480)?;
     let cols: usize = o.num("cols", 5)?;
     let variation: u32 = o.num("variation", 0)?;
@@ -500,7 +521,10 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         (((cell as f64) / ext.height).round() as u32, cell)
     };
     let ctx = Arc::new(GpuContext::new(&o.policy()).map_err(|e| e.to_string())?);
-    let renderer = DebugRenderer::new(ctx.clone(), view).map_err(|e| e.to_string())?;
+    let renderer: Box<dyn Renderer> = match view {
+        Some(v) => Box::new(DebugRenderer::new(ctx.clone(), v).map_err(|e| e.to_string())?),
+        None => Box::new(PaintRenderer::new(ctx.clone()).map_err(|e| e.to_string())?),
+    };
     let cols = cols.clamp(1, cells.len());
     let rows = cells.len().div_ceil(cols);
     const GAP: u32 = 6;
@@ -511,11 +535,13 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     let mut sheet = vec![0x80u8; sw as usize * sh as usize * 3];
     let ids = RequestIds::default();
     let mut notes = format!(
-        "pigment-prose {} contact-sheet: lakeshore generator v{}, debug view {view:?}, aspect {}:{}, \
-         cell {cw}x{ch}, form faceting={} relief={} woodland_density={}\ndevice: {}\n\
+        "pigment-prose {} contact-sheet: lakeshore generator v{}, renderer v{}, view {}, aspect {}:{}, \
+         cell {cw}x{ch}, form faceting={} relief={} woodland_density={}\nappearance: {appearance:?}\ndevice: {}\n\
          cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\t{}\tcoverage % ({})\n",
         version::APP_VERSION,
         version::GENERATOR_VERSION,
+        version::RENDERER_VERSION,
+        view.map_or("paint".to_string(), |v| format!("{v:?}")),
         aspect.width,
         aspect.height,
         form.faceting,
@@ -538,7 +564,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             purpose: RenderPurpose::Preview,
             scene: scene.clone(),
             seeds: c.seeds,
-            appearance: Appearance::default(),
+            appearance,
             target: RenderTarget {
                 width: cw,
                 height: ch,

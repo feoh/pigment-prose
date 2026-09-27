@@ -76,22 +76,31 @@ impl AweMetrics {
     }
 }
 
-pub fn measure(scene: &Scene) -> AweMetrics {
+/// Canvas y of the far shoreline (the top of the water inside the frame)
+/// and of the highest visible summit. Used by the metrics and by the
+/// painting renderer (treeline and snowline).
+pub fn horizon_and_summit(scene: &Scene) -> (f64, f64) {
     let ext = scene.extents();
     let (w, h) = (ext.width, ext.height);
-    let layers = scene.layers();
-    let in_frame = |x: f32| (0.0..=w as f32).contains(&x);
     let top_of = |role: LayerRole| {
-        layers
+        scene
+            .layers()
             .iter()
             .filter(|l| l.role == role)
             .flat_map(|l| l.outline.iter())
-            .filter(|p| in_frame(p.x))
+            .filter(|p| (0.0..=w as f32).contains(&p.x))
             .map(|p| p.y as f64)
             .fold(f64::INFINITY, f64::min)
     };
     let horizon = top_of(LayerRole::Water).min(h);
-    let summit = top_of(LayerRole::Mountain).min(horizon);
+    (horizon, top_of(LayerRole::Mountain).min(horizon))
+}
+
+pub fn measure(scene: &Scene) -> AweMetrics {
+    let ext = scene.extents();
+    let (w, h) = (ext.width, ext.height);
+    let layers = scene.layers();
+    let (horizon, summit) = horizon_and_summit(scene);
     let rise = (horizon - summit).max(0.0);
 
     let mut trees: Vec<f64> = layers

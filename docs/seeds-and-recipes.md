@@ -82,7 +82,7 @@ The PRNG is part of `pigment-seed/1`. Changing the digest, the stream derivation
 | `frame.width`, `frame.height` | integer 0…2³²−1 | 64…16384 px each, long/short ≤ 4 |
 | `form.{faceting, relief, woodland_density}` | number | range from `settings::CONTROLS` |
 | `painting.{edge_looseness, wash_gouache, mark_scale, granulation, paper_grain}` | number | range from `settings::CONTROLS` |
-| `palette.id` | string | `lakeshore` (task 06 adds ids) |
+| `palette.id` | string | `lakeshore` or `golden-evening` |
 | `palette.intensity`, `atmosphere.haze` | number | range from `settings::CONTROLS` |
 | `source_text` | string | **optional**. Present only if the user chose to keep the prose (task 10). It must pass the input gate and reproduce `seed.digest`. |
 

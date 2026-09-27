@@ -154,7 +154,10 @@ pub struct PaintingSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PaletteId {
+    /// Verdant high summer (the default).
     Lakeshore,
+    /// Low gold evening light.
+    GoldenEvening,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

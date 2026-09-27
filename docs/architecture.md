@@ -38,6 +38,8 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | CPU reference raster | `scene::raster::{front_layers, role_coverage, empty_fraction, is_simple}` | `crates/pigment-core/src/scene/raster.rs` | exists |
 | Awe metrics | `scene::metrics::{measure, AweMetrics}` | `crates/pigment-core/src/scene/metrics.rs` | exists (task 05b; [rubric](art-direction.md#awe-metrics)) |
 | Scene debug views | `pigment_gpu::{DebugRenderer, DebugView}` (`Flat`, `Regions`, `LayerIds`) | `crates/pigment-gpu/src/debug.rs` + `debug.wgsl` | exists |
+| Painting renderer | `pigment_gpu::PaintRenderer` | `crates/pigment-gpu/src/paint.rs` + `paint.wgsl` | first cut (task 06, [spec](painting.md)); coverage acceleration open |
+| Palettes | `palette::{Palette, palette, PALETTES, LAKESHORE, GOLDEN_EVENING}` | `crates/pigment-core/src/palette.rs` | exists (task 06) |
 | PaintingSettings | `settings::PaintingSettings` (+ `Appearance`, `PaletteSettings`, `AtmosphereSettings`) | `crates/pigment-core/src/settings.rs` | exists; effects → 06/07 |
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |
 | Control specification | `settings::CONTROLS`, `ControlSpec`, `Channel`, `Group` | same | exists; UI → 12 |
@@ -170,7 +172,7 @@ Source of truth: `settings::CONTROLS`. Ranges are inclusive. The UI clamps by co
 | `painting.mark_scale` | Mark scale | Paint handling | Advanced | 0.5–2 | 1.0 | fine marks → broad marks | 06 |
 | `painting.granulation` | Granulation | Paint handling | Advanced | 0–1 | 0.3 | smooth pigment → strongly settled pigment | 06 |
 | `painting.paper_grain` | Paper grain | Paint handling | Advanced | 0–1 | 0.3 | smooth hot-press → rough tooth | 06 |
-| `palette.id` | Palette | Appearance | Main | `lakeshore` (06 adds more) | `lakeshore` | — | 06 |
+| `palette.id` | Palette | Appearance | Main | `lakeshore`, `golden-evening` | `lakeshore` | — | 06 |
 
 **Form**, **Edge Looseness** and **Wash / Gouache** are three separate channels. Faceting changes geometry only. Looseness changes edge and boundary behaviour (bleed radius, soft/hard selection) only. Wash/gouache changes opacity and material character only. No control may secretly drive another channel. A coupled "style" slider is not allowed. Seasons and biomes are **not** controls until tasks 16–17, so no placeholder UI.
 

@@ -20,7 +20,7 @@ use pigment_core::scene::{SceneGenerator, TestCard, diagnostic_seeds, raster};
 use pigment_core::seed::{SeedBundle, TextDigest, Variation};
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::TilePolicy;
-use pigment_gpu::{DebugRenderer, DebugView, GpuContext, SmokeRenderer};
+use pigment_gpu::{DebugRenderer, DebugView, GpuContext, PaintRenderer, SmokeRenderer};
 
 fn context() -> Arc<GpuContext> {
     static C: OnceLock<Arc<GpuContext>> = OnceLock::new();
@@ -265,4 +265,107 @@ fn debug_views_are_identical_tiled_and_single() {
             assert!(tiled.rgba8 == single.rgba8, "{view:?} tile {edge}");
         }
     }
+}
+
+fn render_paint(req: &RenderRequest) -> MemorySink {
+    static R: OnceLock<PaintRenderer> = OnceLock::new();
+    let r = R.get_or_init(|| PaintRenderer::new(context()).expect("paint pipelines"));
+    let mut sink = MemorySink::default();
+    let rep = r
+        .render(req, &CancelToken::new(), &mut NoProgress, &mut sink)
+        .expect("render");
+    assert_eq!(rep.outcome, RenderOutcome::Completed);
+    sink
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn painting_is_identical_tiled_and_single() {
+    // The apron covers the loose-edge warp and disc at every looseness.
+    let frame = Frame::new(1001, 563).unwrap();
+    for looseness in [0.0, 0.4, 1.0] {
+        let mut single = lakeshore_request("Blue dusk.", frame, TilePolicy::Single);
+        single.appearance.painting.edge_looseness = looseness;
+        let reference = render_paint(&single);
+        for edge in [256, 333] {
+            let mut tiled = single.clone();
+            tiled.target.policy = TilePolicy::Fixed { edge };
+            assert!(
+                render_paint(&tiled).rgba8 == reference.rgba8,
+                "looseness {looseness} tile {edge}"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn painting_is_opaque_repeatable_and_varied() {
+    let frame = Frame::new(640, 360).unwrap();
+    for text in [
+        "A pebble rests by the shore.",
+        "風が湖を渡る。",
+        "Blue dusk.",
+    ] {
+        let req = lakeshore_request(text, frame, TilePolicy::Single);
+        let a = render_paint(&req);
+        let b = render_paint(&req);
+        assert!(a.rgba8 == b.rgba8, "{text}: not repeatable");
+        let px = a.rgba8.as_chunks::<4>().0;
+        assert!(px.iter().all(|p| p[3] == 255), "{text}: not opaque");
+        // Not blank or flat: a real spread of values and colors.
+        let lum: Vec<f64> = px
+            .iter()
+            .map(|p| 0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64)
+            .collect();
+        let mean = lum.iter().sum::<f64>() / lum.len() as f64;
+        let sd =
+            (lum.iter().map(|l| (l - mean) * (l - mean)).sum::<f64>() / lum.len() as f64).sqrt();
+        assert!(sd > 15.0, "{text}: value spread {sd}");
+        // "Verdant": a good share of clearly green pixels.
+        let green = px
+            .iter()
+            .filter(|p| p[1] as i32 > p[0] as i32 + 10 && p[1] as i32 > p[2] as i32 + 10)
+            .count() as f64
+            / px.len() as f64;
+        eprintln!("{text}: value sd {sd:.1}, green {:.0}%", green * 100.0);
+        assert!(green > 0.05, "{text}: only {green} green");
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn painting_agrees_across_resolutions() {
+    // Band-limited textures: a 4x-downsampled 1920 render resembles the 480
+    // render of the same scene (value structure, not texture detail).
+    let big = render_paint(&lakeshore_request(
+        "A pebble rests by the shore.",
+        Frame::new(1920, 1080).unwrap(),
+        TilePolicy::Single,
+    ));
+    let small = render_paint(&lakeshore_request(
+        "A pebble rests by the shore.",
+        Frame::new(480, 270).unwrap(),
+        TilePolicy::Single,
+    ));
+    let mut se = 0.0;
+    let mut n = 0.0;
+    for y in 0..270usize {
+        for x in 0..480usize {
+            for ch in 0..3 {
+                let mut acc = 0.0;
+                for dy in 0..4 {
+                    for dx in 0..4 {
+                        acc += big.rgba8[((y * 4 + dy) * 1920 + x * 4 + dx) * 4 + ch] as f64;
+                    }
+                }
+                let d = acc / 16.0 - small.rgba8[(y * 480 + x) * 4 + ch] as f64;
+                se += d * d;
+                n += 1.0;
+            }
+        }
+    }
+    let psnr = 10.0 * (255.0f64 * 255.0 / (se / n)).log10();
+    eprintln!("480 vs downsampled 1920: PSNR {psnr:.1} dB");
+    assert!(psnr > 24.0, "PSNR {psnr}");
 }

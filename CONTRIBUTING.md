@@ -22,7 +22,7 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | **Hardware GPU checks** | `scripts/gpu-tests.sh [LOG_FILE]` |
 | List adapters | `cargo run --release -p pigment-cli -- gpu-info` |
 | GPU smoke test | `cargo run --release -p pigment-cli -- gpu-smoke [--width W --height H --tile T --adapter NAME]` |
-| Scene contact sheet (debug views) | `cargo run --release -p pigment-cli -- contact-sheet --out SHEET.png [--aspect 9:16] [--view flat\|regions] [--sample N]`; see [docs/evidence/scene-05/README.md](docs/evidence/scene-05/README.md) |
+| Contact sheet (paintings or debug views) | `cargo run --release -p pigment-cli -- contact-sheet --out SHEET.png [--aspect 9:16] [--view paint\|flat\|regions] [--sample N \| --samples I,J] [--palette ID --haze H ...]`; see [docs/visual-review/](docs/visual-review/) |
 | Hardware test suite only | `cargo test --release --locked -p pigment-gpu --test gpu_hardware -- --ignored --test-threads=1` |
 
 `scripts/gpu-tests.sh` builds the CLI, prints `gpu-info`, runs `gpu-smoke` and then the ignored hardware tests. It exits non-zero if any step fails. **A machine without a hardware GPU fails these checks; it never skips them into a pass.** A software rasterizer is refused by default. With `--allow-software` it runs, labelled SOFTWARE, and `gpu-smoke` still exits non-zero.

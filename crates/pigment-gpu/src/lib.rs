@@ -9,15 +9,16 @@
 //!   used by `pigment-prose contact-sheet`.
 //! - `tiled` (private): the tile loop every renderer shares.
 //!
-//! The painting renderer (tasks 06–07) will be `paint.rs` + `paint.wgsl`
-//! beside them, implementing the same `pigment_core::request::Renderer`.
+//! - [`paint`]: the painting renderer (tasks 06–07).
 
 pub mod adapter;
 pub mod context;
 pub mod debug;
+pub mod paint;
 pub mod smoke;
 mod tiled;
 
 pub use context::GpuContext;
 pub use debug::{DebugRenderer, DebugView};
+pub use paint::PaintRenderer;
 pub use smoke::SmokeRenderer;

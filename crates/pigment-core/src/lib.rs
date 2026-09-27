@@ -18,6 +18,7 @@ pub mod error;
 pub mod frame;
 pub mod invalidate;
 pub mod job;
+pub mod palette;
 pub mod recipe;
 pub mod request;
 pub mod scene;

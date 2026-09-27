@@ -377,7 +377,7 @@ impl Composition {
                 width: r.range_f64(0.25, 0.7) * w.clamp(1.0, 1.8),
                 base: horizon * r.range_f64(0.3, 0.8),
                 height: r.range_f64(0.08, 0.22) * h.min(w).max(horizon.min(1.0)),
-                billow: r.range_f64(0.1, 0.22),
+                billow: r.range_f64(0.14, 0.26),
             });
         }
         cumulus.truncate(n_cumulus);
@@ -761,13 +761,18 @@ impl<'a> Builder<'a> {
             let seed = ts.clouds.wrapping_add(k as u64 + 1);
             // Billows are at least 0.1 across, so a coarser grid suffices.
             let xs = samples(a, b, CLOUD_STEP);
+            let swell = self.fbm(seed ^ 5, 2.5 * cu.billow, 0.5 * cu.billow, 0.5, 0.0);
             let env: Vec<f64> = xs.iter().map(|&x| envelope((x - a) / (b - a))).collect();
             let top: Vec<f64> = xs
                 .iter()
                 .zip(&env)
                 .map(|(&x, &e)| {
-                    let billow = (crowns(seed, x, cu.billow) - 0.65) / 0.35;
-                    cu.base - cu.height * e * (0.45 + 0.55 * billow)
+                    // Two billow scales, offset, with a slow swell: towers
+                    // and hollows rather than a row of equal teeth.
+                    let b1 = billow(seed, x, cu.billow);
+                    let b2 = billow(seed ^ 3, x + 0.37 * cu.billow, 0.43 * cu.billow);
+                    let swell = swell.eval(x);
+                    cu.base - cu.height * e * (0.3 + 0.35 * b1 + 0.2 * b2 + 0.35 * swell)
                 })
                 .collect();
             let bottom: Vec<f64> = env
@@ -1804,6 +1809,15 @@ fn crowns(seed: u64, x: f64, wl: f64) -> f64 {
     0.65 + 0.35 * bump * hv
 }
 
+/// Rounded cloud billows in `[0, 1]`: semicircular bumps of wavelength
+/// about `wl` with per-billow heights (`sqrt` is IEEE-exact).
+fn billow(seed: u64, x: f64, wl: f64) -> f64 {
+    let t = x / wl;
+    let k = t.floor();
+    let c = 2.0 * (t - k) - 1.0;
+    (1.0 - c * c).sqrt() * (0.55 + 0.45 * unit(seed, k as i64))
+}
+
 /// Piecewise-linear interpolation through `(s, v)` knots sorted by `s`.
 fn piecewise(s: f64, knots: &[(f64, f64)]) -> f64 {
     for pair in knots.windows(2) {
@@ -2038,9 +2052,9 @@ mod tests {
     }
 
     const FROZEN: [u64; 3] = [
-        0xa045_37ec_b34c_c5d8,
-        0x63b8_9a73_f8a3_c28e,
-        0xe54e_29c1_e332_9256,
+        0x11d0_4125_b35e_1131,
+        0x6ec8_2a9d_7ce3_b2e6,
+        0x93e0_cd7d_4357_9056,
     ];
 
     #[test]
