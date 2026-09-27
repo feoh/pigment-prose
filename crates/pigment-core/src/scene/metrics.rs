@@ -36,6 +36,10 @@ pub struct AweMetrics {
     /// Spread of `shade` across layers covering at least 0.5 % of the frame
     /// (sky excluded): how strongly light and shadow are staged.
     pub light_contrast: f64,
+    /// Share of the bottom third of the frame that is vegetated land
+    /// (spurs, ridges, woodland, meadow shore): a foreground rich enough to
+    /// draw the eye and hold it (round 4 favourites, 2026-09-27).
+    pub foreground: f64,
 }
 
 impl fmt::Display for AweMetrics {
@@ -45,25 +49,26 @@ impl fmt::Display for AweMetrics {
             .map_or("-".to_string(), |r| format!("{r:.0}"));
         write!(
             f,
-            "rise {:.2} scale {scale} planes {} expanse {:.2} clutter {:.2} sky {:.2} light {:.2}",
+            "rise {:.2} scale {scale} planes {} expanse {:.2} clutter {:.2} sky {:.2} light {:.2} foreground {:.2}",
             self.summit_rise,
             self.planes,
             self.expanse,
             self.centre_clutter,
             self.sky_structure,
-            self.light_contrast
+            self.light_contrast,
+            self.foreground
         )
     }
 }
 
 /// Column headers matching [`AweMetrics::columns`].
-pub const COLUMNS: &str = "rise\tscale\tplanes\texpanse\tclutter\tsky\tlight";
+pub const COLUMNS: &str = "rise\tscale\tplanes\texpanse\tclutter\tsky\tlight\tforeground";
 
 impl AweMetrics {
     /// Tab-separated values for notes and rating sheets.
     pub fn columns(&self) -> String {
         format!(
-            "{:.2}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}",
+            "{:.2}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{:.2}",
             self.summit_rise,
             self.scale_ratio
                 .map_or("-".to_string(), |r| format!("{r:.0}")),
@@ -71,7 +76,8 @@ impl AweMetrics {
             self.expanse,
             self.centre_clutter,
             self.sky_structure,
-            self.light_contrast
+            self.light_contrast,
+            self.foreground
         )
     }
 }
@@ -124,9 +130,22 @@ pub fn measure(scene: &Scene) -> AweMetrics {
     let ids = raster::front_layers(scene, gw, gh);
     let mut counts = vec![0usize; layers.len()];
     let mut centre = (0usize, 0usize);
+    let mut bottom = (0usize, 0usize);
     for (i, &id) in ids.iter().enumerate() {
         if id == NONE {
             continue;
+        }
+        if i / gw >= gh * 2 / 3 {
+            bottom.1 += 1;
+            let l = &layers[id as usize];
+            let land = match l.role {
+                LayerRole::NearRidge | LayerRole::MidRidge | LayerRole::Woodland => true,
+                LayerRole::Shore => l.depth < 0.45,
+                _ => false,
+            };
+            if land {
+                bottom.0 += 1;
+            }
         }
         counts[id as usize] += 1;
         let col = i % gw;
@@ -183,5 +202,10 @@ pub fn measure(scene: &Scene) -> AweMetrics {
         },
         sky_structure,
         light_contrast: if hi >= lo { hi - lo } else { 0.0 },
+        foreground: if bottom.1 > 0 {
+            bottom.0 as f64 / bottom.1 as f64
+        } else {
+            0.0
+        },
     }
 }

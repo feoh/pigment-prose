@@ -280,7 +280,7 @@ struct Stands {
 // Irregular Voronoi stands (smaller with distance) with the two nearest
 // stands, so their colors can blend across a soft, warped boundary.
 fn stands(c: vec2<f32>, depth: f32) -> Stands {
-    let size = 0.08 + 0.1 * (1.0 - depth);
+    let size = 0.14;
     let w = c + (vec2<f32>(fbm(c, 0.04, 3u, 401u), fbm(c, 0.04, 3u, 402u)) - 0.5) * 0.9 * size;
     let p = w / size;
     let i = floor(p);
@@ -314,9 +314,21 @@ fn stand_plant(c: vec2<f32>, depth: f32) -> u32 {
 
 // One plant's painted canopy: its own crown shape, colors and details.
 // `bb` is the layer's bounding box, for trunks under near canopies.
+// Crowns at the true size for this depth would shear into streaks where
+// depth changes continuously down the ground, so crowns are drawn at the two
+// nearest power-of-two sizes and blended (as texture mipmaps are).
 fn plant_color(plant: u32, c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32> {
     let near = 1.0 - depth;
     let size = (0.003 + 0.03 * near * near) * P.handling.z;
+    let lvl = log2(size / 0.001);
+    let l0 = floor(lvl);
+    let s0 = 0.001 * exp2(l0);
+    let a = plant_color_at(plant, c, s0, depth, shade, bb);
+    let b = plant_color_at(plant, c, 2.0 * s0, depth, shade, bb);
+    return mix(a, b, lvl - l0);
+}
+
+fn plant_color_at(plant: u32, c: vec2<f32>, size: f32, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32> {
     let light = col(PLANTS + 2u * (plant - 1u));
     let shadow = col(PLANTS + 2u * (plant - 1u) + 1u);
     let base = mix(shadow, light, smoothstep(0.08, 0.92, shade)) * (0.72 + 0.3 * depth);
@@ -466,10 +478,32 @@ fn meadow_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
 fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
     let h = layers[3u * l];
     let role = u32(layers[3u * l + 2u].x);
-    let depth = h.z;
-    let shade = h.w;
+    var depth = h.z;
+    var shade = h.w;
     let horizon = P.frame.x;
     let summit = P.frame.y;
+    // Ground layers can span near and far (river banks): below the horizon
+    // their effective depth follows the perspective of the ground itself,
+    // so crowns and haze match their true distance.
+    // Only for ground in front of the water (depth <= 0.45: banks, spurs,
+    // near shore and woods). The inverse of the generator's placement: a
+    // spur at nearness t sits at y = horizon + fg * t^1.5 with depth
+    // 0.44 - 0.3 t, so each spur's base matches the ground under it.
+    if ((role == R_NEAR_RIDGE || role == R_WOODLAND || role == R_SHORE)
+        && depth <= 0.45 && c.y > horizon) {
+        let f = clamp((c.y - horizon) / max(P.frame.w - horizon, 1e-3), 0.0, 1.0);
+        // Nearer of the two: a spur keeps its own depth above its base (its
+        // ridge stands out against the bank behind) and takes the ground's
+        // below it (no step at its foot).
+        depth = min(depth, 0.44 - 0.3 * pow(f, 2.0 / 3.0));
+        // A ridge's light fades to neutral toward its foot (the bottom of
+        // its bounding box), where it meets the neutral river bank.
+        if (role == R_NEAR_RIDGE) {
+            let bb = layers[3u * l + 1u];
+            let rel = clamp((bb.w - c.y) / max(bb.w - bb.y, 1e-4), 0.0, 1.0);
+            shade = mix(0.5, shade, smoothstep(0.05, 0.6, rel));
+        }
+    }
     let rise = max(horizon - summit, 1e-3);
     var rgb = vec3<f32>(0.0);
     switch role {

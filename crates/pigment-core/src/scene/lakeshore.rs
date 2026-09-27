@@ -226,12 +226,13 @@ impl Composition {
         let ext = aspect.extents();
         let (w, h) = (ext.width, ext.height);
         let mut r = seeds.stream(Domain::Composition).rng();
-        // The vista templates (tower and high vantage) take half the draws.
+        // Weights follow the user's ratings: every favourite in rounds 3–4
+        // was a high-vantage valley.
         let template = match r.below(100) {
-            0..25 => Template::TowerPeak,
-            25..50 => Template::HighVantage,
-            50..67 => Template::PeakOverWater,
-            67..84 => Template::TwinSummits,
+            0..20 => Template::TowerPeak,
+            20..60 => Template::HighVantage,
+            60..73 => Template::PeakOverWater,
+            73..87 => Template::TwinSummits,
             _ => Template::FramingRidges,
         };
         let mirrored = r.below(2) == 1;
@@ -822,6 +823,49 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// `HighVantage`: the river's two continuous banks. Each is land from
+    /// the frame edge to the channel's edge, from where the river leaves
+    /// the lake (half the first spur's nearness) to the frame's bottom, so
+    /// a bank never breaks between spurs; the spurs are ridges on top.
+    /// Built along the depth of the view, so each is a y-monotone polygon
+    /// (simple by construction).
+    fn river_banks(&mut self, spurs: &[Spur]) {
+        let Some(first) = spurs.first() else { return };
+        let fg = self.h - self.sky;
+        let bottom = self.h + MARGIN;
+        let open = 0.5 * first.nearness;
+        let pt = |x: f64, y: f64| CanvasPoint {
+            x: x as f32,
+            y: y as f32,
+        };
+        for right in [false, true] {
+            let edge = if right { self.w + MARGIN } else { -MARGIN };
+            let n = 240;
+            let mut outline = vec![pt(edge, self.sky + fg * open * open.sqrt())];
+            for i in 1..=n {
+                let t = open + (1.0 - open) * i as f64 / n as f64;
+                // The lake's shore swings in from the frame edge and becomes
+                // the river's bank by the first spur.
+                let inward = ease(((t - open) / open).min(1.0), 0.0);
+                let (l, r, _) = channel(&self.comp.river, t);
+                let bank = if right { r * self.w } else { l * self.w };
+                outline.push(pt(lerp(edge, bank, inward), self.sky + fg * t * t.sqrt()));
+            }
+            let last = *outline.last().unwrap();
+            outline.push(pt(last.x as f64, bottom));
+            outline.push(pt(edge, bottom));
+            if right {
+                outline.reverse();
+            }
+            self.push(
+                LayerRole::NearRidge,
+                depth::SPUR_FARTHEST + 0.004,
+                0.5,
+                outline,
+            );
+        }
+    }
+
     /// `HighVantage`: ridge spurs from the sides, far to near, each with a
     /// band of trees sized for its distance, so the eye steps down the
     /// valley and the trees measure it.
@@ -829,6 +873,7 @@ impl<'a> Builder<'a> {
         let f = *self.form;
         let fg = self.h - self.sky;
         let spurs = self.comp.spurs.clone();
+        self.river_banks(&spurs);
         for (k, sp) in spurs.iter().enumerate() {
             let v = &mut self.vegetation;
             let (wood_roll, wood_at, wood_len, wood_wl, wood_seed) = (
@@ -887,6 +932,13 @@ impl<'a> Builder<'a> {
                 let u = ((dist(x) / span - 0.7) / 0.3).clamp(0.0, 1.0);
                 (1.0 - u * u).sqrt()
             };
+            // The spur's high ground slopes down toward the water from
+            // halfway out, so big near spurs end in a rounded prow rather
+            // than a cut face; the water-level thickness keeps the blunt cap.
+            let slope = |x: f64| {
+                let u = ((dist(x) / span - 0.5) / 0.5).clamp(0.0, 1.0);
+                1.0 - 0.85 * u * u * (3.0 - 2.0 * u)
+            };
             let bank = self.fbm(
                 ts.spurs.wrapping_add(100 + k as u64),
                 0.2,
@@ -897,8 +949,8 @@ impl<'a> Builder<'a> {
             let top: Vec<f64> = xs
                 .iter()
                 .map(|&x| {
-                    let upper = height * profile(x) * (1.0 + 0.4 * detail.eval(x)) + 0.35 * thick;
-                    y_base - upper * cap(x)
+                    let high = height * profile(x) * (1.0 + 0.4 * detail.eval(x)) * slope(x);
+                    y_base - (high + 0.35 * thick) * cap(x)
                 })
                 .collect();
             let bottom: Vec<f64> = xs
@@ -911,6 +963,8 @@ impl<'a> Builder<'a> {
                 })
                 .collect();
             let d = depth::SPUR_FARTHEST - (depth::SPUR_FARTHEST - depth::SPUR_NEAREST) * t as f32;
+            // The spur's facing sets its light; the painter fades it to
+            // neutral toward the spur's foot, where it meets the bank.
             let (x_edge, x_tip) = if sp.from_right {
                 (self.w + MARGIN, self.w - reach)
             } else {
@@ -923,8 +977,10 @@ impl<'a> Builder<'a> {
                 shade,
                 band(&xs, &top, Bottom::Open(&bottom)),
             );
-            // Trees along the spur's upper slope.
-            if wood_roll >= 0.2 + 0.7 * f.woodland_density {
+            // Trees along the spur's upper slope, where the spur stands in
+            // open water. In a river valley the banks and spurs are already
+            // one mixed forest, and a separate band reads as a stray stripe.
+            if self.comp.shore == ShoreKind::Valley || wood_roll >= 0.2 + 0.7 * f.woodland_density {
                 continue;
             }
             let (s0, s1) = (wood_at, (wood_at + wood_len).min(0.95));
@@ -966,7 +1022,14 @@ impl<'a> Builder<'a> {
             (lp.x, lp.y)
         };
         let (w, h, r2) = (self.w, self.h, lp.radius * lp.radius);
+        let valley = self.comp.shore == ShoreKind::Valley;
         for l in self.layers.iter_mut().skip(1) {
+            // River banks stay neutral: spurs' light fades to neutral at
+            // their feet (in the painter), so they meet the banks without a
+            // step.
+            if valley && l.role == LayerRole::NearRidge && l.depth > depth::SPUR_FARTHEST {
+                continue;
+            }
             let (mut acc, mut n) = (0.0, 0usize);
             for p in &l.outline {
                 let (x, y) = (p.x as f64, p.y as f64);
@@ -2085,7 +2148,7 @@ mod tests {
     const FROZEN: [u64; 3] = [
         0x91a2_336a_07d0_1989,
         0x9143_581e_72ed_10df,
-        0xba92_4177_4bd8_86d9,
+        0x3362_03c4_001e_ff3d,
     ];
 
     #[test]
@@ -2468,18 +2531,38 @@ mod tests {
 
     #[test]
     fn valley_spurs_have_blunt_tips() {
-        // A wedge closes linearly toward its tip; an eroded spur keeps most
-        // of its thickness until it rounds off. Measured on the band's gap
-        // (bottom chain minus top chain) at 85 % of the way to the tip.
+        // The shape of the last stretch decides bluntness. A wedge closes
+        // linearly, keeping a third of its thickness from 85 % to 95 % of
+        // the way out; an elliptical, eroded end keeps about 60 %. Measured
+        // on the band's gap (bottom chain minus top chain). The high ground
+        // sloping down toward a prow does not count against it.
         let aspect = UHD_4K.aspect();
         let mut spurs = 0;
         for i in 0..80 {
             let seeds = sample(i);
-            if Composition::draw(&seeds, aspect).template != Template::HighVantage {
+            let comp = Composition::draw(&seeds, aspect);
+            if comp.template != Template::HighVantage {
                 continue;
             }
             let s = scene(&seeds, FormSettings::default(), aspect);
-            for l in s.layers().iter().filter(|l| l.role == LayerRole::NearRidge) {
+            // Spurs only; the two river banks sit just behind them.
+            let layers: Vec<&SceneLayer> = s
+                .layers()
+                .iter()
+                .filter(|l| l.role == LayerRole::NearRidge && l.depth <= depth::SPUR_FARTHEST)
+                .collect();
+            assert_eq!(layers.len(), comp.spurs.len(), "sample {i}");
+            for (k, l) in layers.into_iter().enumerate() {
+                // A tip joined to the next spur on the same bank is hidden
+                // behind it; only free tips standing in the water count.
+                let sp = comp.spurs[k];
+                let joined = comp
+                    .spurs
+                    .get(k + 1)
+                    .is_some_and(|n| n.from_right == sp.from_right && n.reach >= 0.8 * sp.reach);
+                if joined {
+                    continue;
+                }
                 let o = &l.outline;
                 let n = o.len() / 2;
                 let gap = |i: usize| (o[o.len() - 1 - i].y - o[i].y) as f64;
@@ -2494,15 +2577,54 @@ mod tests {
                     gap(i.round() as usize)
                 };
                 assert!(
-                    at(0.85) > 0.3 * at(0.5),
+                    at(0.95) > 0.45 * at(0.85),
                     "sample {i}: tip closes like a wedge ({} vs {})",
-                    at(0.85),
-                    at(0.5)
+                    at(0.95),
+                    at(0.85)
                 );
                 spurs += 1;
             }
         }
         assert!(spurs > 40, "only {spurs} spurs checked");
+    }
+
+    #[test]
+    fn river_banks_never_break() {
+        // Rounds 3–4: slits of water opened between spurs. The river now
+        // has two continuous banks: below where it leaves the lake, the
+        // frame's left and right edges are land on every row.
+        let aspect = UHD_4K.aspect();
+        let mut checked = 0;
+        for i in 0..120 {
+            let seeds = sample(i);
+            let comp = Composition::draw(&seeds, aspect);
+            if comp.template != Template::HighVantage {
+                continue;
+            }
+            let s = scene(&seeds, FormSettings::default(), aspect);
+            let (gw, gh) = (256usize, 144usize);
+            let ids = raster::front_layers(&s, gw, gh);
+            let ext = s.extents();
+            let fg = ext.height - comp.horizon;
+            let t = comp.spurs[0].nearness;
+            let from = comp.horizon + fg * t * t.sqrt();
+            for row in 0..gh {
+                let y = (row as f64 + 0.5) * ext.height / gh as f64;
+                if y <= from {
+                    continue;
+                }
+                for col in [0, gw - 1] {
+                    let role = s.layers()[ids[row * gw + col] as usize].role;
+                    assert_ne!(
+                        role,
+                        LayerRole::Water,
+                        "sample {i}: water at the frame edge, row {row}"
+                    );
+                }
+            }
+            checked += 1;
+        }
+        assert!(checked >= 20, "only {checked} valleys checked");
     }
 
     #[test]

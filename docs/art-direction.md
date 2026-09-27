@@ -43,6 +43,7 @@ Awe is judged by a person. The scene generator reports measurable parts of the d
 | `clutter` | near foreground in the central third | low: frame at the edges and keep the centre open |
 | `sky` | visible cloud coverage | some structure in most skies |
 | `light` | spread of structural shade: light staged against shadow | higher in dramatic scenes |
+| `foreground` | vegetated land share of the bottom third | **not predictive** in round 4: the favourites had 0.59 and 0.65, while the most land (0.85) was the "less natural" image. Kept for testing the figure-against-ground hypothesis |
 
 These targets are guesses until calibrated: rating rounds log the user's "vastness" and "stop" scores against the metrics, and the targets and template weights follow whatever actually predicts those scores.
 

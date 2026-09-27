@@ -49,6 +49,12 @@ After round 2 the user asked for "a variety of plant life … some trees tall an
 - **Trunks** show under near tall canopies. About half the crown columns carry one, each offset and with its own height.
 - **Tests:** every woodland layer has a plant and nothing else has one, all six occur across a sample, conifers stand over 1.8× as tall as shrubs, and broadleaf trees over 1.5× (`woodland_stands_have_varied_plants`).
 
+## Ground perspective and crowns (round 4)
+
+- **Ground depth:** ground layers in front of the water (banks, spurs, near shore and woods) can span near and far. Below the horizon, their effective depth is the nearer of their own depth and the ground's depth at that row, `0.44 − 0.3 × ((y − horizon) / (h − horizon))^(2/3)`. That formula inverts the generator's spur placement, so a spur's base matches the ground under it, and a spur's ridge stays nearer and darker than the bank behind it.
+- **Crowns at two sizes:** crowns sized continuously by depth would shear into streaks where depth changes down the ground. So crowns are drawn at the two nearest power-of-two sizes and blended, as texture mipmaps are. Forest stands have one fixed size.
+- **Ridge light:** a valley spur's light fades to neutral toward its foot (the bottom of its bounding box), where it meets the neutral bank.
+
 ## Edges and texture (pass 2)
 
 - **Loose edges:** each pixel's lookup is displaced by a coherent noise warp, and an 8-tap disc is averaged where layers differ. The radius is `0.02 × edge_looseness × (0.15 + 0.85 × depth)` canvas units, so distant edges wander and soften while near ones stay crisp (selective edges). Offsets are rounded independently of the tile origin.

@@ -68,7 +68,7 @@ The draw order is fixed, and **the number of values drawn never depends on form 
 | `tower-peak` (05b) | "high distance": a low horizon (66–74 % of the frame height in portrait and square frames, up to 70–78 % at 2:1 and wider), one steep summit at 35–62 % with two shoulders at 50–82 % of its height, 1.4× detail. The summit reaches 0.56–0.9 of the sky space (up to `MAX_TOWER` = 1.3), with half-width (1.25 − 0.5 × relief) × height | a small corner. Far trees are 0.35× normal size (0.5× under `high-vantage`), near woods stay at the frame edge, rocks are 0.6× |
 | `high-vantage` (05b) | "level distance" from above: a high horizon (28–40 %) with a distant massif at 0.45–0.85 of the small sky space | none. Valley spurs descend from the horizon to the frame's bottom edge (nearness k/n, spacing ∝ t^1.5, size (0.05 + 0.32 t²) × (0.6 + 0.8 × relief)) along a meander |
 
-Template weights (05b): `tower-peak` 25 %, `high-vantage` 25 %, `peak-over-water` 17 %, `twin-summits` 17 %, `framing-ridges` 16 %. Mirroring flips every horizontal placement. The light comes from the upper left or the upper right. Secondary summits continue outward from the focal ones every 0.3–0.6 canvas units until past the frame, so a wide frame shows more of the range instead of stretched summits.
+Template weights: `tower-peak` 20 %, `high-vantage` 40 % (raised after rounds 3–4, whose favourites were all high-vantage), `peak-over-water` 13 %, `twin-summits` 14 %, `framing-ridges` 13 %. Mirroring flips every horizontal placement. The light comes from the upper left or the upper right. Secondary summits continue outward from the focal ones every 0.3–0.6 canvas units until past the frame, so a wide frame shows more of the range instead of stretched summits.
 
 **Horizon:** 52–60 % of the frame height for portrait and square frames, rising linearly to 60–68 % at 2:1 and wider. Everything above it is the *sky space* that summit heights are measured against.
 
@@ -102,6 +102,9 @@ The user pointed out that rivers cannot zigzag with sharp angles, because erosio
 - **Width:** a half-width of 0.05 + 0.1 t, so the channel widens toward the viewer.
 - **Spurs:** each spur grows from the bank the channel swings away from (the inside of the bend) and reaches that bank's edge (±0.03). The tips therefore line up along smooth banks.
 - **Rounded tips:** the last 30 % of each spur closes on an elliptical cap, and the water line curves gently (fBm, ±10 %).
+- **Continuous banks (user round 4):** slits of water opened between spurs, so the river now has two banks. Each is a land layer from the frame edge to the channel's edge, from where the river leaves the lake (half the first spur's nearness) to the frame's bottom, just behind all spurs. The lake's shore swings in to become the bank. The banks are built along the depth of the view, so each is a y-monotone polygon. The spurs are ridges standing on the banks, and water shows only inside the channel. Tested by `river_banks_never_break`: below the outlet, the frame's side edges are land on every row, and the test fails without the banks. Spur-top tree bands are omitted in river valleys, since the banks and spurs are one mixed forest.
+- **Light on the valley:** spurs keep their facing light and the light pool. The painter fades it to neutral toward each spur's foot, where it meets the neutral banks, so hills read without steps.
+- **Weights:** `high-vantage` is now 40 % of compositions, following the user's favourites (rounds 3–4).
 - **Tests:** `meanders_are_smooth` and `valley_spurs_have_blunt_tips`.
 
 ## Sky, light and scale (05b)

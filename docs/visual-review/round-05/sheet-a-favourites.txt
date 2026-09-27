@@ -1,0 +1,9 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v0, renderer v0, view paint, aspect 16:9, cell 640x360, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)
+1	sample passage 3	high-vantage	true	38	10790	caa061d46b882928	0.23	18	10	0.46	0.00	0.09	0.62	0.86	14.5 1.8 1.7 51.8 11.9 0.1 0.2 0.0 8.5 9.4
+2	sample passage 12	high-vantage	true	41	10694	1cfa908a8283d9c0	0.21	17	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.3 0.0 7.0 9.0
+3	sample passage 17	high-vantage	false	39	11450	07f2a622ebe57393	0.26	16	11	0.54	0.00	0.16	0.75	0.75	6.6 0.6 1.6 49.0 14.4 0.2 0.3 0.0 11.7 15.7
+4	sample passage 15	high-vantage	false	41	11922	1de20977a158d612	0.22	11	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4
+5	sample passage 33	high-vantage	true	31	9598	9ceadf2d86a75c27	0.27	17	9	0.55	0.00	0.07	0.75	0.75	13.8 1.6 2.3 49.5 16.4 0.2 0.1 0.0 9.1 6.9
