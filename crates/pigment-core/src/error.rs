@@ -75,6 +75,138 @@ impl fmt::Display for TextError {
 
 impl std::error::Error for TextError {}
 
+/// A recipe document could not be loaded or saved.
+///
+/// Paths are dotted schema keys (`painting.edge_looseness`). They are built
+/// only from the schema's own key names, plus [`sanitized_key`]'s rendering
+/// of an unrecognized key, so no value from the file can reach the message.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecipeError {
+    /// Larger than [`crate::recipe::MAX_RECIPE_BYTES`].
+    TooLarge {
+        bytes: usize,
+        max: usize,
+    },
+    /// Not well-formed JSON, or a key repeated within one object.
+    Malformed {
+        line: usize,
+        column: usize,
+        kind: MalformedKind,
+    },
+    /// The `schema` number is not one this build reads. Newer files are
+    /// never guessed at; there are no older schemas to migrate yet.
+    UnsupportedSchema {
+        found: u64,
+        supported: u32,
+    },
+    /// `versions.normalization` or `versions.seed_algorithm` names an
+    /// algorithm this build does not implement, so the seed cannot be
+    /// reproduced. `found` is sanitized like a key.
+    UnsupportedAlgorithm {
+        field: &'static str,
+        found: String,
+    },
+    MissingField {
+        path: String,
+    },
+    UnknownField {
+        path: String,
+    },
+    /// Wrong JSON type, e.g. a string where a number belongs.
+    WrongType {
+        path: String,
+        expected: &'static str,
+    },
+    /// Right type, unacceptable value (bad digest, unknown palette id).
+    InvalidValue {
+        path: String,
+        reason: &'static str,
+    },
+    /// A setting or frame dimension failed range validation.
+    Validation(ValidationError),
+    /// The stored `source_text` is not acceptable prose.
+    SourceText(TextError),
+    /// The stored `source_text` does not produce `seed.digest`. The digest is
+    /// authoritative, so the file is rejected rather than showing prose that
+    /// does not belong to the painting.
+    SourceTextMismatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MalformedKind {
+    Syntax,
+    /// The file ends early (truncated).
+    Truncated,
+    DuplicateKey,
+}
+
+/// Renders a key or identifier from a file for an error message. Short,
+/// identifier-like text is shown; anything else becomes a placeholder.
+pub fn sanitized_key(key: &str) -> String {
+    let ok = !key.is_empty()
+        && key.len() <= 64
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'/'));
+    if ok {
+        key.to_string()
+    } else {
+        "<unrecognized>".to_string()
+    }
+}
+
+impl fmt::Display for RecipeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let at = |p: &str| {
+            if p.is_empty() {
+                "the recipe".to_string()
+            } else {
+                format!("`{p}`")
+            }
+        };
+        match self {
+            RecipeError::TooLarge { bytes, max } => {
+                write!(f, "the recipe is {bytes} bytes; the limit is {max} bytes")
+            }
+            RecipeError::Malformed { line, column, kind } => {
+                let what = match kind {
+                    MalformedKind::Syntax => "is not valid JSON",
+                    MalformedKind::Truncated => "ends unexpectedly (truncated?)",
+                    MalformedKind::DuplicateKey => "repeats a key",
+                };
+                write!(f, "the recipe {what} at line {line}, column {column}")
+            }
+            RecipeError::UnsupportedSchema { found, supported } => write!(
+                f,
+                "recipe schema {found} is not supported; this version reads schema {supported}"
+            ),
+            RecipeError::UnsupportedAlgorithm { field, found } => write!(
+                f,
+                "`versions.{field}` is {found:?}, which this version does not implement"
+            ),
+            RecipeError::MissingField { path } => write!(f, "{} is missing", at(path)),
+            RecipeError::UnknownField { path } => write!(f, "{} is not a recipe field", at(path)),
+            RecipeError::WrongType { path, expected } => {
+                write!(f, "{} must be {expected}", at(path))
+            }
+            RecipeError::InvalidValue { path, reason } => write!(f, "`{path}` {reason}"),
+            RecipeError::Validation(e) => e.fmt(f),
+            RecipeError::SourceText(e) => write!(f, "`source_text`: {e}"),
+            RecipeError::SourceTextMismatch => {
+                f.write_str("`source_text` does not match `seed.digest`")
+            }
+        }
+    }
+}
+
+impl std::error::Error for RecipeError {}
+
+impl From<ValidationError> for RecipeError {
+    fn from(e: ValidationError) -> Self {
+        RecipeError::Validation(e)
+    }
+}
+
 /// A tile sink (preview image, PNG stream) could not accept output.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SinkError {

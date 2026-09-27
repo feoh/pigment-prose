@@ -17,6 +17,8 @@ pigment-gpu = { path = "crates/pigment-gpu" }
 pollster = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+sha2 = { version = "0.11.0", default-features = false }
+unicode-normalization = "0.1.25"
 wgpu = "30.0.1"
 
 [workspace.lints.rust]

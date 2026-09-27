@@ -2,7 +2,7 @@
 
 This document freezes the interfaces that tasks 04–23 build on. Where it says **exists**, the code is in the repository, tested, and runs today. Where it names a later task, that task implements the item at the stated path with the stated signature. Decision record: [ADR 0001](decisions/0001-renderer-and-desktop-shell.md). Spike evidence: [architecture-spike.md](architecture-spike.md). Build and test commands: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Status of what runs today.** Only the portable core and the GPU smoke path are implemented. There is no painting, no text seeding, no PNG export and no desktop UI yet. The GPU smoke path was verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/gpu-smoke-linux-2026-09-26.txt](evidence/gpu-smoke-linux-2026-09-26.txt). Windows and macOS are unverified.
+**Status of what runs today.** Only the portable core (including text seeding and the recipe format, task 04) and the GPU smoke path are implemented. There is no painting, no PNG export and no desktop UI yet. The GPU smoke path was verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/gpu-smoke-linux-2026-09-26.txt](evidence/gpu-smoke-linux-2026-09-26.txt). Windows and macOS are unverified.
 
 ## Stack
 
@@ -30,9 +30,9 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | Concept (roadmap name) | Rust item | File | Status / owner |
 | --- | --- | --- | --- |
 | Text input gate | `text::check_source`, `text::MAX_SOURCE_BYTES` (1 MiB) | `crates/pigment-core/src/text.rs` | exists |
-| Normalized text | `text::NormalizedText` (length-only `Debug`) | same | type exists; `text::normalize` → 04 |
-| SeedBundle | `seed::SeedBundle`, `TextDigest` (256-bit, hex), `Variation(u32)`, `Domain`, `StreamSeed(u64)` | `crates/pigment-core/src/seed.rs` | types exist; `TextDigest::of`, `SeedBundle::derive`, `StreamSeed::rng` → 04 |
-| Recipe | `recipe::Recipe`, `RecipeVersions`, `RecipeSeed` | `crates/pigment-core/src/recipe.rs` | shape exists; parse/version policy → 04, files → 10 |
+| Normalized text | `text::NormalizedText` (length-only `Debug`) | same | exists (`text::normalize`, `nfc-lf-utf8/1`, task 04) |
+| SeedBundle | `seed::SeedBundle`, `TextDigest` (256-bit, hex), `Variation(u32)`, `Domain`, `StreamSeed(u64)` | `crates/pigment-core/src/seed.rs` | exists (`TextDigest::of`/`from_source`, `SeedBundle::derive`, `StreamSeed::rng` → `Rng`, `pigment-seed/1`, task 04) |
+| Recipe | `recipe::Recipe`, `RecipeVersions`, `RecipeSeed` | `crates/pigment-core/src/recipe.rs` | exists (`from_json`, `to_canonical_json`, `validate`, `seeds`, `version_notices`, `SCHEMA`; task 04); files → 10 |
 | Scene | `scene::Scene`, `SceneKey`, `SceneLayer`, `LayerRole`, `CanvasPoint`, `SceneGenerator` | `crates/pigment-core/src/scene.rs` | exists (plus diagnostic `TestCard`); product generator → 05 |
 | PaintingSettings | `settings::PaintingSettings` (+ `Appearance`, `PaletteSettings`, `AtmosphereSettings`) | `crates/pigment-core/src/settings.rs` | exists; effects → 06/07 |
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |
@@ -50,7 +50,7 @@ Dependency direction: `pigment-core` ← `pigment-gpu` ← `pigment-io` ← `pig
 | Capability reporting | `capability::GpuCapabilities`, `AdapterReport`, `LimitsReport`, `AdapterPolicy`, `rank` | `crates/pigment-core/src/capability.rs` | exists |
 | GPU device | `pigment_gpu::GpuContext` (`new`, `check_alive`, `scoped`) | `crates/pigment-gpu/src/context.rs` | exists |
 | Adapter selection | `pigment_gpu::adapter::{enumerate, select, report, is_software}` | `crates/pigment-gpu/src/adapter.rs` | exists |
-| Errors | `error::{RenderError, ValidationError, Problem, TextError, SinkError}`, `tiles::TilePlanError` | `crates/pigment-core/src/error.rs` | exists |
+| Errors | `error::{RenderError, ValidationError, Problem, TextError, RecipeError, MalformedKind, SinkError}`, `tiles::TilePlanError` | `crates/pigment-core/src/error.rs` | exists |
 | Versions | `version::{RECIPE_SCHEMA_VERSION, GENERATOR_VERSION, RENDERER_VERSION, NORMALIZATION_ID, SEED_ALGORITHM_ID}` | `crates/pigment-core/src/version.rs` | exists |
 
 ## A request from recipe to result
@@ -64,10 +64,10 @@ use pigment_core::{frame::UHD_8K, recipe::Recipe, request::*, job::*, tiles::Til
 
 // 1. Prose → seeds. The prose is never logged or stored unless the user opts in.
 text::check_source(&prose)?;                                   // exists: empty/blank/oversize
-let normalized = text::normalize(&prose)?;                     // task 04
-let recipe = Recipe::new(TextDigest::of(&normalized), UHD_8K); // TextDigest::of: task 04
+let normalized = text::normalize(&prose)?;                     // exists: NFC + LF
+let recipe = Recipe::new(TextDigest::of(&normalized), UHD_8K); // exists
 recipe.validate_values()?;                                     // exists
-let seeds = SeedBundle::derive(recipe.seed.digest, recipe.seed.variation); // task 04
+let seeds = recipe.seeds();                                    // exists: SeedBundle::derive
 
 // 2. Seeds + form + aspect → immutable scene (built once, shared by preview and export).
 let scene = Arc::new(LakeshoreGenerator.generate(&seeds, &recipe.form, recipe.frame.aspect())?); // task 05
@@ -152,7 +152,7 @@ match report.outcome {
 
 ## Controls and invalidation
 
-Source of truth: `settings::CONTROLS`. Ranges are inclusive. The UI clamps by construction. Recipe/API input outside a range is **rejected**, never clamped (task 04).
+Source of truth: `settings::CONTROLS`. Ranges are inclusive. The UI clamps by construction. Recipe/API input outside a range is **rejected**, never clamped ([load policy](seeds-and-recipes.md#load-policy)).
 
 | Key | Label | Channel | Group | Range | Default | Low end → high end | Effect task |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -200,7 +200,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 
 ## Versioning and compatibility
 
-- `RECIPE_SCHEMA_VERSION` = 1. A recipe with a **newer** schema is rejected with a clear message. An older schema loads only through an explicit, tested migration. No invented migrations (task 04 documents the limits).
+- `RECIPE_SCHEMA_VERSION` = 1. A recipe with a **newer** schema is rejected with a clear message. An older schema loads only through an explicit, tested migration. No invented migrations ([migration limits](seeds-and-recipes.md#versions-and-migration-limits)).
 - `GENERATOR_VERSION` and `RENDERER_VERSION` start at **0 = pre-approval**: fixtures and images may change without a bump until the task 08 visual gate. After approval they become 1. From then on, **any** change to scene checksums for the same key bumps `GENERATOR_VERSION`, and any intentional pixel change on the same device bumps `RENDERER_VERSION`.
 - The app ships exactly **one** generator and one renderer. It does not keep old versions alive. A recipe whose recorded versions differ opens with a visible notice ("made with generator vN; this version may compose/paint differently"). The recorded versions update only when the user saves.
 - `NORMALIZATION_ID` (`nfc-lf-utf8/1`) and `SEED_ALGORITHM_ID` (`pigment-seed/1`) name the algorithms. Changing either one creates a new identifier, never a silent change.
@@ -209,7 +209,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 
 | Tier | What | Guarantee | How it is checked |
 | --- | --- | --- | --- |
-| 0 | Text → normalized bytes → digest → stream seeds | exact on every platform and build | frozen test vectors (task 04), portable CI on Linux, Windows and macOS |
+| 0 | Text → normalized bytes → digest → stream seeds | exact on every platform and build | frozen vectors in `fixtures/seed-vectors.json`, reproduced by an independent Python reference; portable CI on Linux, Windows and macOS ([spec](seeds-and-recipes.md)) |
 | 1 | Seeds + form + aspect → scene geometry (`geometry_checksum`) for one `GENERATOR_VERSION` | exact on every platform | exact arithmetic only in generators: `+ − × ÷`, `sqrt`, comparisons, or a pure-Rust `libm`; never platform `sin`/`exp`. Checksum fixtures in CI. The `TestCard` checksum `54e3809864ea446c` is already frozen |
 | 2 | Pixels on one device, driver, backend and build, including tiled vs single tile | byte-identical | hardware suite and `gpu-smoke`: verified on NVIDIA and Intel Vulkan (tasks 02, 03) |
 | 3 | Pixels across devices, backends or drivers | **within a measured tolerance, never identical** | per-backend baselines (tasks 14, 21, 22) |
@@ -234,7 +234,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 
 | Task | Entry points and files |
 | --- | --- |
-| 04 seeds and recipe schema | `text::normalize` (`text.rs`); `TextDigest::of`, `SeedBundle::derive`, `StreamSeed::rng` (`seed.rs`); `Recipe::from_json`/`to_canonical_json` and version/unknown-field policy (`recipe.rs`); test vectors in `fixtures/seed-vectors.json`. Recommended, not yet frozen: SHA-256 digest; stream seed = first 8 LE bytes of SHA-256 over `"pigment-prose/stream/v1"`, then a length-prefixed domain label, the digest and (if `uses_variation`) the variation as u32 LE; an in-tree PCG or xoshiro PRNG with published vectors |
+| 04 seeds and recipe schema | **Done.** Spec: [seeds-and-recipes.md](seeds-and-recipes.md). `text::normalize`; `TextDigest::of`, `SeedBundle::derive`, `StreamSeed::rng` (xoshiro256\*\*); `Recipe::from_json`/`to_canonical_json`; vectors in `fixtures/seed-vectors.json` from `scripts/seed-vectors.py`. CPU generators (05, 07) draw from `seeds.stream(Domain::…).rng()`, one generator per domain |
 | 05 composition and landforms | `scene.rs` → `scene/mod.rs` + `scene/lakeshore.rs` (`LakeshoreGenerator: SceneGenerator`); extend `LayerRole`/`SceneLayer`, bumping the version and the checksum; flat-value debug view by extending `pigment-gpu/src/smoke.rs` into `debug.rs`; `pigment-prose contact-sheet` in `pigment-cli` |
 | 06 color planes and washes | `pigment-gpu/src/paint.rs` + `paint.wgsl` (`PaintRenderer: Renderer`); palettes in `pigment-core/src/palette.rs`; control effects per the table above |
 | 07 woodland, rocks, water | same renderer; placements are part of `Scene` (vegetation stream), never generated on the GPU per tile |

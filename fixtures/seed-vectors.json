@@ -1,0 +1,680 @@
+{
+  "normalization": "nfc-lf-utf8/1",
+  "seed_algorithm": "pigment-seed/1",
+  "rejected": [
+    "",
+    " ",
+    "\r\n",
+    "\t　"
+  ],
+  "vectors": [
+    {
+      "id": "shore-a",
+      "text": "A pebble rests by the shore.",
+      "normalized_utf8_bytes": 28,
+      "digest": "7ac7f737542c62a3a903b3190f6dc3b4585bb653290dfaa2da804cad7ad37850",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "54717a8a868e1926",
+          "terrain": "da3c98ca79ff5eb5",
+          "vegetation": "9f16ef7b679863f2",
+          "paint-detail": "5790b6802d0f41fb"
+        },
+        {
+          "variation": 1,
+          "composition": "5caa626eb162aec6",
+          "terrain": "b0729c42409adf5d",
+          "vegetation": "10384bb1ddfd2031",
+          "paint-detail": "5790b6802d0f41fb"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "aba8802759487657",
+          "terrain": "b91228214ae68ed9",
+          "vegetation": "134b33c13c6fe2fb",
+          "paint-detail": "5790b6802d0f41fb"
+        }
+      ]
+    },
+    {
+      "id": "shore-b",
+      "text": "A pebble rests by the shores.",
+      "normalized_utf8_bytes": 29,
+      "digest": "0fe8457b6422654022ddfe378054a0d56fab1c4308b5001cd38f0b14dfcc6006",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "ff54010dacd95904",
+          "terrain": "a817c6cf97835e21",
+          "vegetation": "c21776a5b7df0410",
+          "paint-detail": "1c010a184dd04324"
+        },
+        {
+          "variation": 1,
+          "composition": "1d1eb7fb4b34216b",
+          "terrain": "578bf59d1c136912",
+          "vegetation": "732a495cc61934fb",
+          "paint-detail": "1c010a184dd04324"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "3e057936e3124248",
+          "terrain": "0bab3a71e75a3412",
+          "vegetation": "abf847c94af40d94",
+          "paint-detail": "1c010a184dd04324"
+        }
+      ]
+    },
+    {
+      "id": "short",
+      "text": "Blue dusk.",
+      "normalized_utf8_bytes": 10,
+      "digest": "3f4c6a865e73b3522e039c1c048b796c8ed54c9829de55ff14bf2e2ad21d670d",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "cff008782104020b",
+          "terrain": "840f47a934298d39",
+          "vegetation": "356b5e1b42bba341",
+          "paint-detail": "ed30bf7d6777317e"
+        },
+        {
+          "variation": 1,
+          "composition": "48098637b1a5f628",
+          "terrain": "a047d1ace3f51903",
+          "vegetation": "0af6b6d4964c526d",
+          "paint-detail": "ed30bf7d6777317e"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "e8403bcb4f440a61",
+          "terrain": "1e887d55ade44fc8",
+          "vegetation": "cb06673a6847dcb4",
+          "paint-detail": "ed30bf7d6777317e"
+        }
+      ]
+    },
+    {
+      "id": "line-break",
+      "text": "The path bends.\nThe evening waits.",
+      "normalized_utf8_bytes": 34,
+      "digest": "205dd3e775ef9e12290d879455b66b55aba69c587d49b2d5a6d6a49997acd5e1",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "dea21e1d44ae4015",
+          "terrain": "953a600650f76b56",
+          "vegetation": "57cb4714e4ac7f4d",
+          "paint-detail": "0a5f681f4c032943"
+        },
+        {
+          "variation": 1,
+          "composition": "e01767a0ea6860da",
+          "terrain": "8fd87b2ff8e77f49",
+          "vegetation": "d80116ff311394a6",
+          "paint-detail": "0a5f681f4c032943"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "99dc93badf51daed",
+          "terrain": "40d2f3b8f3d7be25",
+          "vegetation": "b188b133349538fe",
+          "paint-detail": "0a5f681f4c032943"
+        }
+      ]
+    },
+    {
+      "id": "punctuation",
+      "text": "A comma, a dash — and silence.",
+      "normalized_utf8_bytes": 32,
+      "digest": "2bd9cd69bd7d2906fcfb8fbee4000194a4372ffe9440d5eec7bdfa9d2d5edfa9",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "1312923568495f59",
+          "terrain": "4ed6793a5bc2537b",
+          "vegetation": "cb21af0bdddcbe03",
+          "paint-detail": "c6fb50d1b7d1a2d7"
+        },
+        {
+          "variation": 1,
+          "composition": "a7db5c453be8eb80",
+          "terrain": "44c881731bf09fb5",
+          "vegetation": "686321fb64dbe9c8",
+          "paint-detail": "c6fb50d1b7d1a2d7"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "e8275711b8af07de",
+          "terrain": "3c520117ecda6b60",
+          "vegetation": "62e948c0569f09a6",
+          "paint-detail": "c6fb50d1b7d1a2d7"
+        }
+      ]
+    },
+    {
+      "id": "accent",
+      "text": "Café lumière près du lac.",
+      "normalized_utf8_bytes": 28,
+      "digest": "e9f8dbac0783576e212b30355bbc3150260501474563332aa6d51dc0ab0978b6",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "e22d56d8d48eb44a",
+          "terrain": "7b10fac7cd9ed370",
+          "vegetation": "6344f41a9adf97fa",
+          "paint-detail": "af8c88f344f67c37"
+        },
+        {
+          "variation": 1,
+          "composition": "70fbbb19ad764788",
+          "terrain": "8daaf682860895bb",
+          "vegetation": "e50a47d171cc4d97",
+          "paint-detail": "af8c88f344f67c37"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "c36c4f3692f177c9",
+          "terrain": "15363d0ea5a2cfea",
+          "vegetation": "a3ef2e5f3eeeb2fd",
+          "paint-detail": "af8c88f344f67c37"
+        }
+      ]
+    },
+    {
+      "id": "non-latin",
+      "text": "風が湖を渡る。",
+      "normalized_utf8_bytes": 21,
+      "digest": "dd886496b3716acd697956fa9f6304b58ee100fe7c812634bb1964c18275341a",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "d050c58583d1ff86",
+          "terrain": "5a816446a618e909",
+          "vegetation": "57fd15530150d6f4",
+          "paint-detail": "11104124e061b04c"
+        },
+        {
+          "variation": 1,
+          "composition": "0de7d3c06e319459",
+          "terrain": "aaec84bb8954e692",
+          "vegetation": "9e5fed70ec4eabf5",
+          "paint-detail": "11104124e061b04c"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "290ec12e73aae7d0",
+          "terrain": "cd3aaf2042a52f05",
+          "vegetation": "23d418740d068a9c",
+          "paint-detail": "11104124e061b04c"
+        }
+      ]
+    },
+    {
+      "id": "emoji",
+      "text": "Clouds drift ☁ above quiet water.",
+      "normalized_utf8_bytes": 35,
+      "digest": "01226f496bbebd56a38a13b8eec1511202d032bcf388030896598de3bc16c0af",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "945f951d92feed5a",
+          "terrain": "c4ff1d49cb1bb312",
+          "vegetation": "10b0f2e777a09dcc",
+          "paint-detail": "f7ecb9d0d753829f"
+        },
+        {
+          "variation": 1,
+          "composition": "57ff1bbd349e1fc4",
+          "terrain": "6fa414c9465d3ff0",
+          "vegetation": "f53a300ca49d93ed",
+          "paint-detail": "f7ecb9d0d753829f"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "81bf91054c7de658",
+          "terrain": "7d7700053061c43d",
+          "vegetation": "b799cca2b3287418",
+          "paint-detail": "f7ecb9d0d753829f"
+        }
+      ]
+    },
+    {
+      "id": "whitespace",
+      "text": "  A lantern glows at dawn.  ",
+      "normalized_utf8_bytes": 28,
+      "digest": "fbb5c160f56efa6960e1199796fe917991e5b73ab1a53dcebff1f0619b345923",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "858302afb8c634c2",
+          "terrain": "159629a53e12a96a",
+          "vegetation": "556b3aec19b63bf4",
+          "paint-detail": "c0eb41b961d3054b"
+        },
+        {
+          "variation": 1,
+          "composition": "f4e42edbeb46b141",
+          "terrain": "065a75a9a2425d9b",
+          "vegetation": "fd079e6a324dd155",
+          "paint-detail": "c0eb41b961d3054b"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "315c3420af1e1e3f",
+          "terrain": "62bf8ce31e35ecd1",
+          "vegetation": "fb2907e093a92eaa",
+          "paint-detail": "c0eb41b961d3054b"
+        }
+      ]
+    },
+    {
+      "id": "unrelated",
+      "text": "A clock ticks behind the door.",
+      "normalized_utf8_bytes": 30,
+      "digest": "a788232b9d493ae54d8695c9ac1526b4049b16e249d69b3f3ccd2670fb751583",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "7be53e390a6cd6d0",
+          "terrain": "7fa51c7b4751d1be",
+          "vegetation": "6862fb4594eba697",
+          "paint-detail": "953772f3c2cc34c4"
+        },
+        {
+          "variation": 1,
+          "composition": "ed1831e0eaa030a9",
+          "terrain": "e15bbc66ad675dcd",
+          "vegetation": "d37620d0420d87b1",
+          "paint-detail": "953772f3c2cc34c4"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "5e27c0e0513546b9",
+          "terrain": "3e412f42e01b60e7",
+          "vegetation": "3ed0b0a53bf33003",
+          "paint-detail": "953772f3c2cc34c4"
+        }
+      ]
+    },
+    {
+      "id": "crlf",
+      "text": "The path bends.\r\nThe evening waits.",
+      "same_as": "line-break",
+      "normalized_utf8_bytes": 34,
+      "digest": "205dd3e775ef9e12290d879455b66b55aba69c587d49b2d5a6d6a49997acd5e1",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "dea21e1d44ae4015",
+          "terrain": "953a600650f76b56",
+          "vegetation": "57cb4714e4ac7f4d",
+          "paint-detail": "0a5f681f4c032943"
+        },
+        {
+          "variation": 1,
+          "composition": "e01767a0ea6860da",
+          "terrain": "8fd87b2ff8e77f49",
+          "vegetation": "d80116ff311394a6",
+          "paint-detail": "0a5f681f4c032943"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "99dc93badf51daed",
+          "terrain": "40d2f3b8f3d7be25",
+          "vegetation": "b188b133349538fe",
+          "paint-detail": "0a5f681f4c032943"
+        }
+      ]
+    },
+    {
+      "id": "lone-cr",
+      "text": "The path bends.\rThe evening waits.",
+      "same_as": "line-break",
+      "normalized_utf8_bytes": 34,
+      "digest": "205dd3e775ef9e12290d879455b66b55aba69c587d49b2d5a6d6a49997acd5e1",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "dea21e1d44ae4015",
+          "terrain": "953a600650f76b56",
+          "vegetation": "57cb4714e4ac7f4d",
+          "paint-detail": "0a5f681f4c032943"
+        },
+        {
+          "variation": 1,
+          "composition": "e01767a0ea6860da",
+          "terrain": "8fd87b2ff8e77f49",
+          "vegetation": "d80116ff311394a6",
+          "paint-detail": "0a5f681f4c032943"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "99dc93badf51daed",
+          "terrain": "40d2f3b8f3d7be25",
+          "vegetation": "b188b133349538fe",
+          "paint-detail": "0a5f681f4c032943"
+        }
+      ]
+    },
+    {
+      "id": "decomposed",
+      "text": "Café lumière près du lac.",
+      "same_as": "accent",
+      "normalized_utf8_bytes": 28,
+      "digest": "e9f8dbac0783576e212b30355bbc3150260501474563332aa6d51dc0ab0978b6",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "e22d56d8d48eb44a",
+          "terrain": "7b10fac7cd9ed370",
+          "vegetation": "6344f41a9adf97fa",
+          "paint-detail": "af8c88f344f67c37"
+        },
+        {
+          "variation": 1,
+          "composition": "70fbbb19ad764788",
+          "terrain": "8daaf682860895bb",
+          "vegetation": "e50a47d171cc4d97",
+          "paint-detail": "af8c88f344f67c37"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "c36c4f3692f177c9",
+          "terrain": "15363d0ea5a2cfea",
+          "vegetation": "a3ef2e5f3eeeb2fd",
+          "paint-detail": "af8c88f344f67c37"
+        }
+      ]
+    },
+    {
+      "id": "cr-crlf",
+      "text": "Blue\r\r\ndusk.",
+      "normalized_utf8_bytes": 11,
+      "digest": "a49251e277acb32b46a74eae8c0f03a7724acd4faf6b20714bfc71d9d6a423d2",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "e4a12e4a70a0e37e",
+          "terrain": "5a6ce685372a6c19",
+          "vegetation": "f4830073de3b1c91",
+          "paint-detail": "1a5a3370447a06ae"
+        },
+        {
+          "variation": 1,
+          "composition": "2aa2250c1ac271f1",
+          "terrain": "b37b98cc01dab799",
+          "vegetation": "6fcc876538c6afe4",
+          "paint-detail": "1a5a3370447a06ae"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "c834963a60982472",
+          "terrain": "2e7fb32d06003223",
+          "vegetation": "1a10898a3ea2a671",
+          "paint-detail": "1a5a3370447a06ae"
+        }
+      ]
+    },
+    {
+      "id": "two-lf",
+      "text": "Blue\n\ndusk.",
+      "same_as": "cr-crlf",
+      "normalized_utf8_bytes": 11,
+      "digest": "a49251e277acb32b46a74eae8c0f03a7724acd4faf6b20714bfc71d9d6a423d2",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "e4a12e4a70a0e37e",
+          "terrain": "5a6ce685372a6c19",
+          "vegetation": "f4830073de3b1c91",
+          "paint-detail": "1a5a3370447a06ae"
+        },
+        {
+          "variation": 1,
+          "composition": "2aa2250c1ac271f1",
+          "terrain": "b37b98cc01dab799",
+          "vegetation": "6fcc876538c6afe4",
+          "paint-detail": "1a5a3370447a06ae"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "c834963a60982472",
+          "terrain": "2e7fb32d06003223",
+          "vegetation": "1a10898a3ea2a671",
+          "paint-detail": "1a5a3370447a06ae"
+        }
+      ]
+    },
+    {
+      "id": "lower-case",
+      "text": "blue dusk.",
+      "normalized_utf8_bytes": 10,
+      "digest": "cc3f2b25a0edc7d844cd88d5a2f7b799d85e9e94ffe1725300c30c78b5eb2bc4",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "5b0021f41a8c624e",
+          "terrain": "ddb04d8ba18d3997",
+          "vegetation": "bfb2a51d9ab1bd6f",
+          "paint-detail": "fec5803eb1bcb5dc"
+        },
+        {
+          "variation": 1,
+          "composition": "b2f87f63fb54c2a8",
+          "terrain": "9de09f8da6ed417f",
+          "vegetation": "af29638f355e1099",
+          "paint-detail": "fec5803eb1bcb5dc"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "b551046cd93368d8",
+          "terrain": "56a75478b19ad9cc",
+          "vegetation": "2cc5531049b535a2",
+          "paint-detail": "fec5803eb1bcb5dc"
+        }
+      ]
+    },
+    {
+      "id": "trailing-newline",
+      "text": "Blue dusk.\n",
+      "normalized_utf8_bytes": 11,
+      "digest": "f2c516757069775de761a3dfe532eeb6eb67a74b6b5903a2d4d11a9b86cefa21",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "c0242825ce6293d9",
+          "terrain": "24fd2c51003ec546",
+          "vegetation": "8d49bc66f04f7234",
+          "paint-detail": "ccb2ffb924db4196"
+        },
+        {
+          "variation": 1,
+          "composition": "f0ce3bd7fdd1e532",
+          "terrain": "5c1e44ffd3687841",
+          "vegetation": "39ae768ab73fc08a",
+          "paint-detail": "ccb2ffb924db4196"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "3c0aabb85d1d7204",
+          "terrain": "79b59529582356bb",
+          "vegetation": "802f8b69561f7f07",
+          "paint-detail": "ccb2ffb924db4196"
+        }
+      ]
+    },
+    {
+      "id": "no-break-space",
+      "text": "Blue dusk.",
+      "normalized_utf8_bytes": 11,
+      "digest": "8a6d03a28301c73424cb9db931db25989b21329ad7c9ad6883c06e6168588fd9",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "cca36a41bf2313eb",
+          "terrain": "21fa3f1e6703d13d",
+          "vegetation": "3fabe66c52564a36",
+          "paint-detail": "0c6540aa35684b24"
+        },
+        {
+          "variation": 1,
+          "composition": "175ab9602ad39d97",
+          "terrain": "d6caecaa89c521b7",
+          "vegetation": "1e3550343eae456e",
+          "paint-detail": "0c6540aa35684b24"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "b78a6d49314ead84",
+          "terrain": "82223759dc0e0453",
+          "vegetation": "2231a704f5309105",
+          "paint-detail": "0c6540aa35684b24"
+        }
+      ]
+    },
+    {
+      "id": "fullwidth",
+      "text": "Ｂlue dusk.",
+      "normalized_utf8_bytes": 12,
+      "digest": "ac798aeb2aa4a9f0e6b2381a73a5d23fbfc1c356b8228223ca4f7991209a723b",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "382b6f29f66d9674",
+          "terrain": "7cb787173d131e81",
+          "vegetation": "0a3262029c814aea",
+          "paint-detail": "25911bd827cff727"
+        },
+        {
+          "variation": 1,
+          "composition": "111313c8118422d1",
+          "terrain": "4824319be1630bd9",
+          "vegetation": "63565a6571adde9a",
+          "paint-detail": "25911bd827cff727"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "d86c12f7f0e31a97",
+          "terrain": "d511048f1d01d29f",
+          "vegetation": "7f10b7084ceac82c",
+          "paint-detail": "25911bd827cff727"
+        }
+      ]
+    },
+    {
+      "id": "kelvin",
+      "text": "K",
+      "same_as": "latin-k",
+      "normalized_utf8_bytes": 1,
+      "digest": "7b3913e2915942d2116a14890320e25d6afac853b1366d6be987992a64df726c",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "24bee6d845eb0799",
+          "terrain": "786b1c2ac96420d8",
+          "vegetation": "fbc36cd0dd448608",
+          "paint-detail": "63004c6b5a6c9290"
+        },
+        {
+          "variation": 1,
+          "composition": "c4f43bd1c10de8a4",
+          "terrain": "6e52bc4eb14c0775",
+          "vegetation": "4b7a00c33d220ca9",
+          "paint-detail": "63004c6b5a6c9290"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "da2ada7f83c87832",
+          "terrain": "8b816237c016d42b",
+          "vegetation": "ae272cdb8e12a98d",
+          "paint-detail": "63004c6b5a6c9290"
+        }
+      ]
+    },
+    {
+      "id": "latin-k",
+      "text": "K",
+      "normalized_utf8_bytes": 1,
+      "digest": "7b3913e2915942d2116a14890320e25d6afac853b1366d6be987992a64df726c",
+      "streams": [
+        {
+          "variation": 0,
+          "composition": "24bee6d845eb0799",
+          "terrain": "786b1c2ac96420d8",
+          "vegetation": "fbc36cd0dd448608",
+          "paint-detail": "63004c6b5a6c9290"
+        },
+        {
+          "variation": 1,
+          "composition": "c4f43bd1c10de8a4",
+          "terrain": "6e52bc4eb14c0775",
+          "vegetation": "4b7a00c33d220ca9",
+          "paint-detail": "63004c6b5a6c9290"
+        },
+        {
+          "variation": 4294967295,
+          "composition": "da2ada7f83c87832",
+          "terrain": "8b816237c016d42b",
+          "vegetation": "ae272cdb8e12a98d",
+          "paint-detail": "63004c6b5a6c9290"
+        }
+      ]
+    }
+  ],
+  "rng": [
+    {
+      "seed": "0000000000000000",
+      "next_u64": [
+        "99ec5f36cb75f2b4",
+        "bf6e1f784956452a",
+        "1a5f849d4933e6e0",
+        "6aa594f1262d2d2c",
+        "bba5ad4a1f842e59",
+        "ffef8375d9ebcaca",
+        "6c160deed2f54c98",
+        "8920ad648fc30a3f"
+      ]
+    },
+    {
+      "seed": "0000000000000001",
+      "next_u64": [
+        "b3f2af6d0fc710c5",
+        "853b559647364cea",
+        "92f89756082a4514",
+        "642e1c7bc266a3a7",
+        "b27a48e29a233673",
+        "24c123126ffda722",
+        "123004ef8df510e6",
+        "61954dcc47b1e89d"
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "next_u64": [
+        "a2c2a42038d4ec3d",
+        "05fc25d0738e7b0f",
+        "625e7bff938e701e",
+        "1ba4ddc6fe2b5726",
+        "df0a2482ac9254cf",
+        "3939eda866ababe8",
+        "b59d922db3f2da81",
+        "80472ee13a970c2a"
+      ]
+    },
+    {
+      "seed": "ffffffffffffffff",
+      "next_u64": [
+        "8f5520d52a7ead08",
+        "c476a018caa1802d",
+        "81de31c0d260469e",
+        "bf658d7e065f3c2f",
+        "913593fda1bca32a",
+        "bb535e93941ba525",
+        "5ecda415c3c6dfde",
+        "c487398fc9de9ae2"
+      ]
+    }
+  ]
+}

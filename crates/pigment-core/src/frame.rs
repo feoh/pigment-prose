@@ -27,6 +27,7 @@ pub const MAX_ASPECT: f64 = 4.0;
 
 /// Pixel dimensions of an export, and of the document's framing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Frame {
     pub width: u32,
     pub height: u32,

@@ -10,7 +10,7 @@ A local-first desktop painting studio in planning. Arbitrary prose supplies **no
 - [Architecture and module contracts](docs/architecture.md) and [ADR 0001: Rust + wgpu renderer, eframe/egui shell](docs/decisions/0001-renderer-and-desktop-shell.md)
 - [Build, test and contribution rules](CONTRIBUTING.md)
 
-The Cargo workspace has three crates: `crates/pigment-core` (portable, tested contracts), `crates/pigment-gpu` (wgpu device, capability report and a tiled diagnostic renderer) and `crates/pigment-cli` (the `pigment-prose gpu-info` / `gpu-smoke` diagnostics). The GPU smoke path runs on Linux (Vulkan) on the RTX 4070 Ti and the Intel iGPU ([evidence](docs/evidence/gpu-smoke-linux-2026-09-26.txt)). Windows and macOS are unverified. There is still no painting renderer, text seeding, image export, desktop application or published release.
+The Cargo workspace has three crates: `crates/pigment-core` (portable, tested contracts), `crates/pigment-gpu` (wgpu device, capability report and a tiled diagnostic renderer) and `crates/pigment-cli` (the `pigment-prose gpu-info` / `gpu-smoke` diagnostics). The GPU smoke path runs on Linux (Vulkan) on the RTX 4070 Ti and the Intel iGPU ([evidence](docs/evidence/gpu-smoke-linux-2026-09-26.txt)). Windows and macOS are unverified. Prose-to-seed derivation and the versioned recipe format are implemented and frozen ([spec](docs/seeds-and-recipes.md)). There is still no painting renderer, image export, desktop application or published release.
 
 ```sh
 scripts/check.sh       # portable format, lint and tests (no GPU needed)

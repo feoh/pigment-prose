@@ -11,7 +11,8 @@
 //! - `RENDERER_VERSION` changes whenever the same scene and appearance would
 //!   paint visibly differently on the same device. Same `0` rule.
 //! - Text normalization and seed derivation have their own identifiers so a
-//!   recipe says exactly how its digest was produced (frozen by task 04).
+//!   recipe says exactly how its digest was produced. Both are frozen by
+//!   `fixtures/seed-vectors.json`; see docs/seeds-and-recipes.md.
 
 /// Recipe file format version understood by this build.
 pub const RECIPE_SCHEMA_VERSION: u32 = 1;
@@ -22,10 +23,11 @@ pub const GENERATOR_VERSION: u32 = 0;
 /// Painting renderer version. `0` = pre-approval, no cross-build promise.
 pub const RENDERER_VERSION: u32 = 0;
 
-/// Identifier of the text normalization algorithm (task 04 freezes it).
+/// Text normalization: NFC, then CRLF/CR to LF, as UTF-8 (`text::normalize`).
 pub const NORMALIZATION_ID: &str = "nfc-lf-utf8/1";
 
-/// Identifier of the digest and stream-derivation algorithm (task 04 freezes it).
+/// Digest, stream derivation and PRNG (`seed` module): domain-separated
+/// SHA-256 and xoshiro256** seeded by SplitMix64.
 pub const SEED_ALGORITHM_ID: &str = "pigment-seed/1";
 
 /// Crate version of this build, for diagnostics and render reports.

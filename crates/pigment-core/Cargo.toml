@@ -9,9 +9,10 @@ publish.workspace = true
 
 [dependencies]
 serde.workspace = true
-
-[dev-dependencies]
+# Recipe parsing inspects the document structure before typing it (task 04).
 serde_json.workspace = true
+sha2.workspace = true
+unicode-normalization.workspace = true
 
 [lints]
 workspace = true

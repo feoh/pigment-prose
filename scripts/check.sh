@@ -5,3 +5,5 @@ cd "$(dirname "$0")/.."
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
+# The independent seed reference (stdlib Python) must agree with the fixture.
+python3 scripts/seed-vectors.py --check

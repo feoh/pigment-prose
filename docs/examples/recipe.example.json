@@ -7,11 +7,18 @@
     "renderer": 0
   },
   "seed": {
-    "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+    "digest": "7ac7f737542c62a3a903b3190f6dc3b4585bb653290dfaa2da804cad7ad37850",
     "variation": 2
   },
-  "frame": { "width": 7680, "height": 4320 },
-  "form": { "faceting": 0.55, "relief": 0.5, "woodland_density": 0.5 },
+  "frame": {
+    "width": 7680,
+    "height": 4320
+  },
+  "form": {
+    "faceting": 0.55,
+    "relief": 0.5,
+    "woodland_density": 0.5
+  },
   "painting": {
     "edge_looseness": 0.4,
     "wash_gouache": 0.25,
@@ -19,6 +26,11 @@
     "granulation": 0.3,
     "paper_grain": 0.3
   },
-  "palette": { "id": "lakeshore", "intensity": 0.6 },
-  "atmosphere": { "haze": 0.4 }
+  "palette": {
+    "id": "lakeshore",
+    "intensity": 0.6
+  },
+  "atmosphere": {
+    "haze": 0.4
+  }
 }

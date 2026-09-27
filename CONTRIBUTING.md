@@ -18,6 +18,7 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | Format | `cargo fmt --all` (check only: `cargo fmt --all -- --check`) |
 | Lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Portable tests | `cargo test --workspace --locked` (the GPU suite shows as *ignored*) |
+| Seed reference check | `python3 scripts/seed-vectors.py --check` (stdlib only; `uv run` also works) |
 | **Hardware GPU checks** | `scripts/gpu-tests.sh [LOG_FILE]` |
 | List adapters | `cargo run --release -p pigment-cli -- gpu-info` |
 | GPU smoke test | `cargo run --release -p pigment-cli -- gpu-smoke [--width W --height H --tile T --adapter NAME]` |

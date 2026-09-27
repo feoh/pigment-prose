@@ -38,3 +38,7 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Tests (GPU suite is ignored and reported as such)
         run: cargo test --workspace --locked
+      # Independent stdlib-only reference for the tier-0 seed vectors.
+      - name: Seed vectors match the reference implementation
+        if: runner.os == 'Linux'
+        run: python3 scripts/seed-vectors.py --check

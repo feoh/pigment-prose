@@ -293,7 +293,8 @@ impl SceneGenerator for TestCard {
     }
 }
 
-/// Test-card PRNG only. The product PRNG is task 04's `StreamSeed::rng`.
+/// Test-card PRNG only, frozen with its checksum. Product generators use
+/// `StreamSeed::rng`.
 struct SplitMix64(u64);
 
 impl SplitMix64 {

@@ -1,0 +1,5 @@
+# Keep LF on every OS. Byte-exact tests compare checked-in files (the
+# canonical recipe example, seed vectors), and a Windows checkout with
+# core.autocrlf would otherwise turn them into CRLF.
+* text=auto eol=lf
+*.png binary

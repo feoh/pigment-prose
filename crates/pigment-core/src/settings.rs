@@ -8,7 +8,7 @@
 //!   haze and depth appearance. Repaints only; geometry must not change.
 //!
 //! [`CONTROLS`] is the single source of ranges, defaults and labels for the
-//! UI (task 12), validation (task 04) and the renderer (tasks 05–07). Values
+//! UI (task 12), recipe validation and the renderer (tasks 05–07). Values
 //! outside a range are *rejected* at the boundary (recipe load, API); the UI
 //! clamps by construction. All values are dimensionless `f64`.
 
@@ -132,6 +132,7 @@ pub const MAX_EDGE_BLEED_RADIUS: f64 = 0.02;
 
 /// Structural settings. Changing any of these rebuilds the scene.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FormSettings {
     pub faceting: f64,
     pub relief: f64,
@@ -140,6 +141,7 @@ pub struct FormSettings {
 
 /// Paint handling. Must never change scene geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PaintingSettings {
     pub edge_looseness: f64,
     pub wash_gouache: f64,
@@ -156,12 +158,14 @@ pub enum PaletteId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PaletteSettings {
     pub id: PaletteId,
     pub intensity: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AtmosphereSettings {
     pub haze: f64,
 }
