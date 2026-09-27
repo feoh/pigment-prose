@@ -216,6 +216,9 @@ pub struct Composition {
     pub cumulus: Vec<Cumulus>,
     pub deck: Option<Deck>,
     pub light: LightPool,
+    /// `HighVantage` meander: centre, amplitude (fractions of the width),
+    /// bends over the depth of the view, phase. Zero otherwise.
+    pub river: [f64; 4],
     /// `HighVantage` only (empty otherwise).
     pub spurs: Vec<Spur>,
     /// `HighVantage` cliff edge: base height, rise at the high side, and
@@ -407,22 +410,34 @@ impl Composition {
 
         let mut spurs = Vec::new();
         let mut ledge = [0.0; 3];
+        let mut river = [0.0; 4];
         if template == Template::HighVantage {
+            // A meandering channel: smooth bends of even wavelength that
+            // widen toward the viewer. Each spur grows from the bank the
+            // channel swings away from (the inside of the bend) and ends at
+            // the channel's edge, so the tips line up along smooth banks.
+            river = [
+                r.range_f64(0.4, 0.6),
+                r.range_f64(0.12, 0.22),
+                r.range_f64(1.0, 1.8),
+                r.next_f64(),
+            ];
             let n = 4 + r.below((MAX_SPURS - 3) as u64) as usize;
-            let mut side = r.below(2) == 1;
             for k in 0..n {
                 let t = (k + 1) as f64 / (n + 1) as f64;
+                let jitter = r.range_f64(-0.03, 0.03);
+                let height = r.range_f64(0.6, 1.4);
+                let thickness = r.range_f64(0.5, 1.2);
+                let (left, right, centre) = channel(&river, t);
+                let from_right = centre < river[0];
+                let reach = if from_right { 1.0 - right } else { left };
                 spurs.push(Spur {
-                    from_right: side,
+                    from_right,
                     nearness: t,
-                    reach: r.range_f64(0.35, 0.72),
-                    height: r.range_f64(0.6, 1.4),
-                    thickness: r.range_f64(0.5, 1.2),
+                    reach: (reach + jitter).clamp(0.12, 0.85),
+                    height,
+                    thickness,
                 });
-                // Mostly alternate so the lake winds between the spurs.
-                if r.next_f64() < 0.8 {
-                    side = !side;
-                }
             }
             ledge = [
                 r.range_f64(0.05, 0.1),
@@ -431,6 +446,7 @@ impl Composition {
             ];
         }
         Composition {
+            river,
             template,
             mirrored,
             light_from_left,
@@ -876,13 +892,35 @@ impl<'a> Builder<'a> {
                 let hill = 1.0 - (2.0 * u - 0.7) * (2.0 * u - 0.7);
                 fall * (0.65 + 0.35 * hill.max(0.0))
             };
+            // Blunt, rounded tips (water erodes points): the last 30 % of
+            // the spur closes on an elliptical cap. The water line curves
+            // gently instead of running straight.
+            let cap = |x: f64| {
+                let u = ((dist(x) / span - 0.7) / 0.3).clamp(0.0, 1.0);
+                (1.0 - u * u).sqrt()
+            };
+            let bank = self.fbm(
+                ts.spurs.wrapping_add(100 + k as u64),
+                0.2,
+                4.0 * step,
+                0.4,
+                0.0,
+            );
             let top: Vec<f64> = xs
                 .iter()
-                .map(|&x| y_base - height * profile(x) * (1.0 + 0.4 * detail.eval(x)))
+                .map(|&x| {
+                    let upper = height * profile(x) * (1.0 + 0.4 * detail.eval(x)) + 0.35 * thick;
+                    y_base - upper * cap(x)
+                })
                 .collect();
             let bottom: Vec<f64> = xs
                 .iter()
-                .map(|&x| y_base + 0.003 + thick * (1.0 - dist(x) / span).max(0.0))
+                .map(|&x| {
+                    let u = (dist(x) / span).clamp(0.0, 1.0);
+                    let lower =
+                        thick * (0.55 + 0.45 * (1.0 - u) * (1.0 - u)) * (1.0 + 0.1 * bank.eval(x));
+                    y_base + 0.001 + lower * cap(x)
+                })
                 .collect();
             let d = depth::SPUR_FARTHEST - (depth::SPUR_FARTHEST - depth::SPUR_NEAREST) * t as f32;
             let (x_edge, x_tip) = if sp.from_right {
@@ -1790,6 +1828,30 @@ struct RockParams {
     cap: f64,
 }
 
+/// A smooth periodic wave in `[-1, 1]` with period 1: two parabolic
+/// half-waves, continuous in value and slope (a sine stand-in built from
+/// exact arithmetic).
+fn wave(u: f64) -> f64 {
+    let f = u - u.floor();
+    if f < 0.5 {
+        let g = 2.0 * f;
+        4.0 * g * (1.0 - g)
+    } else {
+        let g = 2.0 * f - 1.0;
+        -4.0 * g * (1.0 - g)
+    }
+}
+
+/// The meander's left bank, right bank and centre (fractions of the width)
+/// at nearness `t`: bends swing wider and the channel widens toward the
+/// viewer.
+fn channel(river: &[f64; 4], t: f64) -> (f64, f64, f64) {
+    let [centre, amp, bends, phase] = *river;
+    let x = centre + amp * (0.4 + 0.6 * t) * wave(phase + bends * t);
+    let half = 0.05 + 0.1 * t;
+    (x - half, x + half, x)
+}
+
 /// Height of the primary summit above the horizon. Capped in short-side
 /// units too, so tall portrait frames keep sky above the summit; the tower
 /// may rise higher than the other templates.
@@ -2103,7 +2165,7 @@ mod tests {
     const FROZEN: [u64; 3] = [
         0x91a2_336a_07d0_1989,
         0x9143_581e_72ed_10df,
-        0x477e_18fc_c742_e567,
+        0x8d72_6063_3f95_e0c3,
     ];
 
     #[test]
@@ -2465,6 +2527,62 @@ mod tests {
         assert_eq!(counts.len(), 6);
         assert_eq!(counts[&Plant::Broadleaf], 260);
         assert_eq!(counts[&Plant::Copper], 80);
+    }
+
+    #[test]
+    fn meanders_are_smooth() {
+        // The channel wave is continuous in value and slope (no kinks), so
+        // bends are smooth like an eroded river's.
+        let h = 1e-6;
+        for k in 0..400 {
+            let u = k as f64 / 100.0;
+            let (a, b) = (wave(u - h), wave(u + h));
+            // |slope| <= 8, so a continuous wave moves at most 16h over 2h.
+            assert!((a - b).abs() <= 16.0 * h + 1e-12, "jump at {u}");
+            let s1 = (wave(u) - wave(u - h)) / h;
+            let s2 = (wave(u + h) - wave(u)) / h;
+            assert!((s1 - s2).abs() < 1e-3, "kink at {u}: {s1} vs {s2}");
+            assert!((-1.0..=1.0).contains(&wave(u)));
+        }
+    }
+
+    #[test]
+    fn valley_spurs_have_blunt_tips() {
+        // A wedge closes linearly toward its tip; an eroded spur keeps most
+        // of its thickness until it rounds off. Measured on the band's gap
+        // (bottom chain minus top chain) at 85 % of the way to the tip.
+        let aspect = UHD_4K.aspect();
+        let mut spurs = 0;
+        for i in 0..80 {
+            let seeds = sample(i);
+            if Composition::draw(&seeds, aspect).template != Template::HighVantage {
+                continue;
+            }
+            let s = scene(&seeds, FormSettings::default(), aspect);
+            for l in s.layers().iter().filter(|l| l.role == LayerRole::NearRidge) {
+                let o = &l.outline;
+                let n = o.len() / 2;
+                let gap = |i: usize| (o[o.len() - 1 - i].y - o[i].y) as f64;
+                // Chains run from the frame edge to the tip or the reverse.
+                let (edge, tip) = if o[0].x < o[n - 1].x && o[0].x < 0.0 {
+                    (0, n - 1)
+                } else {
+                    (n - 1, 0)
+                };
+                let at = |f: f64| {
+                    let i = edge as f64 + (tip as f64 - edge as f64) * f;
+                    gap(i.round() as usize)
+                };
+                assert!(
+                    at(0.85) > 0.3 * at(0.5),
+                    "sample {i}: tip closes like a wedge ({} vs {})",
+                    at(0.85),
+                    at(0.5)
+                );
+                spurs += 1;
+            }
+        }
+        assert!(spurs > 40, "only {spurs} spurs checked");
     }
 
     #[test]

@@ -94,6 +94,16 @@ Template weights (05b): `tower-peak` 25 %, `high-vantage` 25 %, `peak-over-water
 
 **Woodland.** The far woods are clusters stratified along the width. Each is active with probability 0.15 + 0.8 × density, has a half-width of (0.06–0.24) × (0.6 + 0.8 × density), and stands 0.012–0.047 × (0.6 + 0.8 × density) tall on the waterline. The near woods are up to 3 clusters on the near shore toward the frame edge, each active with probability 0.1 + 0.9 × density, standing up to (0.1–0.35) × sky space × (0.5 + 0.7 × density) tall. Density 0 leaves under 5 % woodland coverage, and density 1 always gives more than density 0 (tested).
 
+## Meanders (`high-vantage`, task 06 round 3)
+
+The user pointed out that rivers cannot zigzag with sharp angles, because erosion and flow round them off. The valley's water now follows a meander:
+
+- **Centreline:** `centre + amplitude × (0.4 + 0.6 t) × wave(phase + bends × t)` (fractions of the width, nearness `t` from 0 at the horizon to 1). `wave` is two parabolic half-waves, continuous in value and slope: a sine stand-in built from exact arithmetic. The composition draws centre 0.4–0.6, amplitude 0.12–0.22, 1.0–1.8 bends over the view, and a phase.
+- **Width:** a half-width of 0.05 + 0.1 t, so the channel widens toward the viewer.
+- **Spurs:** each spur grows from the bank the channel swings away from (the inside of the bend) and reaches that bank's edge (±0.03). The tips therefore line up along smooth banks.
+- **Rounded tips:** the last 30 % of each spur closes on an elliptical cap, and the water line curves gently (fBm, ±10 %).
+- **Tests:** `meanders_are_smooth` and `valley_spurs_have_blunt_tips`.
+
 ## Sky, light and scale (05b)
 
 - **Clouds.** 75 % of skies are *dramatic*. A dramatic sky gets a storm deck with a probability of 65 % (calm skies 15 %). The deck's lower edge is at 12–30 % of the sky space, lumpy, and lifts by 40–80 % inside a break 0.3–0.7 wide near the focal summit. Every sky has 1–3 cumulus banks 0.25–0.7 × the width (capped at 1.8 canvas units) wide, with billows 0.1–0.22 across. Cloud outlines use `CLOUD_STEP` = 1/120.
