@@ -4,6 +4,7 @@ description = "pigment-prose diagnostics CLI: GPU capability report and smoke te
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [[bin]]

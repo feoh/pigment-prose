@@ -8,8 +8,8 @@ exclude = ["spikes/gpu-tiles"]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.98"
+license = "MIT"
 publish = false
-# No project license has been chosen; task 15 asks the user.
 
 [workspace.dependencies]
 pigment-core = { path = "crates/pigment-core" }

@@ -18,3 +18,5 @@ scripts/gpu-tests.sh   # hardware GPU smoke run and test suite
 ```
 
 The task 02 spike ([`spikes/gpu-tiles/`](spikes/gpu-tiles/)) is kept as a separate, throwaway Cargo project.
+
+Source code is licensed under the [MIT License](LICENSE).

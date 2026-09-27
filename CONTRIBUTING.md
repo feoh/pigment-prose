@@ -39,7 +39,7 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 ## Dependencies
 
 - Declare every third-party crate once in the root `[workspace.dependencies]` with a full minimum version, and refer to it from member crates with `.workspace = true`. Commit `Cargo.lock`.
-- Before adding a dependency, check its license. The project uses only permissive licenses (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode) so far. Note new licenses in the change description; the distribution audit is task 15.
+- Before adding a dependency, check its license. Dependencies must be compatible with distributing the MIT-licensed project; so far all are permissive (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode). Note new licenses in the change description; the distribution audit is task 15.
 - Upgrade wgpu and egui together: the shell and renderer must share one wgpu major.
 
 ## Privacy rules for code
@@ -50,4 +50,4 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 
 ## Repository
 
-This is a private project. Do not publish releases, packages or crates. Pushing to the private GitHub remote requires the owner's go-ahead. No project license has been chosen yet; task 15 asks the owner.
+This is a private project. Do not publish releases, packages or crates. Pushing to the private GitHub remote requires the owner's go-ahead. The project source is licensed under the [MIT License](LICENSE). That covers the code only; it adds no watermark, attribution or other terms to images the application exports.
