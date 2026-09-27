@@ -1,0 +1,115 @@
+# 2026-09-27T23:48:39Z Linux 7.2.7-1-cachyos x86_64
+rustc 1.98.1 (48a229cea 2026-09-01)
+   Compiling pigment-gpu v0.1.0 (<repo>/crates/pigment-gpu)
+   Compiling pigment-cli v0.1.0 (<repo>/crates/pigment-cli)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.60s
+pigment-prose 0.1.0 (wgpu 30.0.1); 2 adapter(s)
+- NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=Discrete software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_buffer_size=4294967295 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+- Intel(R) Graphics (RPL-S)
+    backend=Vulkan type=Integrated software=false vendor=0x8086 device=0xa780
+    driver=Intel open-source Mesa driver (Mesa 26.2.3-arch3.1)
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=102
+selected: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+pigment-prose 0.1.0 gpu-smoke
+wgpu: 30.0.1
+adapter: NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=Discrete software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_buffer_size=4294967295 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+device limits requested: WebGPU defaults (max_texture_dimension_2d=8192)
+device init + pipelines: 127.50 ms
+scene: test card v3, seed 7, aspect 16:9, geometry checksum cc068b7a51ae091c
+single tile 1920x1080: apron 9 px, 1 tile, GPU tile bytes 33612192, render+readback 4.04 ms, total 12.02 ms, fnv 97250fcf653e3692
+repeat single tile: identical
+Fixed { edge: 512 }: 4x3 tiles of 512x512, apron 9, GPU tile bytes 4344352, render+readback 4.50 ms, total 5.05 ms -> identical
+Fixed { edge: 333 }: 6x4 tiles of 333x333, apron 9, GPU tile bytes 1940652, render+readback 5.09 ms, total 5.80 ms -> identical
+Budget { gpu_bytes: 268435456, host_bytes: 268435456 }: 1x1 tiles of 1920x1080, apron 9, GPU tile bytes 33612192, render+readback 3.91 ms, total 4.64 ms -> identical
+cancellation after tile 1 of 40: Cancelled { tiles_done: 1 }, sink aborted=true -> ok
+preview 1280x720 test card, warm (n=20): median 1.55 ms, p95 1.96 ms
+RESULT: PASS on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+   Compiling pigment-gpu v0.1.0 (<repo>/crates/pigment-gpu)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.54s
+     Running tests/gpu_hardware.rs (target/release/deps/gpu_hardware-42a5c8c215d69450)
+
+running 12 tests
+test cancellation_stops_at_the_next_tile_and_aborts_the_sink ... ok
+test compositing_matches_the_reference_model ... ok
+test debug_layer_ids_match_the_cpu_rasterizer ... ok
+test debug_views_are_identical_tiled_and_single ... ok
+test impossible_tile_plan_is_an_error_not_a_crash ... ok
+test output_is_opaque_and_repeatable ... ok
+test paint_settings_change_pixels_but_not_the_scene ... ok
+test painting_agrees_across_resolutions ... ok
+test painting_is_identical_tiled_and_single ... ok
+test painting_is_opaque_repeatable_and_varied ... ok
+test painting_is_valid_at_setting_extremes ... ok
+test tiled_output_is_byte_identical_to_single_tile ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+   Compiling pigment-io v0.1.0 (<repo>/crates/pigment-io)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.61s
+     Running tests/gpu_export.rs (target/release/deps/gpu_export-0c551de4e322e70f)
+
+running 7 tests
+test approved_recipes_repaint_identically_after_save_and_load ... GPU export suite on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+ok
+test cancelled_export_leaves_the_old_file_and_no_partial ... ok
+test custom_portrait_export_keeps_the_preview_composition ... 3000x4000 export, 3x4 tiles of 1000 px, apron 35: 81 ms (65 ms PNG), 9.6 MiB
+600x800 preview vs 3000x4000 downsampled 5x: PSNR 32.1 dB
+ok
+test eight_k_export_keeps_the_preview_composition ... 7680x4320 export, 4x3 tiles of 2048 px, apron 50: 236 ms (182 ms PNG), 22.1 MiB
+960x540 preview vs 8K downsampled 8x: PSNR 34.0 dB
+ok
+test impossible_budgets_and_bad_destinations_are_errors ... ok
+test kept_prose_never_reaches_the_exported_png ... 1600x900 export, 1x1 tiles of 1600 px, apron 12: 12 ms (8 ms PNG), 1.5 MiB
+ok
+test tiled_png_export_equals_the_single_tile_render ... 1001x563 export, 4x3 tiles of 256 px, apron 0: 9 ms (7 ms PNG), 0.6 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 0: 8 ms (5 ms PNG), 0.6 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 0: 4 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 8: 5 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 8: 5 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 8: 4 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 17: 5 ms (3 ms PNG), 0.7 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 17: 5 ms (3 ms PNG), 0.7 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 17: 4 ms (3 ms PNG), 0.7 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 0: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 0: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 8: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 8: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 8: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 17: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 17: 4 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 17: 4 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 0: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 8: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 8: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 8: 4 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 17: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 17: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 17: 4 ms (3 ms PNG), 0.5 MiB
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+   Compiling pigment-studio v0.1.0 (<repo>/crates/pigment-studio)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.46s
+     Running tests/gpu_preview.rs (target/release/deps/gpu_preview-f109b964262892f9)
+
+running 1 test
+test a_request_storm_stays_bounded_and_ends_on_the_newest ... preview suite on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+1000 requests in 0.56 s: 555 jobs started, 355 painted, 200 cancelled; 355 shown, 0 stale dropped; scenes built 24 / reused 531
+resident memory: 236.7 MiB before, 239.0 MiB after (growth 2.4 MiB)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+

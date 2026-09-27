@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/pigment-core", "crates/pigment-gpu", "crates/pigment-io", "crates/pigment-cli"]
+members = [
+    "crates/pigment-core",
+    "crates/pigment-gpu",
+    "crates/pigment-io",
+    "crates/pigment-studio",
+    "crates/pigment-cli",
+]
 # The task 02 spike is a separate, throwaway Cargo project with its own lock.
 exclude = ["spikes/gpu-tiles"]
 
@@ -15,6 +21,9 @@ publish = false
 pigment-core = { path = "crates/pigment-core" }
 pigment-gpu = { path = "crates/pigment-gpu" }
 pigment-io = { path = "crates/pigment-io" }
+# The desktop shell (task 11). eframe 0.36 uses wgpu 30, the renderer's version;
+# upgrade the two together (ADR 0001). Only the wgpu renderer is enabled.
+eframe = { version = "0.36.2", default-features = false, features = ["accesskit", "default_fonts", "wgpu", "wayland", "x11"] }
 png = "0.18.1"
 pollster = "1.0.1"
 serde = { version = "1.0.228", features = ["derive"] }

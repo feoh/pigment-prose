@@ -2,7 +2,7 @@
 
 This document freezes the interfaces that tasks 04–23 build on. Where it says **exists**, the code is in the repository, tested, and runs today. Where it names a later task, that task implements the item at the stated path with the stated signature. Decision record: [ADR 0001](decisions/0001-renderer-and-desktop-shell.md). Spike evidence: [architecture-spike.md](architecture-spike.md). Build and test commands: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. The painting renderer (tasks 06–07) and tiled PNG export (task 09, [export.md](export.md)) exist. There is no desktop UI yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
+**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. The painting renderer (tasks 06–07), tiled PNG export (task 09, [export.md](export.md)), recipe files (task 10) and the desktop shell with its preview lifecycle (task 11, [studio.md](studio.md)) exist. The artistic controls and the export dialog do not yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
 
 ## Stack
 
@@ -20,7 +20,7 @@ This document freezes the interfaces that tasks 04–23 build on. Where it says 
 | `crates/pigment-gpu/tests/gpu_hardware.rs` | test | Hardware GPU suite, `#[ignore]` by default. | exists |
 | `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`, `contact-sheet` (task 05, debug views to PNG), `paint-bench`, `export` (task 09). Task 14 adds `bench`. | exists |
 | `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize, and the export job (09); recipe files and the document model (10). | exists (09, 10) |
-| `crates/pigment-studio/` → binary `pigment-studio` | bin | eframe/egui desktop app (11–13). | task 11 creates |
+| `crates/pigment-studio/` → binary `pigment-studio` (+ lib for tests) | bin | eframe/egui desktop app (11–13): `app.rs`, `worker.rs`, `preview.rs`, `script.rs`. | exists (11) |
 | `spikes/gpu-tiles/` | separate Cargo project | Task 02 throwaway spike, excluded from the workspace. | frozen |
 
 Dependency direction: `pigment-core` ← `pigment-gpu`, `pigment-core` ← `pigment-io`, and both ← `pigment-studio`. `pigment-io` reaches the GPU only through the `Renderer` trait, so it builds without wgpu; its hardware tests use `pigment-gpu` as a dev-dependency. `pigment-cli` depends on `core`, `gpu` and `io`. `pigment-core` never depends on the others.
@@ -53,7 +53,7 @@ Dependency direction: `pigment-core` ← `pigment-gpu`, `pigment-core` ← `pigm
 | Renderer | `request::Renderer` trait | same | exists; `SmokeRenderer` exists, `PaintRenderer` → 06/07 |
 | Cancellation | `job::CancelToken` | `crates/pigment-core/src/job.rs` | exists |
 | Progress | `job::Progress`, `Phase`, `ProgressSink` | same | exists |
-| Preview queue / stale results | `job::Mailbox`, `Submitted`, `PreviewState` | same | exists; wired by 11 |
+| Preview queue / stale results | `job::Mailbox`, `Submitted`, `PreviewState` | same | exists; wired in `pigment_studio::{worker::PreviewWorker, preview::PreviewView}` (task 11) |
 | Invalidation | `invalidate::Invalidation::between` | `crates/pigment-core/src/invalidate.rs` | exists |
 | Tiling and halo | `tiles::TilePlan`, `Tile`, `TilePolicy`, `TileOrder`, `Support`, `apron_pixels`, `TileCostModel` | `crates/pigment-core/src/tiles.rs` | exists |
 | Capability reporting | `capability::GpuCapabilities`, `AdapterReport`, `LimitsReport`, `AdapterPolicy`, `rank` | `crates/pigment-core/src/capability.rs` | exists |
@@ -251,7 +251,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | 08 visual gate | `docs/visual-review/`, contact sheets from `pigment-prose contact-sheet` |
 | 09 tiled PNG export | **Done.** Spec: [export.md](export.md); evidence: [evidence/export-09](evidence/export-09/README.md). `pigment-io/src/png_sink.rs` (`PngSink: TileSink`, streaming, `IEND` check), `atomic.rs` (`AtomicFile`, also for task 10), `export.rs` (`export_png`, `ExportSize`, OOM retry); `TileOrder` on `RenderTarget`; `pigment-prose export`; hardware suite `crates/pigment-io/tests/gpu_export.rs` |
 | 10 recipe persistence | **Done.** Spec: [recipe-files.md](recipe-files.md). `pigment-io/src/recipe_file.rs` (size-limited read, atomic `write_recipe`, redacted `RecipeFileError`), `document.rs` (`Document`: prose in memory, `keep_source_text` off by default, path, dirty state, validate-before-replace); `tests/recipes.rs` (47 baseline recipes, restart in a child process) |
-| 11 shell and preview | new `crates/pigment-studio/` (eframe/egui, `WgpuSetup::Existing` with `GpuContext`); render worker on `job::Mailbox`; `PreviewState`; diagnostics panel from `GpuCapabilities` |
+| 11 shell and preview | **Done.** Spec: [studio.md](studio.md); evidence: [evidence/studio-11](evidence/studio-11/README.md). `crates/pigment-studio/` (eframe/egui 0.36, `WgpuSetup::Existing` with `GpuContext`); `worker.rs` (render thread on `job::Mailbox`, scene reuse, bounded results, simulated delay and device loss); `preview.rs` (debounce, exact-aspect sizing, `PreviewView`); `script.rs` (`--script` acceptance run); `tests/gpu_preview.rs`. Interaction previews (960 px while dragging) arrive with the sliders in 12 |
 | 12 controls | `pigment-studio/src/controls.rs` generated from `settings::CONTROLS`; `Invalidation::between` decides what reruns |
 | 13 export UI | `pigment-studio/src/export_dialog.rs`; `Frame::new` validation; progress from `job::Progress` |
 | 14 qualification | `scripts/check.sh`, `scripts/gpu-tests.sh`, `crates/*/tests/`, `docs/qualification.md` |

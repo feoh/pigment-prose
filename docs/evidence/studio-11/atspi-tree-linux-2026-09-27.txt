@@ -1,0 +1,18 @@
+application: 'pigment-studio'
+  frame: '' [focusable]
+    label: 'Pigment Prose'
+    button: 'Save recipe…' [focusable]
+    button: 'Export PNG…' [focusable]
+    toggle button: 'Diagnostics' [focusable]
+    label: 'NVIDIA GeForce RTX 4070 Ti (Vulkan)'
+    label: 'Preview 1848×1039 · render 4.4 ms · shown 19 ms after request'
+    label: 'Prose'
+    label: 'Paste or write anything. The text seeds the painting; its meaning is not read.'
+    entry: 'Prose' [focusable]
+    label: '61 bytes'
+    label: 'Painting'
+    combo box: 'Shape' [focusable]
+    label: 'Shape'
+    label: 'A new shape recomposes the painting.'
+    unknown: '' [focusable]
+    image: 'Painting preview'

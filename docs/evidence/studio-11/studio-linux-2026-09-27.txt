@@ -1,0 +1,73 @@
+# 2026-09-27T23:46:12Z Linux 7.2.7-1-cachyos x86_64; rustc 1.98.1 (48a229cea 2026-09-01); NVIDIA driver 615.71.09; KDE Plasma Wayland session, 2x scale
+
+$ pigment-studio --script --preview-delay-ms 1500 --screenshot window-delayed.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 3 (superseded before starting 0), displayed 2, max in flight 1
+UI frames while a job was in flight: 310, longest gap 20.8 ms
+longest busy gaps: 21 ms at 5.92 s, 19 ms at 0.42 s, 17 ms at 0.04 s, 17 ms at 0.10 s, 13 ms at 1.37 s
+request→shown latency: median 1540.8 ms, p95 1540.8 ms, max 1540.8 ms; render+readback median 19.75 ms, max 19.75 ms (n=2)
+close → worker stopped: 4.2 ms (joined: true)
+window captured: window-delayed.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] UI frames kept coming while rendering (gap < 250 ms)
+[ok] closed while a render was in flight
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit 0
+GPU memory (nvidia-smi, whole process, measured): peak 262 MiB
+
+$ pigment-studio --script --log-timings --screenshot window.png   # no delay: real preview timings
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+preview id=1 1848x1039 scene=built (1.18 ms) render+readback 4.41 ms, request→shown 21.6 ms
+preview id=2 1920x1080 scene=built (2.63 ms) render+readback 11.83 ms, request→shown 29.6 ms
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 3 (superseded before starting 0), displayed 2, max in flight 1
+UI frames while a job was in flight: 5, longest gap 11.2 ms
+longest busy gaps: 11 ms at 0.01 s, 11 ms at 4.40 s, 10 ms at 4.39 s, 9 ms at 4.46 s, 2 ms at 4.45 s
+request→shown latency: median 29.6 ms, p95 29.6 ms, max 29.6 ms; render+readback median 11.83 ms, max 11.83 ms (n=2)
+close → worker stopped: 2.1 ms (joined: true)
+window captured: window.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit 0
+
+$ pigment-studio --script --lose-device-after 1 --screenshot device-lost.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+preview 2: GPU device lost: simulated device loss
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 2 (superseded before starting 0), displayed 1, max in flight 1
+UI frames while a job was in flight: 1, longest gap 16.3 ms
+longest busy gaps: 16 ms at 0.02 s
+request→shown latency: median 29.3 ms, p95 29.3 ms, max 29.3 ms; render+readback median 4.74 ms, max 4.74 ms (n=1)
+close → worker stopped: 2.1 ms (joined: true)
+window captured: device-lost.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] device loss shown and previews stopped
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit 0
+
+$ pigment-studio --adapter no-such-gpu --script --screenshot init-failure.png
+pigment-studio: no adapter name contains "no-such-gpu"; run `pigment-prose gpu-info` to list adapters
+exit 1
+
+$ pigment-studio --adapter intel   # iGPU without a display attached (known limitation)
+pigment-studio: painting on Intel(R) Graphics (RPL-S) (Vulkan)
+pigment-studio: the selected GPU cannot display this window (its outputs are not connected to the display in use). Choose the GPU that drives your monitor with --adapter, or omit --adapter to use the default selection.
+exit 2
