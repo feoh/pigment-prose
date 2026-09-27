@@ -15,6 +15,8 @@ The scene is **geometry only**: depth-ordered polygons with a semantic role and 
 - **role:** what the region *is*. Later passes select regions by role and never infer them from painted colors.
 - **shade** (new in task 05): structural illumination from 0 to 1, meaning how directly the plane faces the scene's light, computed from its geometry. 0.5 means neutral or not a facet. Painting maps it to value and temperature (Cézanne's color planes). It is not a color, and appearance settings never change it.
 
+`Scene::light()` (task 07) says which side of the sky the light comes from (`LightSide::Left` or `Right`, the composition's light side). Painting uses it to light crowns and cast stand shadows consistently with `shade`. The geometry checksum covers it.
+
 Layers produced, back to front:
 
 | Layer | Role | Depth | Notes |
@@ -90,9 +92,9 @@ Template weights: `tower-peak` 20 %, `high-vantage` 40 % (raised after rounds 3�
 
 **Water and shores.** The far shoreline is the horizon ± 0.006 of low-frequency noise, plus the forward bend under the framing ridges. A corner shore enters its side at 15–45 % of the foreground depth and leaves through the bottom 55–85 % of the width along, with curvature from 0.2 to 0.7. A bay shore sits at 45–65 % of the foreground depth with a bay 35–60 % wide and 8–25 % deep, rising at the headlands. Both carry ±0.012 of fBm detail.
 
-**Rocks.** There are 3–6 rocks, clustered around a composed position along the visible near shoreline. Their width is (0.06 + 0.16 × size) × (0.5 + 0.8 × nearness). Most sit on the waterline (a base offset of −0.25 to +0.4 widths, where negative means standing in water). A few stand further forward and larger (cubed placement). The profile blends a dome with a seven-knot polygon that has a broad top (`faceting`). The planes are two flanks with creases falling from the apex, and a top cap facing the sky (shade from facing, slightly lifted).
+**Rocks.** There are 3–6 rocks, clustered around a composed position along the visible near shoreline. Their width is (0.06 + 0.16 × size) × (0.5 + 0.8 × nearness). Most sit on the waterline (a base offset of −0.25 to +0.4 widths, where negative means standing in water). A few stand further forward and larger (cubed placement). The profile blends a dome with a seven-knot polygon that has a broad top (`faceting`). The planes are two flanks with creases falling from the apex, and a top cap facing the sky (shade from facing, slightly lifted). Plane contrast is `0.85 + 0.15 × faceting` (task 07; it was `0.6 + 0.4 × faceting`), so even rounded rocks keep a lit and a shadowed flank (`rocks_have_lit_and_shadowed_planes`).
 
-**Woodland.** The far woods are clusters stratified along the width. Each is active with probability 0.15 + 0.8 × density, has a half-width of (0.06–0.24) × (0.6 + 0.8 × density), and stands 0.012–0.047 × (0.6 + 0.8 × density) tall on the waterline. The near woods are up to 3 clusters on the near shore toward the frame edge, each active with probability 0.1 + 0.9 × density, standing up to (0.1–0.35) × sky space × (0.5 + 0.7 × density) tall. Density 0 leaves under 5 % woodland coverage, and density 1 always gives more than density 0 (tested).
+**Woodland.** The far woods are clusters stratified along the width. Each is active with probability 0.15 + 0.8 × density, has a half-width of (0.06–0.24) × (0.6 + 0.8 × density), and stands 0.012–0.047 × (0.6 + 0.8 × density) tall on the waterline. The near woods are up to 3 clusters on the near shore toward the frame edge, each active with probability 0.1 + 0.9 × density, standing up to (0.1–0.35) × sky space × (0.5 + 0.7 × density) tall. Density 0 leaves under 5 % woodland coverage, and density 1 always gives more than density 0 (tested). Canopy edges (task 07): each crown has its own height, and about one crown in seven is an emergent tree 1.35× taller and one in seven a young one at 0.65×. That is decided by a second hash of the crown index, so it adds no random draws, and shrubs vary half as much. Far woods tuck their base 0.006 under the waterline. Near woods stand on the near shore, and `woodland_stands_on_land` checks both at density 0.1, 0.5 and 1.
 
 ## Meanders (`high-vantage`, task 06 round 3)
 
@@ -141,7 +143,7 @@ Edge softness, washes and opacity are **not** here. They belong to `painting.*` 
 
 ## Reproducibility
 
-Generators use only `+ − × ÷`, `sqrt`, `floor`, comparisons and integer hashing in `f64`, followed by one rounding to `f32`. A test scans `lakeshore.rs` and `noise.rs` for transcendental calls. Geometry checksums are therefore identical on every platform (tier 1): three are frozen in `scene::lakeshore::tests::checksums_are_frozen` and checked by portable CI on Linux, Windows and macOS. `TestCard` moved to version 1 because the checksum now covers `shade`.
+Generators use only `+ − × ÷`, `sqrt`, `floor`, comparisons and integer hashing in `f64`, followed by one rounding to `f32`. A test scans `lakeshore.rs` and `noise.rs` for transcendental calls. Geometry checksums are therefore identical on every platform (tier 1): three are frozen in `scene::lakeshore::tests::checksums_are_frozen` and checked by portable CI on Linux, Windows and macOS. `TestCard` moved to version 1 because the checksum covered `shade`, to 2 for `plant`, and to 3 (task 07) for the light side.
 
 ## Debug views and contact sheets
 

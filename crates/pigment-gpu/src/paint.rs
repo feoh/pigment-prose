@@ -16,7 +16,7 @@ use pigment_core::error::RenderError;
 use pigment_core::job::{CancelToken, Phase, Progress, ProgressSink};
 use pigment_core::palette::palette;
 use pigment_core::request::{RenderReport, RenderRequest, Renderer, TileSink};
-use pigment_core::scene::{Scene, metrics};
+use pigment_core::scene::{LayerRole, LightSide, Scene, metrics};
 use pigment_core::seed::Domain;
 use pigment_core::settings::Appearance;
 use pigment_core::tiles::{Support, Tile, TileCostModel, TilePlan, apron_pixels};
@@ -26,7 +26,7 @@ use crate::context::GpuContext;
 use crate::coverage::CoverageIndex;
 use crate::tiled::{TilePasses, drive, storage_buffer, storage_buffer_u32, texture};
 
-const PARAMS_BYTES: u64 = 96;
+const PARAMS_BYTES: u64 = 112;
 
 // paint.wgsl measures wash/gouache character and texture strength from the
 // defaults (DEFAULT_WASH_GOUACHE, DEFAULT_TEXTURE).
@@ -122,8 +122,13 @@ impl PaintRenderer {
             }
             headers.extend([first, l.outline.len() as f32, l.depth, l.shade]);
             headers.extend([minx, miny, maxx, maxy]);
-            headers.extend([l.role as u8 as f32, l.plant as u8 as f32, 0.0, 0.0]);
-            headers.extend([lb.base as f32, lb.bins as f32, lb.inv_height, lb.min_y]);
+            headers.extend([
+                l.role as u8 as f32,
+                l.plant as u8 as f32,
+                lb.axis as u8 as f32,
+                0.0,
+            ]);
+            headers.extend([lb.base as f32, lb.bins as f32, lb.inv_span, lb.min_v]);
         }
         let bins: Vec<u32> = index.bins.iter().flatten().copied().collect();
         let entries: Vec<u32> = index.entries.iter().flatten().copied().collect();
@@ -274,6 +279,20 @@ impl PaintRenderer {
             .map(|v| [v[0], v[1], v[2]])
             .collect())
     }
+}
+
+/// Union bounding box of the foreground rocks, `(min x, min y, max x, max
+/// y)`, or an empty box (min > max) when there are none. The shader looks
+/// for rock contacts and reflections only inside it.
+fn rock_bounds(scene: &Scene) -> [f32; 4] {
+    scene
+        .layers()
+        .iter()
+        .filter(|l| l.role == LayerRole::ForegroundRock)
+        .flat_map(|l| l.outline.iter())
+        .fold([f32::MAX, f32::MAX, f32::MIN, f32::MIN], |b, p| {
+            [b[0].min(p.x), b[1].min(p.y), b[2].max(p.x), b[3].max(p.y)]
+        })
 }
 
 struct PaintTiles<'a> {
@@ -455,7 +474,11 @@ impl Renderer for PaintRenderer {
         ] {
             fixed.extend(v.to_le_bytes());
         }
-        for v in [apron, req.scene.layers().len() as u32, seed, 0] {
+        let light = match req.scene.light() {
+            LightSide::Left => 0,
+            LightSide::Right => 1,
+        };
+        for v in [apron, req.scene.layers().len() as u32, seed, light] {
             fixed.extend(v.to_le_bytes());
         }
         for v in [
@@ -473,6 +496,9 @@ impl Renderer for PaintRenderer {
             ext.height,
         ] {
             fixed.extend((v as f32).to_le_bytes());
+        }
+        for v in rock_bounds(&req.scene) {
+            fixed.extend(v.to_le_bytes());
         }
         let tiles = PaintTiles {
             renderer: self,

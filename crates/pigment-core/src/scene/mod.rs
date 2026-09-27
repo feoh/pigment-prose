@@ -177,6 +177,17 @@ impl Plant {
     }
 }
 
+/// The side of the sky the scene's light comes from. Planes' `shade` is
+/// computed from it; painting uses it to light tree crowns and cast stand
+/// shadows the same way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(u8)]
+pub enum LightSide {
+    #[default]
+    Left = 0,
+    Right = 1,
+}
+
 /// A point in canvas units (short side = 1, +y down).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CanvasPoint {
@@ -208,6 +219,7 @@ pub struct Scene {
     extents: CanvasExtents,
     /// Back to front: depth never increases along the list.
     layers: Vec<SceneLayer>,
+    light: LightSide,
 }
 
 impl Scene {
@@ -294,7 +306,18 @@ impl Scene {
             key,
             extents: key.aspect.extents(),
             layers,
+            light: LightSide::default(),
         })
+    }
+
+    /// The same scene lit from `light` (the default is [`LightSide::Left`]).
+    pub fn with_light(mut self, light: LightSide) -> Scene {
+        self.light = light;
+        self
+    }
+
+    pub fn light(&self) -> LightSide {
+        self.light
     }
 
     pub fn key(&self) -> &SceneKey {
@@ -310,12 +333,14 @@ impl Scene {
     }
 
     /// FNV-1a 64 over the canonical little-endian encoding of everything the
-    /// GPU receives (aspect, then per layer: role, plant, depth bits, shade
-    /// bits, vertex count, vertex bits). A regression checksum, not a security hash.
+    /// GPU receives (aspect, light side, then per layer: role, plant, depth
+    /// bits, shade bits, vertex count, vertex bits). A regression checksum,
+    /// not a security hash.
     pub fn geometry_checksum(&self) -> u64 {
         let mut h = Fnv1a::new();
         h.u32(self.key.aspect.width);
         h.u32(self.key.aspect.height);
+        h.bytes(&[self.light as u8]);
         h.u32(self.layers.len() as u32);
         for l in &self.layers {
             h.bytes(&[l.role as u8, l.plant as u8]);
@@ -372,8 +397,9 @@ pub struct TestCard;
 
 impl TestCard {
     /// 1: layers gained `shade` (always 0.5 here); 2: and `plant` (always
-    /// `None`). The checksum covers both.
-    pub const VERSION: u32 = 2;
+    /// `None`); 3: the checksum covers the scene's light side (always
+    /// left here).
+    pub const VERSION: u32 = 3;
 }
 
 impl SceneGenerator for TestCard {
@@ -544,10 +570,11 @@ mod tests {
         assert_eq!(s.geometry_checksum(), TEST_CARD_SEED7_4K_CHECKSUM);
     }
 
-    // Captured on Linux x86_64 for TestCard v2 (v0 0x54e3_8098_64ea_446c had
-    // no `shade`, v1 0x2257_2651_a5cc_f378 no `plant`); portable CI re-checks
-    // it on Windows and macOS.
-    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0x52b0_6c7e_571a_a4b4;
+    // Captured on Linux x86_64 for TestCard v3 (v0 0x54e3_8098_64ea_446c had
+    // no `shade`, v1 0x2257_2651_a5cc_f378 no `plant`, v2
+    // 0x52b0_6c7e_571a_a4b4 no light side); portable CI re-checks it on
+    // Windows and macOS.
+    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0xcc06_8b7a_51ae_091c;
 
     #[test]
     fn invalid_scenes_are_rejected() {

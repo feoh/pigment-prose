@@ -1,0 +1,16 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v0, renderer v0, view paint, aspect 16:9, cell 640x360, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)
+6	sample passage 16	peak-over-water	false	51	10389	0dedb06d57f5b699	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.1 9.1 1.6 2.2 11.9 4.3
+7	sample passage 19	peak-over-water	false	51	10399	27a66a36f7ba994a	0.35	9	2	0.25	0.00	0.16	0.77	0.34	26.8 0.2 3.2 0.0 23.6 10.3 1.9 0.8 17.3 15.9
+8	sample passage 31	peak-over-water	true	49	10454	35eab59f3866988e	0.32	10	3	0.29	0.05	0.04	0.71	0.29	38.4 0.5 3.1 0.0 26.8 7.4 3.5 2.4 14.2 3.7
+9	sample passage 0	tower-peak	false	53	9635	508d4e06ab4536a8	0.59	64	3	0.21	0.01	0.08	0.60	0.26	35.1 5.4 5.2 0.0 19.5 2.0 1.4 1.2 22.2 7.9
+10	sample passage 10	tower-peak	false	42	9191	12b554dd14d67768	0.54	49	3	0.20	0.00	0.18	0.74	0.24	28.5 7.1 5.0 0.0 19.4 2.6 0.8 0.7 17.3 18.6
+11	sample passage 22	tower-peak	true	46	9103	606bc93462a0b8c8	0.55	49	3	0.21	0.00	0.14	0.74	0.20	32.7 3.2 4.0 0.0 19.9 2.0 1.2 0.4 22.8 13.8
+12	sample passage 8	framing-ridges	false	58	11284	05697f712f882423	0.36	6	4	0.22	0.01	0.12	0.73	0.54	25.4 0.5 1.6 3.7 20.6 17.2 1.6 1.9 15.2 12.4
+13	sample passage 18	framing-ridges	true	56	10674	46e4d9b3c376a462	0.32	7	3	0.19	0.00	0.15	0.73	0.57	27.3 0.0 0.9 5.0 17.3 17.6 2.6 1.5 12.4 15.4
+14	sample passage 24	framing-ridges	true	46	9187	ef3e0bc5ac6bd05a	0.33	8	4	0.23	0.03	0.04	0.73	0.58	35.2 1.1 1.4 3.0 20.9 18.1 1.8 0.6 13.8 4.0
+15	sample passage 1	twin-summits	false	55	11034	eec1be3d617be0a9	0.36	16	3	0.26	0.07	0.19	0.75	0.28	24.0 0.3 2.8 0.0 24.8 7.8 2.4 2.0 17.1 18.8
+16	sample passage 2	twin-summits	true	59	12586	62a63affcdb109fe	0.31	15	2	0.27	0.05	0.20	0.76	0.24	23.8 0.1 3.0 0.0 26.8 8.0 1.2 1.9 15.6 19.6
+17	sample passage 9	twin-summits	false	51	10524	cb48edeb003946dd	0.36	6	2	0.20	0.03	0.21	0.74	0.38	20.1 0.0 3.4 0.0 19.5 12.4 1.3 1.8 20.8 20.8

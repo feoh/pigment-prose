@@ -2,9 +2,11 @@
 //!
 //! Used by tests (visible coverage per role, topology), by the contact-sheet
 //! statistics and as the reference the GPU debug view is compared against.
-//! Coverage uses the same rule as the GPU shaders: even-odd crossings of a
-//! horizontal ray to the right of the sample, with an edge counted when
-//! exactly one endpoint lies strictly below the sample's y.
+//! Coverage uses the same rule as the GPU debug shader: even-odd crossings
+//! of a horizontal ray to the right of the sample, with an edge counted when
+//! exactly one endpoint lies strictly below the sample's y. The painting
+//! renderer casts a vertical ray for some layers (`pigment_gpu::coverage`),
+//! which differs only within float rounding of an edge.
 
 use super::{CanvasPoint, LayerRole, Scene};
 

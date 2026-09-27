@@ -290,18 +290,28 @@ fn render_paint(req: &RenderRequest) -> MemorySink {
 #[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
 fn painting_is_identical_tiled_and_single() {
     // The apron covers the loose-edge warp and disc at every looseness.
+    // Reflections, rock rims and contacts are evaluated from the scene at
+    // offset points (no halo); the sample seeds cover a river valley (15), a
+    // lake with rocks under a tower (0) and framing ridges with rocks (8).
     let frame = Frame::new(1001, 563).unwrap();
-    for looseness in [0.0, 0.4, 1.0] {
-        let mut single = lakeshore_request("Blue dusk.", frame, TilePolicy::Single);
-        single.appearance.painting.edge_looseness = looseness;
-        let reference = render_paint(&single);
-        for edge in [256, 333] {
-            let mut tiled = single.clone();
-            tiled.target.policy = TilePolicy::Fixed { edge };
-            assert!(
-                render_paint(&tiled).rgba8 == reference.rgba8,
-                "looseness {looseness} tile {edge}"
-            );
+    for text in [
+        "Blue dusk.",
+        "sample passage 15",
+        "sample passage 0",
+        "sample passage 8",
+    ] {
+        for looseness in [0.0, 0.4, 1.0] {
+            let mut single = lakeshore_request(text, frame, TilePolicy::Single);
+            single.appearance.painting.edge_looseness = looseness;
+            let reference = render_paint(&single);
+            for edge in [256, 333] {
+                let mut tiled = single.clone();
+                tiled.target.policy = TilePolicy::Fixed { edge };
+                assert!(
+                    render_paint(&tiled).rgba8 == reference.rgba8,
+                    "{text:?} looseness {looseness} tile {edge}"
+                );
+            }
         }
     }
 }

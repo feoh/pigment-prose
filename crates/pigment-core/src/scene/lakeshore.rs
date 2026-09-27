@@ -17,7 +17,9 @@
 //!   transcendental functions, so geometry is identical on every OS (tier 1).
 
 use super::noise::{Fbm, unit};
-use super::{CanvasPoint, LayerRole, Plant, Scene, SceneGenerator, SceneKey, SceneLayer};
+use super::{
+    CanvasPoint, LayerRole, LightSide, Plant, Scene, SceneGenerator, SceneKey, SceneLayer,
+};
 use crate::error::ValidationError;
 use crate::frame::AspectRatio;
 use crate::seed::{Domain, Rng, SeedBundle};
@@ -475,7 +477,15 @@ impl SceneGenerator for LakeshoreGenerator {
         form.validate()?;
         let comp = Composition::draw(seeds, aspect);
         let layers = Builder::new(seeds, form, aspect, &comp).build();
-        Scene::new(SceneKey::new(self.version(), seeds, *form, aspect), layers)
+        let light = if comp.light_from_left {
+            LightSide::Left
+        } else {
+            LightSide::Right
+        };
+        Ok(
+            Scene::new(SceneKey::new(self.version(), seeds, *form, aspect), layers)?
+                .with_light(light),
+        )
     }
 }
 
@@ -1745,7 +1755,9 @@ impl<'a> Builder<'a> {
                 (xs[ia], top[ia], xs[last], top[last])
             };
             let shade = face_shade(x1 - x0, y1 - y0, self.comp.light_from_left);
-            let shade = 0.5 + (shade - 0.5) * (0.6 + 0.4 * angular);
+            // Rocks are the solid forms up front: even rounded ones keep
+            // clearly lit and shadowed flanks.
+            let shade = 0.5 + (shade - 0.5) * (0.85 + 0.15 * angular);
             self.push(
                 LayerRole::ForegroundRock,
                 d,
@@ -1775,7 +1787,7 @@ impl<'a> Builder<'a> {
             self.push(
                 LayerRole::ForegroundRock,
                 d,
-                0.5 + (shade - 0.5) * (0.6 + 0.4 * angular),
+                0.5 + (shade - 0.5) * (0.85 + 0.15 * angular),
                 band(&xs[c0..=c1], seg, Bottom::Pinched(&b)),
             );
         }
@@ -1872,15 +1884,26 @@ fn plant_shape(p: Plant) -> (f64, f64) {
     }
 }
 
-/// A stand's canopy edge in `(0, 1]` by plant: rounded crowns for leafy
+/// A stand's canopy edge in `(0, 1.35]` by plant: rounded crowns for leafy
 /// trees, pointed spires for conifers, low even mounds for shrubs. Each
 /// crown has its own height, and the profile is continuous where crowns
-/// meet.
+/// meet. About one crown in seven is an emergent tree standing 1.35× taller
+/// and one in seven a young one at 0.65× (round 5: "more variation in size
+/// and height of greenery"); shrubs vary less.
 fn canopy(p: Plant, seed: u64, x: f64, wl: f64) -> f64 {
     let t = x / wl;
     let k = t.floor();
     let c = 2.0 * (t - k) - 1.0;
-    let hv = 0.55 + 0.45 * unit(seed, k as i64);
+    let age = unit(seed ^ 0x6167_6573, k as i64);
+    let spread = if p == Plant::Shrub { 0.5 } else { 1.0 };
+    let age_mul = if age > 0.86 {
+        1.0 + 0.35 * spread
+    } else if age < 0.14 {
+        1.0 - 0.35 * spread
+    } else {
+        1.0
+    };
+    let hv = (0.55 + 0.45 * unit(seed, k as i64)) * age_mul;
     match p {
         Plant::Conifer => 0.3 + 0.7 * (1.0 - c.abs()) * hv,
         Plant::Shrub => 0.72 + 0.28 * (1.0 - c * c) * hv,
@@ -2146,9 +2169,9 @@ mod tests {
     }
 
     const FROZEN: [u64; 3] = [
-        0x91a2_336a_07d0_1989,
-        0x9143_581e_72ed_10df,
-        0x3362_03c4_001e_ff3d,
+        0xbf9b_dd70_d80d_c80a,
+        0xb4ed_d2da_c120_3e96,
+        0x18b6_7727_ba4c_9b0d,
     ];
 
     #[test]
@@ -2499,6 +2522,165 @@ mod tests {
         // Tall trees stand over squat shrubs at the same distance.
         assert!(mean(Plant::Conifer) > 1.8 * mean(Plant::Shrub));
         assert!(mean(Plant::Broadleaf) > 1.5 * mean(Plant::Shrub));
+    }
+
+    /// The front-most layer holding `p` (even-odd, as the renderers).
+    fn front_at(s: &Scene, p: CanvasPoint) -> Option<&SceneLayer> {
+        s.layers().iter().rev().find(|l| {
+            let o = &l.outline;
+            let mut inside = false;
+            let mut j = o.len() - 1;
+            for i in 0..o.len() {
+                let (a, b) = (o[i], o[j]);
+                if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x
+                {
+                    inside = !inside;
+                }
+                j = i;
+            }
+            inside
+        })
+    }
+
+    #[test]
+    fn woodland_stands_on_land() {
+        // Task 07: no tree floats over the lake. Far woods stand on the far
+        // shore: their base tucks 0.006 under the water, so just above the
+        // waterline the stand (or the beach in front) shows, never water or
+        // sky. Near woods stand on the near shore: just below their base is
+        // land. Sparse, default and dense woods.
+        let aspect = UHD_4K.aspect();
+        let w = aspect.extents().width as f32;
+        let mut checked = 0;
+        for density in [0.1, 0.5, 1.0] {
+            let form = FormSettings {
+                woodland_density: density,
+                ..FormSettings::default()
+            };
+            for i in 0..40 {
+                let s = scene(&sample(i), form, aspect);
+                for l in s.layers().iter().filter(|l| l.role == LayerRole::Woodland) {
+                    let o = &l.outline;
+                    let n = o.len() / 2;
+                    for k in (1..n - 1).step_by(4) {
+                        let (x, base) = (o[k].x, o[o.len() - 1 - k].y);
+                        if !(0.0..=w).contains(&x) || base >= 1.0 {
+                            continue;
+                        }
+                        let far = l.depth == depth::FAR_WOODS;
+                        let y = if far { base - 0.0075 } else { base + 0.002 };
+                        let p = CanvasPoint { x, y };
+                        let front = front_at(&s, p).map(|f| f.role);
+                        let ok = if far {
+                            !matches!(front, Some(LayerRole::Water | LayerRole::Sky) | None)
+                        } else {
+                            matches!(
+                                front,
+                                Some(
+                                    LayerRole::Shore
+                                        | LayerRole::ForegroundRock
+                                        | LayerRole::Woodland
+                                )
+                            )
+                        };
+                        assert!(
+                            ok,
+                            "sample {i} density {density}: {front:?} at the base of a {:?} stand ({p:?})",
+                            l.plant
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(checked > 1000, "{checked}");
+    }
+
+    #[test]
+    fn rocks_have_lit_and_shadowed_planes() {
+        // Task 07: every boulder reads as a solid of connected planes, a
+        // body with flanks on its lit and its shadowed side, at every
+        // faceting.
+        let aspect = UHD_4K.aspect();
+        let mut rocks = 0;
+        for faceting in [0.0, 0.55, 1.0] {
+            let form = FormSettings {
+                faceting,
+                ..FormSettings::default()
+            };
+            for i in 0..30 {
+                let s = scene(&sample(i), form, aspect);
+                let ls = s.layers();
+                // A boulder is a run of rock layers at one depth: its body,
+                // then its planes.
+                let mut k = 0;
+                while k < ls.len() {
+                    let body = &ls[k];
+                    if body.role != LayerRole::ForegroundRock {
+                        k += 1;
+                        continue;
+                    }
+                    let run = ls[k + 1..]
+                        .iter()
+                        .take_while(|l| {
+                            l.role == LayerRole::ForegroundRock && l.depth == body.depth
+                        })
+                        .count();
+                    let planes: Vec<f32> = ls[k + 1..=k + run].iter().map(|l| l.shade).collect();
+                    k += run + 1;
+                    assert!(
+                        planes.len() >= 2,
+                        "sample {i}: rock with {} planes",
+                        planes.len()
+                    );
+                    let (lo, hi) = planes
+                        .iter()
+                        .fold((1.0f32, 0.0f32), |(a, b), &v| (a.min(v), b.max(v)));
+                    assert!(
+                        hi - lo >= 0.1,
+                        "sample {i} faceting {faceting}: plane shades {planes:?}"
+                    );
+                    rocks += 1;
+                }
+            }
+        }
+        assert!(rocks > 100, "{rocks}");
+    }
+
+    #[test]
+    fn canopies_mix_emergent_and_young_crowns() {
+        // Round 5: "more variation in size and height of greenery". Crown
+        // heights within one stand now span emergent (1.35×) and young
+        // (0.65×) trees, about one in seven each.
+        let wl = 0.02;
+        for p in [Plant::Broadleaf, Plant::Conifer, Plant::Birch] {
+            let peaks: Vec<f64> = (0..2000)
+                .map(|k| canopy(p, 17, (k as f64 + 0.5) * wl, wl))
+                .collect();
+            let (lo, hi) = peaks
+                .iter()
+                .fold((f64::MAX, 0.0f64), |(a, b), &v| (a.min(v), b.max(v)));
+            // Before: 0.775..1.0 of the stand height for broadleaf (1.29×).
+            assert!(hi / lo > 1.6, "{p:?}: crown heights {lo}..{hi}");
+            // Crowns beyond the range a regular crown can reach, both ways.
+            let (min_regular, max_regular) = (canopy_bounds(p, 0.55), canopy_bounds(p, 1.0));
+            let frac = |f: &dyn Fn(f64) -> bool| {
+                peaks.iter().filter(|&&v| f(v)).count() as f64 / peaks.len() as f64
+            };
+            let tall = frac(&|v| v > max_regular + 1e-9);
+            let young = frac(&|v| v < min_regular - 1e-9);
+            assert!((0.03..0.15).contains(&tall), "{p:?}: {tall} emergent");
+            assert!((0.03..0.15).contains(&young), "{p:?}: {young} young");
+        }
+    }
+
+    /// A crown's peak (its centre) for a regular crown of height `hv`.
+    fn canopy_bounds(p: Plant, hv: f64) -> f64 {
+        match p {
+            Plant::Conifer => 0.3 + 0.7 * hv,
+            Plant::Birch => 0.55 + 0.45 * hv,
+            _ => 0.5 + 0.5 * hv,
+        }
     }
 
     #[test]

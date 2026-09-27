@@ -21,18 +21,21 @@ struct Params {
     apron: u32,
     n_layers: u32,
     seed: u32,
-    _pad: u32,
+    light: u32, // 0: light from the left, 1: from the right
+
     // edge_looseness, wash_gouache, mark_scale, granulation
     handling: vec4<f32>,
     // paper_grain, palette intensity, haze, pixel footprint (canvas / px)
     look: vec4<f32>,
     // horizon y, summit y, canvas width, canvas height
     frame: vec4<f32>,
+    // union bounding box of the foreground rocks (min > max if none)
+    rocks: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> P: Params;
-// Per layer: (first, count, depth, shade), (bbox), (role, plant, 0, 0),
-// (coverage bin base, bin count, 1 / bin height, bbox min y).
+// Per layer: (first, count, depth, shade), (bbox), (role, plant, coverage
+// axis, 0), (coverage bin base, bin count, 1 / bin span, bbox min v).
 @group(0) @binding(1) var<storage, read> layers: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read> verts: array<vec2<f32>>;
 @group(0) @binding(3) var<storage, read> pal: array<vec4<f32>>;
@@ -183,11 +186,23 @@ fn luminance(c: vec3<f32>) -> f32 {
     return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722));
 }
 
+// x direction toward the light: -1 when it comes from the left.
+fn light_x() -> f32 {
+    return select(-1.0, 1.0, P.light == 1u);
+}
+
+// Image-plane direction toward the light (up and to its side), as used for
+// the planes' shade (lakeshore::face_shade).
+fn to_light() -> vec2<f32> {
+    return normalize(vec2<f32>(0.66 * light_x(), -0.75));
+}
+
 // ---------------------------------------------------------------- coverage
 
-// Parity of the +x ray's crossings, over only the edges in the pixel's
-// coverage bin that reach right of it (coverage.rs proves this equals the
-// test over every edge).
+// Parity of the ray's crossings, over only the edges in the pixel's
+// coverage bin that reach past it (coverage.rs proves this equals the test
+// over every edge). The layer's ray runs along u: +x for row bins, +y for
+// column bins (u and v swapped).
 fn inside(l: u32, c: vec2<f32>) -> bool {
     let h = layers[4u * l];
     let bb = layers[4u * l + 1u];
@@ -196,21 +211,24 @@ fn inside(l: u32, c: vec2<f32>) -> bool {
     }
     let first = u32(h.x);
     let last = first + u32(h.y) - 1u;
+    let columns = layers[4u * l + 2u].z > 0.5;
+    let q = select(c, c.yx, columns);
     let cb = layers[4u * l + 3u];
-    let k = u32(clamp(floor((c.y - cb.w) * cb.z), 0.0, cb.y - 1.0));
+    let k = u32(clamp(floor((q.y - cb.w) * cb.z), 0.0, cb.y - 1.0));
     let bin = cov_bins[u32(cb.x) + k];
-    let stop = c.x - 1e-5; // coverage::BREAK_MARGIN
+    let stop = q.x - 1e-5; // coverage::BREAK_MARGIN
     var in_poly = false;
     for (var e = bin.x; e < bin.x + bin.y; e++) {
         let ent = cov_entries[e];
         if (bitcast<f32>(ent.y) < stop) {
             break;
         }
-        let a = verts[ent.x];
-        let b = verts[select(ent.x - 1u, last, ent.x == first)];
-        if ((a.y > c.y) != (b.y > c.y)) {
-            let x = (b.x - a.x) * (c.y - a.y) / (b.y - a.y) + a.x;
-            if (c.x < x) {
+        let a = select(verts[ent.x], verts[ent.x].yx, columns);
+        let pb = verts[select(ent.x - 1u, last, ent.x == first)];
+        let b = select(pb, pb.yx, columns);
+        if ((a.y > q.y) != (b.y > q.y)) {
+            let u = (b.x - a.x) * (q.y - a.y) / (b.y - a.y) + a.x;
+            if (q.x < u) {
                 in_poly = !in_poly;
             }
         }
@@ -226,6 +244,59 @@ fn front_layer(c: vec2<f32>) -> i32 {
         }
     }
     return -1;
+}
+
+// The front layer a water surface reflects at `c`: everything but water,
+// the near shore, its woods and rocks (rocks throw their own reflections).
+fn reflected_layer(c: vec2<f32>) -> i32 {
+    for (var l = i32(P.n_layers) - 1; l >= 0; l--) {
+        let h = layers[4u * u32(l)];
+        let role = u32(layers[4u * u32(l) + 2u].x);
+        let near_ground = (role == R_SHORE || role == R_WOODLAND) && h.z <= 0.3;
+        if (role == R_WATER || role == R_ROCK || near_ground) {
+            continue;
+        }
+        if (inside(u32(l), c)) {
+            return l;
+        }
+    }
+    return -1;
+}
+
+// Distance from `c` up to the edge of water layer `l` above it (its local
+// shoreline): doubling steps, then bisection. At most 0.5 canvas units.
+fn shore_distance(l: u32, c: vec2<f32>) -> f32 {
+    var lo = 0.0;
+    var hi = 0.004;
+    for (var k = 0; k < 8; k++) {
+        if (!inside(l, c - vec2<f32>(0.0, hi))) {
+            break;
+        }
+        lo = hi;
+        hi *= 2.0;
+    }
+    for (var k = 0; k < 6; k++) {
+        let mid = 0.5 * (lo + hi);
+        if (inside(l, c - vec2<f32>(0.0, mid))) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return 0.5 * (lo + hi);
+}
+
+fn role_of(l: i32) -> u32 {
+    if (l < 0) {
+        return 0xffffffffu;
+    }
+    return u32(layers[4u * u32(l) + 2u].x);
+}
+
+// Inside the foreground rocks' bounding box, extended `below` downward.
+fn near_rocks(c: vec2<f32>, below: f32) -> bool {
+    let r = P.rocks;
+    return c.x >= r.x - 0.01 && c.x <= r.z + 0.01 && c.y >= r.y && c.y <= r.w + below;
 }
 
 fn canvas_of_ext(t: vec2<u32>) -> vec2<f32> {
@@ -265,15 +336,15 @@ fn crown_field_wide(c: vec2<f32>, size: f32, wide: f32, s: u32) -> vec2<f32> {
         }
     }
     let crown = clamp(1.0 - best, 0.0, 1.0);
-    let lit = clamp(0.55 - 0.75 * rel.y - 0.2 * rel.x, 0.0, 1.0);
+    let lit = clamp(0.55 - 0.75 * rel.y + 0.2 * light_x() * rel.x, 0.0, 1.0);
     return vec2<f32>(crown, lit);
 }
 
-// Conifer spires: tall pointed crowns, cells twice as tall as wide. The
-// front-most (lowest) spire wins where they overlap. Lit on the left and
-// toward the tip.
+// Conifer spires: tall pointed crowns, cells 1.4× as tall as wide. The
+// front-most (lowest) spire wins where they overlap. Lit on the light's
+// side and toward the tip.
 fn spire_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
-    let p = vec2<f32>(c.x / size, c.y / (2.0 * size));
+    let p = vec2<f32>(c.x / size, c.y / (1.4 * size));
     let i = floor(p);
     var crown = 0.0;
     var lit = 0.0;
@@ -286,16 +357,16 @@ fn spire_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
                 0.2 + 0.6 * hash3(cell.x, cell.y, s + 1u)
             );
             let d = p - pt;
-            let t = (d.y + 0.9) / 1.8; // 0 at the tip, 1 at the base
+            let t = (d.y + 0.75) / 1.5; // 0 at the tip, 1 at the base
             if (t < 0.0 || t > 1.0) {
                 continue;
             }
-            let half = 0.06 + 0.46 * t;
+            let half = 0.08 + 0.5 * t;
             let v = 1.0 - abs(d.x) / half;
             if (v > 0.0 && pt.y > best_y) {
                 best_y = pt.y;
                 crown = min(1.0, 2.5 * v);
-                lit = clamp(0.5 - 0.8 * d.x / half + 0.3 * (1.0 - t), 0.0, 1.0);
+                lit = clamp(0.5 + 0.8 * light_x() * d.x / half + 0.3 * (1.0 - t), 0.0, 1.0);
             }
         }
     }
@@ -323,11 +394,39 @@ fn pick_hill_plant(u: f32) -> u32 {
     return P_COPPER;
 }
 
+// Silhouette height of a plant (matches lakeshore::plant_shape).
+fn plant_tall(plant: u32) -> f32 {
+    switch plant {
+        case P_BROADLEAF: { return 1.15; }
+        case P_CONIFER: { return 1.45; }
+        case P_BIRCH: { return 1.2; }
+        case P_SHRUB: { return 0.45; }
+        case P_FLOWERING: { return 0.85; }
+        case P_COPPER: { return 1.1; }
+        default: { return 1.0; }
+    }
+}
+
 struct Stands {
     first: u32,
     second: u32,
     // 0 on the boundary between the two nearest stands, 1 well inside.
     inside: f32,
+    // Distance past the boundary into the first stand (stand units).
+    edge: f32,
+    // Crown-size multipliers (young thickets to old growth).
+    scale1: f32,
+    scale2: f32,
+    // Canopy heights (plant height × stand scale).
+    height1: f32,
+    height2: f32,
+    // Unit direction from the first stand's site to the second's.
+    toward2: vec2<f32>,
+}
+
+// Stand age as a crown-size multiplier, log-uniform 0.62–1.62.
+fn stand_scale(cell: vec2<i32>) -> f32 {
+    return exp2(-0.7 + 1.4 * hash3(cell.x, cell.y, 406u));
 }
 
 // Irregular Voronoi stands (smaller with distance) with the two nearest
@@ -341,6 +440,10 @@ fn stands(c: vec2<f32>, depth: f32) -> Stands {
     var d2 = 1e9;
     var u1 = 0.0;
     var u2 = 0.0;
+    var c1 = vec2<i32>(0);
+    var c2 = vec2<i32>(0);
+    var p1 = vec2<f32>(0.0);
+    var p2 = vec2<f32>(0.0);
     for (var dy = -1; dy <= 1; dy++) {
         for (var dx = -1; dx <= 1; dx++) {
             let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
@@ -350,15 +453,28 @@ fn stands(c: vec2<f32>, depth: f32) -> Stands {
             if (d < d1) {
                 d2 = d1;
                 u2 = u1;
+                c2 = c1;
+                p2 = p1;
                 d1 = d;
                 u1 = u;
+                c1 = cell;
+                p1 = pt;
             } else if (d < d2) {
                 d2 = d;
                 u2 = u;
+                c2 = cell;
+                p2 = pt;
             }
         }
     }
-    return Stands(pick_hill_plant(u1), pick_hill_plant(u2), smoothstep(0.0, 0.35, d2 - d1));
+    let a = pick_hill_plant(u1);
+    let b = pick_hill_plant(u2);
+    let s1 = stand_scale(c1);
+    let s2 = stand_scale(c2);
+    let dir = p2 - p1;
+    return Stands(a, b, smoothstep(0.0, 0.35, d2 - d1), d2 - d1, s1, s2,
+                  plant_tall(a) * s1, plant_tall(b) * s2,
+                  dir / max(length(dir), 1e-6));
 }
 
 fn stand_plant(c: vec2<f32>, depth: f32) -> u32 {
@@ -370,9 +486,9 @@ fn stand_plant(c: vec2<f32>, depth: f32) -> u32 {
 // Crowns at the true size for this depth would shear into streaks where
 // depth changes continuously down the ground, so crowns are drawn at the two
 // nearest power-of-two sizes and blended (as texture mipmaps are).
-fn plant_color(plant: u32, c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32> {
+fn plant_color(plant: u32, c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>, scale: f32) -> vec3<f32> {
     let near = 1.0 - depth;
-    let size = (0.003 + 0.03 * near * near) * P.handling.z;
+    let size = (0.003 + 0.03 * near * near) * P.handling.z * scale;
     let lvl = log2(size / 0.001);
     let l0 = floor(lvl);
     let s0 = 0.001 * exp2(l0);
@@ -482,8 +598,42 @@ fn forest_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
     return foliage(base, c, depth, shade);
 }
 
-// Forested hills: a patchwork of plant stands, fading to the generic
-// forest with distance so far slopes read through their planes.
+// Emergent trees: sparse big crowns standing above the canopy. Returns
+// (crown, lit) of the nearest active cell; about one cell in eight is active.
+fn emergent_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
+    let p = c / size;
+    let i = floor(p);
+    var best = 1e9;
+    var rel = vec2<f32>(0.0);
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
+            if (hash3(cell.x, cell.y, s + 3u) > 0.12) {
+                continue;
+            }
+            let pt = vec2<f32>(cell) + vec2<f32>(
+                0.25 + 0.5 * hash3(cell.x, cell.y, s),
+                0.25 + 0.5 * hash3(cell.x, cell.y, s + 1u)
+            );
+            let radius = 0.28 + 0.14 * hash3(cell.x, cell.y, s + 2u);
+            let q = (p - pt) / radius;
+            let d = length(q);
+            if (d < best) {
+                best = d;
+                rel = q;
+            }
+        }
+    }
+    let crown = clamp(1.0 - best, 0.0, 1.0);
+    let lit = clamp(0.6 - 0.7 * rel.y + 0.3 * light_x() * rel.x, 0.0, 1.0);
+    return vec2<f32>(crown, lit);
+}
+
+// Forested hills: a patchwork of plant stands of different ages (crown
+// sizes) and heights, fading to the generic forest with distance so far
+// slopes read through their planes. A taller stand shades its lower
+// neighbour on the side away from the light and catches light on its
+// exposed edge; emergent trees stand over the canopy with their shadows.
 fn mixed_forest(c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32> {
     let generic = forest_color(c, depth, shade);
     let amount = smoothstep(0.75, 0.35, depth);
@@ -491,12 +641,63 @@ fn mixed_forest(c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32
         return generic;
     }
     let st = stands(c, depth);
-    var rgb = plant_color(st.first, c, depth, shade, vec4<f32>(0.0));
+    var rgb = plant_color(st.first, c, depth, shade, vec4<f32>(0.0), st.scale1);
     if (st.second != st.first && st.inside < 1.0) {
-        let other = plant_color(st.second, c, depth, shade, vec4<f32>(0.0));
+        let other = plant_color(st.second, c, depth, shade, vec4<f32>(0.0), st.scale2);
         rgb = mix(other, rgb, 0.5 + 0.5 * st.inside);
     }
+    // Height steps between stands (stand units; a stand is 0.14 canvas).
+    let facing = dot(st.toward2, to_light());
+    let step_h = st.height2 - st.height1;
+    let wobble = 0.8 + 0.4 * fbm(c, 0.02, 2u, 407u);
+    if (facing > 0.0 && step_h > 0.15) {
+        // The taller neighbour stands toward the light: its shadow falls here,
+        // darkest at its foot and fading out across the band.
+        let band = 0.4 * step_h * facing * wobble;
+        let shaded_edge = 1.0 - smoothstep(0.0, band, st.edge);
+        let dark = mix(col(FOLIAGE_COOL), col(PLANTS + 2u * (st.first - 1u) + 1u), 0.5) * 0.6;
+        rgb = mix(rgb, mix(rgb, dark, 0.5), shaded_edge);
+    } else if (facing > 0.0 && step_h < -0.15) {
+        // Taller than the neighbour toward the light: an exposed, lit edge.
+        let band = 0.12 * (-step_h) * facing * wobble;
+        let rim = 1.0 - smoothstep(0.0, band, st.edge);
+        rgb = mix(rgb, mix(rgb, col(FOLIAGE_WARM), 0.45) * 1.08, 0.5 * rim * (0.4 + 0.6 * shade));
+    }
+    // Emergent trees over the canopy (in shrubland the emergent is a lone
+    // broadleaf). Drawn at the two nearest power-of-two sizes and blended,
+    // like the crowns, so varying ground depth does not shear them.
+    var eplant = st.first;
+    if (eplant == P_SHRUB) {
+        eplant = P_BROADLEAF;
+    }
+    let near = 1.0 - depth;
+    let esize = (0.003 + 0.03 * near * near) * P.handling.z * 1.8;
+    let lvl = log2(esize / 0.001);
+    let l0 = floor(lvl);
+    let s0 = 0.001 * exp2(l0);
+    let e0 = emergents(rgb, eplant, c, s0, shade);
+    let e1 = emergents(rgb, eplant, c, 2.0 * s0, shade);
+    rgb = mix(e0, e1, lvl - l0);
     return mix(generic, rgb, amount);
+}
+
+// Emergent trees of `plant` at crown size `size` over the canopy color
+// `under`, each with its shadow away from the light. Fades out below a few
+// pixels.
+fn emergents(under: vec3<f32>, plant: u32, c: vec2<f32>, size: f32, shade: f32) -> vec3<f32> {
+    let resolve = smoothstep(3.0, 6.0, size / P.look.w);
+    if (resolve <= 0.0) {
+        return under;
+    }
+    let e = emergent_field(c, size, 431u);
+    let sh = emergent_field(c + to_light() * 0.4 * size, size, 431u);
+    let shadow = smoothstep(0.05, 0.3, sh.x) * (1.0 - smoothstep(0.0, 0.2, e.x));
+    var rgb = mix(under, under * 0.62, 0.5 * shadow * resolve);
+    let light = col(PLANTS + 2u * (plant - 1u));
+    let dark = col(PLANTS + 2u * (plant - 1u) + 1u);
+    let lit = smoothstep(0.2, 0.85, e.y) * (0.45 + 0.55 * shade);
+    let tree = mix(mix(dark, under, 0.3), mix(light, col(FOLIAGE_WARM), 0.25), lit);
+    return mix(rgb, tree, smoothstep(0.04, 0.22, e.x) * resolve);
 }
 
 // Grass: horizontal strokes of warm and cool green.
@@ -528,7 +729,16 @@ fn meadow_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
     return out;
 }
 
-fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
+struct Surface {
+    rgb: vec3<f32>,
+    // Effective depth (ground layers follow the ground's perspective).
+    depth: f32,
+}
+
+// A layer's color at `c` before palette intensity and wash/gouache, with
+// aerial perspective: everything but water (see `water`), which reflects
+// these colors.
+fn land(l: u32, c: vec2<f32>) -> Surface {
     let h = layers[4u * l];
     let role = u32(layers[4u * l + 2u].x);
     var depth = h.z;
@@ -603,15 +813,12 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
             if (plant == 0u) {
                 plant = stand_plant(c, depth);
             }
-            rgb = plant_color(plant, c, depth, shade, layers[4u * l + 1u]);
+            // Each stand has its own age (crown size).
+            let age = exp2(-0.45 + 0.9 * hash3(i32(l), 0, 409u));
+            rgb = plant_color(plant, c, depth, shade, layers[4u * l + 1u], age);
         }
         case R_WATER: {
-            let t = clamp((c.y - horizon) / max(P.frame.w - horizon, 1e-3), 0.0, 1.0);
-            rgb = mix(col(WATER_FAR), col(WATER_DEEP), pow(t, 0.55));
-            // Horizontal ripples, finer toward the horizon.
-            let ripple = fbm(vec2<f32>(c.x * 0.12, c.y), 0.012 * (0.4 + t), 3u, 71u);
-            rgb = mix(rgb, col(WATER_SHEEN), 0.35 * smoothstep(0.62, 0.8, ripple));
-            rgb *= 0.8 + 0.4 * shade;
+            rgb = col(WATER_FAR); // painted by `water`
         }
         case R_SHORE: {
             if (depth > 0.45) {
@@ -619,6 +826,7 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
             } else {
                 let sand = smoothstep(0.7, 0.76, fbm(c, 0.05, 3u, 81u));
                 rgb = mix(meadow_color(c, depth, shade), shaded(SAND, shade), sand);
+                rgb *= 1.0 - 0.4 * rock_contact(c);
             }
         }
         case R_ROCK: {
@@ -627,23 +835,115 @@ fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
             // Moss gathers in the shadowed, lower parts of the planes.
             let moss = smoothstep(0.62, 0.72, fbm(c, 0.03 * P.handling.z, 3u, 91u)) * (1.0 - shade);
             rgb = mix(rgb, col(MOSS) * (0.6 + 0.6 * shade), 0.7 * moss);
+            rgb = rock_edges(rgb, c);
         }
         default: {
             rgb = shaded(ROCK, shade);
         }
     }
 
-    // Aerial perspective: distance dissolves toward the haze color.
-    if (role != R_SKY && role != R_CLOUD) {
-        let far = clamp((depth - 0.1) / 0.9, 0.0, 1.0);
-        // Distance softens, but the main massif keeps its substance.
-        var amt = clamp(P.look.z * far * far * 1.2, 0.0, 0.85);
-        if (role == R_MOUNTAIN) {
-            amt *= 0.55;
-        }
-        let haze = mix(col(HAZE), col(SKY_HORIZON), 0.4);
-        rgb = mix(rgb, haze, amt);
+    return Surface(aerial(rgb, role, depth), depth);
+}
+
+// Aerial perspective: distance dissolves toward the haze color.
+fn aerial(rgb: vec3<f32>, role: u32, depth: f32) -> vec3<f32> {
+    if (role == R_SKY || role == R_CLOUD) {
+        return rgb;
     }
+    let far = clamp((depth - 0.1) / 0.9, 0.0, 1.0);
+    // Distance softens, but the main massif keeps its substance.
+    var amt = clamp(P.look.z * far * far * 1.2, 0.0, 0.85);
+    if (role == R_MOUNTAIN) {
+        amt *= 0.55;
+    }
+    let haze = mix(col(HAZE), col(SKY_HORIZON), 0.4);
+    return mix(rgb, haze, amt);
+}
+
+// Selective accents on a rock (gouache): a lit rim where its edge faces the
+// light and a dark line on the edge turned away. Widths in canvas units,
+// fading out below about 1.5 px.
+fn rock_edges(rgb: vec3<f32>, c: vec2<f32>) -> vec3<f32> {
+    let w = 0.003;
+    let resolve = smoothstep(1.0, 2.0, w / P.look.w);
+    if (resolve <= 0.0) {
+        return rgb;
+    }
+    var out = rgb;
+    if (role_of(front_layer(c + to_light() * w)) != R_ROCK) {
+        let rim = mix(shaded(ROCK, 1.0), col(SUN), 0.35) * 1.08;
+        out = mix(out, rim, 0.6 * resolve);
+    } else if (role_of(front_layer(c - to_light() * w)) != R_ROCK) {
+        out = mix(out, out * 0.5, 0.5 * resolve);
+    }
+    return out;
+}
+
+// How close a rock stands above `c`: probes `n` steps of `step` canvas
+// units upward; 1 at a rock's foot, fading with distance, 0 if none.
+fn rock_above(c: vec2<f32>, step: f32, n: i32) -> f32 {
+    if (!near_rocks(c, step * f32(n))) {
+        return 0.0;
+    }
+    for (var k = 1; k <= n; k++) {
+        if (role_of(front_layer(c - vec2<f32>(0.0, step * f32(k)))) == R_ROCK) {
+            return 1.0 - f32(k - 1) / f32(n);
+        }
+    }
+    return 0.0;
+}
+
+// A rock's contact shadow on the ground at its foot (about 0.012 canvas).
+fn rock_contact(c: vec2<f32>) -> f32 {
+    return rock_above(c, 0.004, 3);
+}
+
+// Water: sky-lit toward the far shore and deep near the viewer, with
+// simplified reflections of the far shore and everything beyond it (mirrored
+// about the horizon, rippled, fading with distance below it), dark
+// reflections under rocks and horizontal ripples on top. Reflections are
+// evaluated from the scene at the mirrored point, not read from neighbouring
+// pixels, so they need no tile halo.
+fn water(l: u32, c: vec2<f32>) -> Surface {
+    let h = layers[4u * l];
+    let depth = h.z;
+    let shade = h.w;
+    let horizon = P.frame.x;
+    let t = clamp((c.y - horizon) / max(P.frame.w - horizon, 1e-3), 0.0, 1.0);
+    var rgb = mix(col(WATER_FAR), col(WATER_DEEP), pow(t, 0.55));
+    // Mirror about the local shoreline above the pixel.
+    let below = shore_distance(l, c);
+    let rise = max(horizon - P.frame.y, 0.05);
+    let fade = 1.0 - smoothstep(0.0, 1.15 * rise, below);
+    if (fade > 0.0) {
+        let wob = fbm(vec2<f32>(c.x * 0.15, c.y), 0.01 * (0.4 + t), 3u, 73u) - 0.5;
+        let m = vec2<f32>(c.x + wob * 0.02 * (0.2 + below / rise), c.y - 2.0 * below);
+        let lr = reflected_layer(m);
+        if (lr >= 0) {
+            let refl = mix(land(u32(lr), m).rgb, col(WATER_FAR), 0.25) * 0.85;
+            rgb = mix(rgb, refl, 0.75 * fade);
+        }
+    }
+    // Horizontal ripples, finer toward the horizon.
+    let ripple = fbm(vec2<f32>(c.x * 0.12, c.y), 0.012 * (0.4 + t), 3u, 71u);
+    rgb = mix(rgb, col(WATER_SHEEN), 0.35 * smoothstep(0.62, 0.8, ripple));
+    rgb *= 0.8 + 0.4 * shade;
+    // Rocks standing in the water throw dark, rippled reflections.
+    let under = rock_above(c + vec2<f32>((fbm(c, 0.01, 2u, 75u) - 0.5) * 0.006, 0.0), 0.006, 5);
+    rgb = mix(rgb, mix(shaded(ROCK, 0.1), col(WATER_DEEP), 0.4) * 0.6, 0.65 * under);
+    return Surface(aerial(rgb, R_WATER, depth), depth);
+}
+
+fn material(l: u32, c: vec2<f32>) -> vec3<f32> {
+    let role = u32(layers[4u * l + 2u].x);
+    var sf: Surface;
+    if (role == R_WATER) {
+        sf = water(l, c);
+    } else {
+        sf = land(l, c);
+    }
+    var rgb = sf.rgb;
+    let depth = sf.depth;
     // Palette intensity: saturation around luminance, brightness kept.
     let lum = luminance(rgb);
     rgb = max(vec3<f32>(lum) + (rgb - vec3<f32>(lum)) * (0.35 + 1.3 * P.look.y), vec3<f32>(0.0));

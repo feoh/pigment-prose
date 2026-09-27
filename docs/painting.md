@@ -1,6 +1,6 @@
-# Painting (task 06)
+# Painting (tasks 06–07)
 
-`pigment_gpu::PaintRenderer` (`crates/pigment-gpu/src/paint.rs` + `paint.wgsl`) paints a `Scene` with an authored palette (`pigment_core::palette`). It runs over the shared tile loop, so tiled output equals single-tile output. **Status:** the painting direction was accepted in visual-review rounds 2–5 ([round 5 result](visual-review/round-05/RESULT.md)). This is not the task 08 gate: that comes after task 07. Reflections and finer rock and tree drawing belong to task 07. Settings side-by-sides, 4K edge crops and benchmark logs are in [evidence/paint-06](evidence/paint-06/README.md).
+`pigment_gpu::PaintRenderer` (`crates/pigment-gpu/src/paint.rs` + `paint.wgsl`) paints a `Scene` with an authored palette (`pigment_core::palette`). It runs over the shared tile loop, so tiled output equals single-tile output. **Status:** the painting direction was accepted in visual-review rounds 2–5 ([round 5 result](visual-review/round-05/RESULT.md)). This is not the task 08 gate. Task 07 then added the [woodland, rocks and water](#woodland-rocks-and-water-task-07) cues and is waiting on [round 6](visual-review/round-06/README.md). Task 06 evidence (settings side-by-sides, 4K edge crops, benchmark logs) is in [evidence/paint-06](evidence/paint-06/README.md), and task 07 evidence is in [evidence/paint-07](evidence/paint-07/README.md).
 
 ## Palettes
 
@@ -52,8 +52,29 @@ After round 2 the user asked for "a variety of plant life … some trees tall an
 ## Ground perspective and crowns (round 4)
 
 - **Ground depth:** ground layers in front of the water (banks, spurs, near shore and woods) can span near and far. Below the horizon, their effective depth is the nearer of their own depth and the ground's depth at that row, `0.44 − 0.3 × ((y − horizon) / (h − horizon))^(2/3)`. That formula inverts the generator's spur placement, so a spur's base matches the ground under it, and a spur's ridge stays nearer and darker than the bank behind it.
-- **Crowns at two sizes:** crowns sized continuously by depth would shear into streaks where depth changes down the ground. So crowns are drawn at the two nearest power-of-two sizes and blended, as texture mipmaps are. Forest stands have one fixed size.
+- **Crowns at two sizes:** crowns sized continuously by depth would shear into streaks where depth changes down the ground. So crowns are drawn at the two nearest power-of-two sizes and blended, as texture mipmaps are. Emergent trees (task 07) are drawn the same way.
 - **Ridge light:** a valley spur's light fades to neutral toward its foot (the bottom of its bounding box), where it meets the neutral bank.
+
+## Woodland, rocks and water (task 07)
+
+**Light side.** `Scene::light()` (`LightSide::Left` or `Right`) is the side the scene's light comes from, and the geometry checksum covers it. The planes' `shade` was always computed from it, but the painter never received it: crowns were lit from the upper left in every scene, against the planes in right-lit scenes. Crowns, spires, emergent trees and stand shadows now follow `to_light()`, the image direction `(±0.66, −0.75)` that the generator's `face_shade` uses.
+
+**Greenery size and height** (round 5: "a bit more variation in size and height of greenery"):
+
+- **Stand ages.** Each stand of the mixed forest has its own crown size, log-uniform over 0.62–1.62× (young thickets to old growth), and a height of the plant's height × that size. Woodland layers get an age of 0.73–1.37× by layer.
+- **Stand shadows.** Where a taller stand lies toward the light, it throws a soft shadow onto its lower neighbour: a band of `0.4 × height step × facing` stand units, darkest at the boundary. A taller stand's own edge facing the light catches a lit rim. Steps under 0.15 are ignored, so like stands merge.
+- **Emergent trees.** About one cell in eight of a sparse field holds a big crown (1.8× the canopy's) standing over the canopy, lit toward the light, with its shadow cast away from the light. They are drawn at two power-of-two sizes and fade out below 3–6 px. In shrubland the emergent is a lone broadleaf.
+- **Silhouettes** (generator): within a stand, about one crown in seven is an emergent tree 1.35× taller and one in seven a young one at 0.65× (shrubs vary half as much). A broadleaf stand's crowns now span 0.68–1.17 of its height, compared with 0.78–1.0 before (`canopies_mix_emergent_and_young_crowns`).
+- **Conifers** from above read as vertical streaks at 4K, so their spire cells are now 1.4× as tall as wide instead of 2×, with wider bases.
+
+**Rocks.** Plane contrast is `0.85 + 0.15 × faceting` (it was `0.6 + 0.4 × faceting`), so even rounded boulders keep a lit and a shadowed flank. `rocks_have_lit_and_shadowed_planes` requires at least 0.1 of shade between planes at every faceting; sample 1 at faceting 0 had 0.077 before. The painter adds selective gouache accents 0.003 canvas units wide (faded below about 1.5 px): a lit rim where the rock's edge faces the light, a dark line on the edge turned away, and a contact shadow on the ground at its foot.
+
+**Water.**
+
+- **Reflections.** Each water pixel finds its local shoreline straight above it (`shore_distance`: doubling steps, then six bisections on the water layer) and mirrors about it. The reflected color is the front layer at the mirrored point, as painted, with its own aerial perspective. It excludes water, the near shore, its woods and rocks. The point is rippled sideways (more with distance from the shore), dimmed (× 0.85, 25 % toward the far-water color) and faded out over 1.15 × the mountain's rise below the shore, at most 0.75 opaque. So lakes mirror their mountains and far woods, and rivers their banks.
+- **Rocks in water** throw short, rippled dark reflections: up to 0.03 canvas units below a rock, found by probing upward inside the rocks' bounding box (`Params.rocks`, from `rock_bounds`).
+- **No halo.** Reflections, rims and contacts evaluate the scene at offset points (coverage plus material). They never read neighbouring pixels, so tiles need no extra apron. `painting_is_identical_tiled_and_single` now also covers a river valley and two lakes with rocks.
+- Water stays in its region by construction: water color is painted only where water is the front layer.
 
 ## Edges and texture (pass 2)
 
@@ -104,7 +125,8 @@ On the GPU, `compositing_matches_the_reference_model` evaluates 576 cases (opaqu
 Pass 1 finds each pixel's front layer. The first cut tested every vertex of every layer whose bounding box held the pixel. Now:
 
 - **Front to back with early exit.** Layers are stored back to front, so the first layer from the front that holds the pixel wins.
-- **Coverage index** (`crates/pigment-gpu/src/coverage.rs`). Each layer's bounding box is cut into up to 256 horizontal bins. Each bin lists the outline edges whose `y` span overlaps it (with one bin of margin), sorted by right-most `x`, descending. The +x parity ray only tests the pixel's bin and stops at the first edge that ends more than 1e-5 canvas units left of the pixel. Such an edge cannot be crossed, and parity does not depend on order, so coverage is **exactly** the brute-force result. `indexed_matches_brute_force` checks this on the CPU, for a pixel grid and every vertex row of four scenes in three aspects. The painted output was byte-identical before and after the change (six seeds, 960 px).
+- **Coverage index** (`crates/pigment-gpu/src/coverage.rs`). Each layer's bounding box is cut into up to 256 bins across its parity ray. Each bin lists the outline edges whose span overlaps it (with one bin of margin), sorted by how far they reach along the ray, descending. The ray only tests the pixel's bin, and it stops at the first edge that ends more than 1e-5 canvas units before the pixel. Such an edge cannot be crossed, and parity does not depend on order, so coverage is **exactly** the brute-force parity along that ray. `indexed_matches_brute_force` checks this on the CPU for four scenes in three aspects, probing a pixel grid and points level with every vertex on both axes. Before the axis choice below, the painted output was byte-identical to the first cut's (six seeds, 960 px).
+- **Ray axis per layer (task 07).** A long, nearly straight chain that runs along the bins puts hundreds of edges in one bin. A shoreline in row bins does this, and the reflection search probes exactly there. So each layer casts its ray along +x (row bins) or +y (column bins), whichever gives the smaller edge-weighted mean list length `Σ len² / Σ len`. Water and flat bands take columns; tall, y-monotone banks keep rows. The two rays disagree only for points within float rounding of an edge (`axes_agree_away_from_edges` asserts under 1e-5 canvas units), so the change is invisible. The debug view and the CPU rasterizer keep the +x ray.
 - **Bounded size.** A layer's bin count is halved until its entries fit in 32 × its vertex count (`index_size_is_bounded`), so the index is at most about 1 M entries (8 MB) at the scene limits.
 - The index is a function of the scene only. `PaintRenderer` keeps the last scene's uploaded buffers (keyed by `Arc` identity), so paint-only changes and resizes skip the rebuild.
 
@@ -121,6 +143,7 @@ The debug renderer still uses the all-vertex loop. It stays as the simple refere
 | 3840 × 2160 | — | 34 / 50 ms | 8.5 / 14 ms | 1.75 / 2.64 s | 159 / 231 ms |
 
 - **Correction:** the first cut recorded "about 0.3 s per 1920 px cell" and called the preview unacceptable. That timed the whole `contact-sheet` loop, not the renderer. The warm render was already within budget on the RTX 4070 Ti, but the Intel iGPU missed both budgets by 3–5×. Most of that time went to coverage. The "first cut" columns are commit `c8b5dad` measured with this `paint-bench`.
-- **Worst case** (`paint-bench --stress`, 96 layers with 32 768 vertices, a sawtooth so every bounding box covers the frame and every edge spans every bin): RTX 4070 Ti now 16 ms at 960 px and 72 ms at 1920 px (first cut 41 and 160 ms); Intel iGPU now 0.73 s and 2.5 s (first cut 1.9 and 7.4 s). The index cannot help much when every edge spans the whole layer height. The generator's bands never produce that shape, but an iGPU-class device would miss the preview budget on such a scene.
+- **Worst case** (`paint-bench --stress`, 96 layers with 32 768 vertices, a sawtooth so every bounding box covers the frame): with row bins only, the RTX 4070 Ti took 16 ms at 960 px and 72 ms at 1920 px (first cut 41 and 160 ms), and the Intel iGPU 0.73 s and 2.5 s (first cut 1.9 and 7.4 s), because every tooth spans every row bin. The task 07 axis choice gives those layers column bins: the RTX now takes 1.3 ms and 5.1 ms, and the iGPU 52 ms and 176 ms. That is still over its budgets on this synthetic case, which the generator's bands never produce.
+- **After task 07** (reflections, rock accents, stand shadows, emergent trees; [log](evidence/paint-07/paint-bench-linux-2026-09-27.txt)): RTX 4070 Ti median / worst scene 0.74 / 0.89 ms at 960 px, 2.6 / 3.4 ms at 1920 px and 9.9 / 12.9 ms at 3840 px; Intel iGPU 17 / 22 ms, 63 / 81 ms and 244 / 312 ms. Both GPUs meet the preview budgets on real scenes. The reflection's shoreline search alone added about 100 ms at 1920 px on the iGPU, until water switched to column bins.
 - Scene generation on the CPU takes 0.5 ms per scene (median).
 - Tiled vs single tile is byte-identical at looseness 0, 0.4 and 1 (hardware suite). The 480 px render and the 1920 px render downsampled 4× agree with a PSNR over 24 dB. Hardware suite log: [gpu-tests-linux-2026-09-27-task06.txt](evidence/gpu-tests-linux-2026-09-27-task06.txt).
