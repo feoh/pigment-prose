@@ -4,7 +4,7 @@ This document specifies the structural scene for the first painting, a rocky woo
 
 **Task 05b (vistas for awe)** added two templates (`tower-peak`, `high-vantage`), cloud masses, a structural light pool, distance-scaled trees and awe metrics. It followed the user's review that the task 05 scenes read as "some hills and some scrub". Sections marked 05b below describe the additions, and [art-direction.md](art-direction.md#awe-metrics) describes the metrics. Round-by-round ratings are in [visual-review/](visual-review/).
 
-The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **3**: version 1 was approved at the task 08 visual gate (2026-09-27), version 2 (task 25: wind, and the rock builder described below) at review round 7 (2026-09-28), and version 3 (varied rock proportions, wear and lean) is under review in round 9. Any checksum change requires a version bump.
+The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **3**: version 1 was approved at the task 08 visual gate (2026-09-27), version 2 (task 25: wind, and the rock builder described below) at review round 7 (2026-09-28), and version 3 (varied rock proportions, wear and lean) at review round 9 (2026-09-28). Any checksum change requires a version bump.
 
 ## Output: the layer model
 
