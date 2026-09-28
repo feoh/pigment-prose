@@ -1,0 +1,12 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v3, renderer v3, view paint, aspect 16:9, cell 400x225, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)	image fnv
+1	sample passage 15 faceting=0	high-vantage	false	37	11934	fb027b57172075d0	0.23	10	11	0.54	0.00	0.05	0.63	0.74	18.4 0.5 1.1 49.2 14.9 0.2 0.4 0.0 10.7 4.6	2ae420c4d2b001d9
+2	sample passage 15 faceting=1	high-vantage	false	41	11920	e04fd943768d873a	0.22	10	11	0.54	0.00	0.06	0.65	0.74	18.9 0.9 1.2 49.1 14.9 0.2 0.4 0.0 8.3 6.1	f93463274277d999
+3	sample passage 33 faceting=0	high-vantage	true	28	9592	98accad2df88491b	0.27	18	9	0.55	0.00	0.07	0.75	0.75	13.2 1.1 2.3 49.5 16.5 0.2 0.1 0.0 10.5 6.6	47da46d1a77cb050
+4	sample passage 33 faceting=1	high-vantage	true	30	9598	ab2aff8a24a0a536	0.27	19	9	0.55	0.00	0.07	0.75	0.75	14.2 2.0 2.4 49.5 16.4 0.2 0.1 0.0 8.2 7.0	a9daf6a5efec1d79
+5	sample passage 8 faceting=0	framing-ridges	false	84	12669	d966bc22c9d0fefd	0.36	6	3	0.22	0.01	0.12	0.73	0.55	24.0 0.2 1.7 3.7 20.7 17.6 1.6 1.4 17.1 12.1	a57e1dd9ab171141
+6	sample passage 8 faceting=1	framing-ridges	false	83	12541	76b2bef42c704e51	0.36	6	4	0.22	0.01	0.13	0.73	0.55	26.2 0.8 1.5 3.7 20.7 17.6 1.5 1.4 13.9 12.7	6a453cfbb48095cf
+7	sample passage 16 faceting=0	peak-over-water	false	82	11997	e78f31ccb104e3e7	0.30	5	3	0.31	0.03	0.04	0.54	0.28	36.6 0.4 1.9 0.0 30.2 9.0 1.6 2.2 13.9 4.3	15aed870afd11216
+8	sample passage 16 faceting=1	peak-over-water	false	84	12238	8c8d27513542cf33	0.30	5	3	0.31	0.03	0.04	0.54	0.28	39.0 1.5 1.9 0.0 30.2 8.9 1.6 2.2 10.4 4.3	cd81059e3a05e964

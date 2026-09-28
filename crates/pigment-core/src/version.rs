@@ -21,16 +21,19 @@ pub const RECIPE_SCHEMA_VERSION: u32 = 2;
 
 /// Scene generator version. `1` = the scene family approved at the task 08
 /// visual gate (2026-09-27); `2` = task 25: a seeded wind on every scene and
-/// more complex rocks (faceted, notched, ledged). Any geometry checksum
-/// change is a bump.
-pub const GENERATOR_VERSION: u32 = 2;
+/// more complex rocks (faceted, notched, ledged); `3` = review round 8:
+/// rock forms vary in height, wear and lean. Any geometry checksum change
+/// is a bump.
+pub const GENERATOR_VERSION: u32 = 3;
 
 /// Painting renderer version. `1` = the painting approved at the task 08
 /// visual gate (2026-09-27, baseline in docs/visual-review/baseline-08/);
 /// `2` = task 25: wind and current on water, rock surfaces (baseline in
-/// docs/visual-review/baseline-25/). Any visible change on the same device
+/// docs/visual-review/baseline-25/); `3` = task 16: the seasons, and (review
+/// round 8) mountainsides with their own anatomy (baseline in
+/// docs/visual-review/baseline-16/). Any visible change on the same device
 /// is a bump.
-pub const RENDERER_VERSION: u32 = 2;
+pub const RENDERER_VERSION: u32 = 3;
 
 /// Text normalization: NFC, then CRLF/CR to LF, as UTF-8 (`text::normalize`).
 pub const NORMALIZATION_ID: &str = "nfc-lf-utf8/1";

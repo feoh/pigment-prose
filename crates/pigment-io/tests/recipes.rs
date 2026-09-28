@@ -1,5 +1,6 @@
-//! Recipe persistence against the approved task 25 baseline, and across a
-//! real process restart (task 10). Portable: no GPU.
+//! Recipe persistence against the approved baseline (schema 2), the
+//! migration of the earlier schema 1 baseline, and a real process restart
+//! (task 10). Portable: no GPU.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,6 +12,11 @@ use pigment_core::seed::Variation;
 use pigment_io::{Document, read_recipe};
 
 fn baseline() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-16")
+}
+
+/// The task 25 baseline: schema 1 recipes, generator and renderer 2.
+fn schema_1_baseline() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-25")
 }
 
@@ -88,23 +94,11 @@ fn approved_recipes_round_trip_and_reproduce_their_scenes() {
         let copy = dir.0.join(format!("{i}.recipe.json"));
         let mut doc2 = doc.clone();
         doc2.save_as(&copy).unwrap();
-        // The approved files are schema 1. Saving writes schema 2 with
-        // exactly two changes: the schema number, and the midsummer season
-        // every schema 1 painting was made in (task 16).
-        let original = String::from_utf8(original).unwrap();
-        let body = original
-            .replacen("\"schema\": 1,", "\"schema\": 2,", 1)
-            .strip_suffix("  }\n}\n")
-            .expect("atmosphere is the last section")
-            .to_string();
-        let migrated = format!("{body}  }},\n  \"season\": {{\n    \"year\": 0.5\n  }}\n}}\n");
-        let saved = std::fs::read_to_string(&copy).unwrap();
-        assert_eq!(saved, migrated, "{path:?}: schema 1 migrates to schema 2");
-        // And the schema 2 file saves again byte for byte.
-        let (again, _) = Document::open(&copy).unwrap();
-        let copy2 = dir.0.join(format!("{i}-again.recipe.json"));
-        again.clone().save_as(&copy2).unwrap();
-        assert_eq!(std::fs::read_to_string(&copy2).unwrap(), saved);
+        assert_eq!(
+            std::fs::read(&copy).unwrap(),
+            original,
+            "{path:?}: save is byte-identical"
+        );
         let back = read_recipe(&copy).unwrap();
         assert_eq!(&back, doc.recipe());
         let scene = LakeshoreGenerator
@@ -190,4 +184,64 @@ fn a_saved_recipe_reproduces_after_restart() {
         std::fs::read_to_string(dir.0.join("expected.txt")).unwrap()
     );
     assert_eq!(doc.recipe().seed.variation, Variation(3));
+}
+
+#[test]
+fn schema_1_recipes_migrate_to_midsummer_schema_2() {
+    // The task 25 baseline was saved in schema 1 (before seasons). Each
+    // opens with notices for its older generator and renderer, and saves
+    // as schema 2 with exactly two changes: the schema number, and the
+    // midsummer season every schema 1 painting was made in (task 16).
+    let dir = Scratch::new("schema-1");
+    let mut n = 0;
+    for sheet in [
+        "corpus-16x9",
+        "corpus-9x16",
+        "corpus-1x1",
+        "round-06-scenes",
+    ] {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(schema_1_baseline().join(sheet))
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.to_string_lossy().ends_with(".recipe.json"))
+            .collect();
+        files.sort();
+        for path in files {
+            let original = std::fs::read_to_string(&path).unwrap();
+            assert!(original.contains("\"schema\": 1,"), "{path:?}");
+            let (doc, notices) = Document::open(&path).unwrap();
+            assert_eq!(notices.len(), 2, "{path:?}: older generator and renderer");
+            let copy = dir.0.join(format!("{n}.recipe.json"));
+            doc.clone().save_as(&copy).unwrap();
+            let body = original
+                .replacen("\"schema\": 1,", "\"schema\": 2,", 1)
+                .replacen(
+                    "\"generator\": 2,",
+                    &format!(
+                        "\"generator\": {},",
+                        pigment_core::version::GENERATOR_VERSION
+                    ),
+                    1,
+                )
+                .replacen(
+                    "\"renderer\": 2\n",
+                    &format!(
+                        "\"renderer\": {}\n",
+                        pigment_core::version::RENDERER_VERSION
+                    ),
+                    1,
+                )
+                .strip_suffix("  }\n}\n")
+                .expect("atmosphere is the last section")
+                .to_string();
+            let migrated = format!("{body}  }},\n  \"season\": {{\n    \"year\": 0.5\n  }}\n}}\n");
+            assert_eq!(
+                std::fs::read_to_string(&copy).unwrap(),
+                migrated,
+                "{path:?}"
+            );
+            n += 1;
+        }
+    }
+    assert_eq!(n, 47);
 }

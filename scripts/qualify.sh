@@ -113,7 +113,7 @@ python3 - "$dir/kept.recipe.json" "$marker" <<'EOF'
 import importlib.util, json, sys
 spec = importlib.util.spec_from_file_location("sv", "scripts/seed-vectors.py")
 sv = importlib.util.module_from_spec(spec); spec.loader.exec_module(sv)
-r = json.load(open("docs/visual-review/baseline-25/corpus-16x9/01.recipe.json"))
+r = json.load(open("docs/visual-review/baseline-16/corpus-16x9/01.recipe.json"))
 r["seed"]["digest"] = sv.digest(sys.argv[2]).hex()
 r["source_text"] = sys.argv[2]
 json.dump(r, open(sys.argv[1], "w"), indent=2)

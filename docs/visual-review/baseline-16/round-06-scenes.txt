@@ -1,0 +1,21 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v3, renderer v3, view paint, aspect 16:9, cell 400x225, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)	image fnv
+1	sample passage 3	high-vantage	true	38	10790	e9a0a03185641a93	0.23	18	10	0.46	0.00	0.09	0.62	0.86	14.5 1.8 1.8 51.8 11.9 0.1 0.2 0.0 8.5 9.4	602dec15e2840c41
+2	sample passage 12	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	fd8d8c5869905c0b
+3	sample passage 17	high-vantage	false	39	11450	13e034e1656c762f	0.26	16	11	0.54	0.00	0.16	0.75	0.75	6.6 0.6 1.6 49.0 14.4 0.2 0.3 0.0 11.7 15.7	c96af38196a9dba9
+4	sample passage 15	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	6d6fafd4e73a8d81
+5	sample passage 33	high-vantage	true	31	9598	ba3879be1d512a2d	0.27	18	9	0.55	0.00	0.07	0.75	0.75	13.8 1.6 2.4 49.5 16.4 0.2 0.1 0.0 9.1 6.9	ed8cf0c4bb1ce37e
+6	sample passage 16	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	9d9530950d811f7c
+7	sample passage 19	peak-over-water	false	79	11469	397dce9b3017b444	0.35	9	2	0.25	0.00	0.16	0.77	0.34	26.8 0.2 3.2 0.0 23.6 10.4 2.2 0.5 17.3 15.9	f069edc482085568
+8	sample passage 31	peak-over-water	true	81	12073	46a12bb049c63849	0.32	10	3	0.29	0.05	0.04	0.71	0.28	38.4 0.5 3.1 0.0 26.7 7.1 3.5 2.8 14.2 3.7	bf48e0e5f02c46c9
+9	sample passage 0	tower-peak	false	80	10704	84047a02572596cf	0.59	64	3	0.21	0.00	0.08	0.60	0.27	35.1 5.4 5.2 0.0 19.4 2.2 1.4 1.1 22.2 7.9	b35a78513ab3ee70
+10	sample passage 10	tower-peak	false	83	10559	dd9f461a5ea99dc5	0.54	51	3	0.21	0.00	0.18	0.74	0.23	28.5 7.1 5.0 0.0 19.6 2.5 0.7 0.7 17.3 18.6	27b82af3cd7e9c6e
+11	sample passage 22	tower-peak	true	69	9930	65dde0dc4bd9cb28	0.55	49	3	0.21	0.00	0.14	0.74	0.20	32.7 3.2 4.0 0.0 19.9 2.1 1.2 0.3 22.8 13.8	a4cbf9ab69c09a0c
+12	sample passage 8	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	67afb08dee472b57
+13	sample passage 18	framing-ridges	true	80	12042	118e17dd0f31d451	0.32	7	3	0.19	0.00	0.15	0.73	0.58	27.3 0.0 1.0 5.0 17.3 17.9 2.6 1.2 12.4 15.4	cbf233c16376157e
+14	sample passage 24	framing-ridges	true	79	10322	dab6d2e43eed9331	0.33	8	4	0.23	0.03	0.04	0.73	0.59	35.2 1.1 1.6 3.0 20.9 18.2 1.7 0.4 13.8 4.0	ac3b0088b5329654
+15	sample passage 1	twin-summits	false	82	12356	aec8679ace4a3b16	0.36	16	3	0.26	0.06	0.19	0.75	0.28	24.0 0.3 2.8 0.0 24.7 7.9 2.4 2.0 17.1 18.8	79976fb1fc0ef88c
+16	sample passage 2	twin-summits	true	86	13897	78a789cffb66c3bc	0.31	15	2	0.27	0.05	0.20	0.76	0.25	23.8 0.1 3.1 0.0 26.6 8.0 1.2 2.0 15.6 19.6	90221f8da3446810
+17	sample passage 9	twin-summits	false	81	12004	d38c3619654ee733	0.36	6	2	0.20	0.02	0.21	0.74	0.38	20.1 0.0 3.4 0.0 19.6 12.6 1.3 1.4 20.8 20.8	732292a08f799f1c

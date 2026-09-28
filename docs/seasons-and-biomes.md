@@ -7,7 +7,7 @@ Code: `pigment_core::season` (the model), `settings::SEASON` (the control), `rec
 ## The year coordinate
 
 - `season.year` is a number in `[0, 1]`. **0 and 1 are the same moment, midwinter.** 0.25 is the spring equinox, 0.5 midsummer and 0.75 the autumn equinox. Values are wrapped (`season::wrap`), so `at(0) == at(1)` exactly, and the painter gives the same bytes for both (tested).
-- **Default: 0.5, midsummer.** That is the approved painting: at midsummer the renderer takes exactly the pre-season code path, and all 47 approved images repaint byte for byte (`approved_recipes_repaint_identically_after_save_and_load`).
+- **Default: 0.5, midsummer.** That is the approved painting: at midsummer every channel is neutral, and the seasonal code is skipped. When the seasons were added, all 47 task 25 images still repainted byte for byte. The round 8 review then changed the mountainsides and rock forms (renderer and generator v3), so the approved midsummer images are now [baseline-16](visual-review/baseline-16/README.md) (`approved_recipes_repaint_identically_after_save_and_load`).
 - **Labels** divide the year into twelfths centred on their times: midwinter, late winter, early spring, spring, late spring, early summer, midsummer, late summer, early autumn, autumn, late autumn, early winter (`season::label`). The slider's value text uses them, for example "0.62 (late summer)".
 - It is a northern-hemisphere, mid-latitude mountain year, **stylized**, not simulated: there is no weather, day length, latitude or ecology model.
 
@@ -49,7 +49,7 @@ A long snowy winter; a late spring with the snow line retreating up the slopes; 
 
 **Snow is derived from the terrain, never overlaid as noise.**
 
-- On the massif and the distant ranges, the snow line comes down from the top as `snow` rises. It is measured as height on the landform (0 at its foot, 1 at its top), ragged with the terrain's own noise, and lower on faces turned from the light, which hold snow longer (`slope_snow`). Above the treeline it lies as a sheet. Below it, it lies among the trees (a share of white, more as the crowns hold more), so the forest's structure still reads.
+- On the massif and the distant ranges, the snow line comes down from the top as `snow` rises. It is measured as height on the landform (0 at its foot, 1 at its top), ragged with the terrain's own noise, and lower on faces turned from the light, which hold snow longer (`slope_snow`). On the massif it also lingers lower in the gullies ([mountainsides](painting.md#mountainsides-renderer-v3-review-round-8)). Above the treeline it lies as a sheet. Below it, it lies among the trees (a share of white, more as the crowns hold more), so the forest's structure still reads.
 - **Monotone:** every snow cover is a fixed noise field against a threshold that falls as its channel rises. A pixel that is snow stays snow as winter deepens, so the landforms stay readable and the snow does not shimmer. Tested on the rock and distant ranges of three scenes from late summer to midwinter: no pixel ever becomes less snowy (`snow_only_grows_as_winter_deepens`).
 - **Lying snow** (`ground_snow_cover`) comes and goes in patches and covers the ground completely at 1. It lies on meadows and shores, more thinly and in shadow on the forest floor between trees, and as ragged caps on rock tops once it is deep enough.
 
@@ -112,4 +112,5 @@ Measured on sample 15 at 1920 × 1080, single runs, render and readback: 3.9 ms 
 | Snowfall mask stability | `gpu_hardware::snow_only_grows_as_winter_deepens` |
 | Tile seams for snow and every other seasonal effect at 2K (tiles of 333 and 512 px) | `gpu_hardware::every_season_is_identical_tiled_and_single_at_high_resolution` |
 | Cyclic keyboard control; season leaves palette and haze alone | `ui_tests::the_season_wraps_from_the_keyboard_and_leaves_palette_and_air_alone` |
-| All approved images unchanged at midsummer | `pigment-io/tests/gpu_export.rs::approved_recipes_repaint_identically_after_save_and_load` |
+| The approved midsummer images repaint exactly | `pigment-io/tests/gpu_export.rs::approved_recipes_repaint_identically_after_save_and_load` |
+| Schema 1 recipes migrate | `pigment-io/tests/recipes.rs::schema_1_recipes_migrate_to_midsummer_schema_2` |

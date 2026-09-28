@@ -1056,21 +1056,7 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
             }
         }
         case R_MOUNTAIN: {
-            if (seasonal()) {
-                rgb = seasonal_mountain(c, depth, shade, horizon, summit, rise);
-            } else {
-                // Forest below a ragged treeline, rock above, snow on high peaks.
-                let tree_y = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u));
-                let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u));
-                let rock = shaded(ROCK, shade);
-                rgb = rock;
-                let tree = smoothstep(tree_y - 0.012, tree_y + 0.012, c.y);
-                rgb = mix(rgb, forest_color(c, depth, shade), tree);
-                if (rise > 0.3 * P.frame.w) {
-                    let snow = 1.0 - smoothstep(snow_y - 0.01, snow_y + 0.01, c.y);
-                    rgb = mix(rgb, shaded(SNOW, shade), snow);
-                }
-            }
+            rgb = mountain(c, depth, shade, horizon, summit, rise);
         }
         case R_MID_RIDGE: {
             rgb = mixed_forest(c, depth, shade, layers[4u * l + 1u]);
@@ -1132,24 +1118,117 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
     return Surface(aerial(rgb, role, depth), depth);
 }
 
-// The massif in a season other than midsummer: the midsummer mountain
-// (kept as its own path in `land`, so midsummer compiles exactly as
-// approved), then seasonal snow coming down it: a sheet on the rock above
-// the treeline, among the trees below it.
-fn seasonal_mountain(c: vec2<f32>, depth: f32, shade: f32, horizon: f32, summit: f32, rise: f32) -> vec3<f32> {
-    let tree_y = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u));
-    let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u));
-    var rgb = shaded(ROCK, shade);
-    let tree = smoothstep(tree_y - 0.012, tree_y + 0.012, c.y);
-    rgb = mix(rgb, forest_color(c, depth, shade), tree);
-    if (rise > 0.3 * P.frame.w) {
-        let snow = 1.0 - smoothstep(snow_y - 0.01, snow_y + 0.01, c.y);
-        rgb = mix(rgb, shaded(SNOW, shade), snow);
+// A mountainside's anatomy (renderer v3, round 8: "mountainsides have
+// detail all their own"): fall lines running down the massif, fanning out
+// as the slant between them drifts across it, with gullies (couloirs) in
+// the low ground between ribs. `slope` is the cross-fall gradient, so each
+// rib is lit on its side toward the light and shaded on the other.
+// `down` is how far down the massif the point is (0 at the summit, 1 at the
+// horizon). Band-limited like every other mark.
+struct Anatomy {
+    gully: f32,
+    rib: f32,
+    slope: f32,
+    down: f32,
+}
+
+fn anatomy(c: vec2<f32>, horizon: f32, rise: f32) -> Anatomy {
+    let top = horizon - rise;
+    let down = clamp((c.y - top) / rise, 0.0, 1.0);
+    let slant = (fbm(vec2<f32>(c.x, 7.0), 0.25 * rise, 2u, 601u) - 0.5) * 2.4;
+    let u = c.x + slant * (c.y - top) + 0.015 * rise * (fbm(c, 0.08 * rise, 2u, 602u) - 0.5);
+    // One width everywhere: scaling it with height would make the streaks'
+    // phase race down the slope into horizontal bands.
+    // Broad ribs and spurs, with finer couloirs cut into them.
+    let wl = 0.075 * rise;
+    let q = vec2<f32>(u, c.y * 0.15);
+    let d = vec2<f32>(0.12 * wl, 0.0);
+    let g = 0.6 * fbm(q, wl, 2u, 603u) + 0.4 * fbm(q, 0.4 * wl, 3u, 604u);
+    let gp = 0.6 * fbm(q + d, wl, 2u, 603u) + 0.4 * fbm(q + d, 0.4 * wl, 3u, 604u);
+    let gm = 0.6 * fbm(q - d, wl, 2u, 603u) + 0.4 * fbm(q - d, 0.4 * wl, 3u, 604u);
+    let slope = (gp - gm) * 4.0;
+    return Anatomy(smoothstep(0.42, 0.26, g), smoothstep(0.56, 0.74, g), clamp(slope, -1.0, 1.0), down);
+}
+
+// The main massif: rock with its own relief, strata and scree above a
+// ragged treeline; alpine meadow and outcrops in between; forest below,
+// shaded by the same ribs and gullies; snow on the high peaks reaching
+// lower in the gullies, with ribs showing through. Then the season's snow,
+// which also lingers in the gullies.
+fn mountain(c: vec2<f32>, depth: f32, shade: f32, horizon: f32, summit: f32, rise: f32) -> vec3<f32> {
+    let a = anatomy(c, horizon, rise);
+    // The plane's shade, turned by the ribs toward or away from the light.
+    let relief = clamp(shade + 0.2 * a.slope * light_x() + 0.06 * (a.rib - a.gully), 0.0, 1.0);
+
+    // Rock: relief, faint tilted strata, grain, and pale scree fans
+    // spilling below the cliffs toward the treeline.
+    var rock = shaded(ROCK, relief);
+    let tilt = normalize(vec2<f32>(1.0, 0.25 * light_x()));
+    let strata = fbm(vec2<f32>(dot(c, tilt) * 0.15, dot(c, vec2<f32>(-tilt.y, tilt.x))), 0.012 * rise, 3u, 605u);
+    rock *= 0.92 + 0.16 * strata;
+    rock *= 0.93 + 0.14 * fbm(c, 0.004, 3u, 606u);
+    rock = mix(rock, rock * 0.72, 0.5 * a.gully);
+    // Cliff bands: short broken ledges along the strata, a shadow under a
+    // lit lip, fading out below a couple of pixels.
+    let ledge_res = smoothstep(1.5, 3.0, 0.004 * rise / P.look.w);
+    if (ledge_res > 0.0) {
+        let along = vec2<f32>(dot(c, tilt), dot(c, vec2<f32>(-tilt.y, tilt.x)));
+        let band = fbm(vec2<f32>(along.x * 0.08, along.y), 0.006 * rise, 2u, 613u);
+        let broken = smoothstep(0.5, 0.62, fbm(c, 0.03 * rise, 2u, 614u));
+        let ledge = smoothstep(0.7, 0.8, band) * broken * ledge_res * (1.0 - a.gully);
+        rock = mix(rock, rock * 0.62, 0.6 * ledge);
+        let lip = smoothstep(0.62, 0.7, band) * (1.0 - smoothstep(0.7, 0.75, band)) * broken * ledge_res;
+        rock = mix(rock, mix(rock, col(SUN), 0.2) * 1.1, 0.35 * lip);
     }
-    let cover = slope_snow(clamp((horizon - c.y) / rise, 0.0, 1.0), c, shade);
-    let wooded = mix(rgb, shaded(SNOW, shade), cover * (0.35 + 0.35 * P.season_a.z));
-    rgb = mix(rgb, wooded, tree);
-    return mix(rgb, shaded(SNOW, shade), cover * (1.0 - tree));
+    let scree = smoothstep(0.55, 0.75, fbm(vec2<f32>(c.x, c.y * 0.5), 0.02 * rise, 3u, 607u))
+        * smoothstep(0.35, 0.6, a.down) * (1.0 - a.rib);
+    rock = mix(rock, mix(shaded(ROCK, 1.0), shaded(SAND, relief), 0.3) * (0.9 + 0.2 * fbm(c, 0.003, 2u, 608u)), 0.45 * scree);
+
+    // The treeline: higher in the gullies, lower on the ribs, ragged, with
+    // clumps of trees straggling above it.
+    let line = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u))
+        - rise * (0.1 * a.gully - 0.06 * a.rib);
+    let ragged = line + 0.03 * rise * (fbm(c, 0.02 * rise, 3u, 609u) - 0.5);
+    let solid = smoothstep(ragged - 0.004, ragged + 0.004, c.y);
+    let above = (ragged - c.y) / rise;
+    let clumps = smoothstep(0.58, 0.68, fbm(c, 0.012 * rise, 3u, 610u))
+        * smoothstep(0.14, 0.0, above) * step(0.0, above);
+    let tree = max(solid, clumps);
+    // Alpine meadow between the trees and the bare rock, broken by
+    // outcrops on the ribs.
+    let alpine = smoothstep(0.2, 0.03, above) * (1.0 - 0.75 * a.rib)
+        * smoothstep(0.35, 0.55, fbm(c, 0.03 * rise, 3u, 611u));
+    let turf = mix(shaded(MEADOW, relief), shaded(ROCK, relief), 0.35) * (0.92 + 0.16 * strata);
+    var rgb = mix(rock, turf, alpine);
+    // The forest follows the same ground, more softly (the canopy smooths
+    // it).
+    var woods = forest_color(c, depth, mix(shade, relief, 0.5));
+    woods *= 1.0 - 0.08 * a.gully;
+    // Avalanche chutes: paler brush and meadow down the upper gullies.
+    let chute = smoothstep(0.55, 0.9, a.gully) * smoothstep(0.85, 0.45, a.down)
+        * smoothstep(0.45, 0.6, fbm(vec2<f32>(c.x, c.y * 0.2), 0.05 * rise, 2u, 615u));
+    woods = mix(woods, mix(shaded(MEADOW, relief), woods, 0.45), 0.6 * chute);
+    rgb = mix(rgb, woods, tree);
+
+    // Permanent snow on the high peaks: lower in the gullies, the ribs
+    // showing through its edge.
+    if (rise > 0.3 * P.frame.w) {
+        let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u))
+            + rise * (0.09 * a.gully - 0.05 * a.rib)
+            + 0.02 * rise * (fbm(c, 0.015 * rise, 3u, 612u) - 0.5);
+        let snow = 1.0 - smoothstep(snow_y - 0.004, snow_y + 0.004, c.y);
+        rgb = mix(rgb, shaded(SNOW, relief), snow);
+    }
+    if (seasonal()) {
+        // Seasonal snow comes down the massif, lingering in the gullies: a
+        // sheet on the rock and turf, among the trees below the treeline.
+        let h = clamp((horizon - c.y) / rise + 0.08 * a.gully - 0.04 * a.rib, 0.0, 1.0);
+        let cover = slope_snow(h, c, relief);
+        let wooded = mix(rgb, shaded(SNOW, relief), cover * (0.35 + 0.35 * P.season_a.z));
+        rgb = mix(rgb, wooded, tree);
+        rgb = mix(rgb, shaded(SNOW, relief), cover * (1.0 - tree));
+    }
+    return rgb;
 }
 
 // Aerial perspective: distance dissolves toward the haze color.

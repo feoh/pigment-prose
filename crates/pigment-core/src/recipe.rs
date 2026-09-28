@@ -923,7 +923,7 @@ mod tests {
         assert!(sample().version_notices().is_empty());
         let r = load_edited(|v| {
             v["versions"]["generator"] = 7.into();
-            v["versions"]["renderer"] = 3.into();
+            v["versions"]["renderer"] = 9.into();
         })
         .unwrap();
         let notices = r.version_notices();

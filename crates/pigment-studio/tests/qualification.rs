@@ -44,7 +44,7 @@ fn ctx() -> Arc<GpuContext> {
 }
 
 fn baseline() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-25")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-16")
 }
 
 struct Scratch(PathBuf);

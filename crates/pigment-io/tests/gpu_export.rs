@@ -377,7 +377,7 @@ fn approved_recipes_repaint_identically_after_save_and_load() {
     // pixels as the original file. On the baseline device (RTX 4070 Ti,
     // Vulkan) they must also match the approved image hashes.
     let dir = Scratch::new("baseline-paint");
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-25");
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-16");
     let label = renderer_label();
     let baseline_device = label == "NVIDIA GeForce RTX 4070 Ti (Vulkan)";
     let mut checked = 0;

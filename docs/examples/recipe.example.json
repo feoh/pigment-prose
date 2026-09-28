@@ -3,8 +3,8 @@
   "versions": {
     "normalization": "nfc-lf-utf8/1",
     "seed_algorithm": "pigment-seed/1",
-    "generator": 2,
-    "renderer": 2
+    "generator": 3,
+    "renderer": 3
   },
   "seed": {
     "digest": "7ac7f737542c62a3a903b3190f6dc3b4585bb653290dfaa2da804cad7ad37850",

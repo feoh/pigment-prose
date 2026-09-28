@@ -1,0 +1,44 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v3, renderer v3, view paint, aspect 16:9, cell 400x225, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)	image fnv
+7	sample passage 15 season=0.98	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	019ba992c2db39a1
+8	sample passage 15 season=0.0	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	250f9f60138d1b10
+9	sample passage 15 season=0.02	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	b2b689e0f75c37b3
+10	sample passage 15 season=0.25	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	14b38c05b5a27c4f
+11	sample passage 15 season=0.5	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	6d6fafd4e73a8d81
+12	sample passage 15 season=0.62	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	d47710c046d89c01
+13	sample passage 15 season=0.75	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	5a8846b0b99f0be9
+14	sample passage 15 season=0.86	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	48e43d323e26f042
+15	sample passage 12 season=0.98	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	2b1daaaf4fdc9b57
+16	sample passage 12 season=0.0	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	0a275cee1f293526
+17	sample passage 12 season=0.02	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	8339e98cb4d14e38
+18	sample passage 12 season=0.25	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	2fc075be1ab59c33
+19	sample passage 12 season=0.5	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	fd8d8c5869905c0b
+20	sample passage 12 season=0.62	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	1d672bee332c23df
+21	sample passage 12 season=0.75	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	6422ff01f4d751f6
+22	sample passage 12 season=0.86	high-vantage	true	41	10694	eccbed5be2948662	0.21	16	10	0.53	0.00	0.09	0.59	0.82	16.0 1.5 1.6 51.4 13.1 0.2 0.2 0.0 7.0 9.0	fa06816affe6431d
+23	sample passage 16 season=0.98	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	d8e33cc55a511901
+24	sample passage 16 season=0.0	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	5a22a3f67a15af10
+25	sample passage 16 season=0.02	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	8eeeec37864f9aed
+26	sample passage 16 season=0.25	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	2471d10788678b44
+27	sample passage 16 season=0.5	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	9d9530950d811f7c
+28	sample passage 16 season=0.62	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	4692d28776dfec1a
+29	sample passage 16 season=0.75	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	7d50eb8b970a71fa
+30	sample passage 16 season=0.86	peak-over-water	false	83	11892	ccd0d7f714958a34	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 9.0 1.6 2.2 11.9 4.3	a5ed0f3f95fd055e
+31	sample passage 8 season=0.98	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	bc3f53c91707b013
+32	sample passage 8 season=0.0	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	40c234cf7fe6525b
+33	sample passage 8 season=0.02	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	67682b017c723fac
+34	sample passage 8 season=0.25	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	a3138ac0f3f59c97
+35	sample passage 8 season=0.5	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	67afb08dee472b57
+36	sample passage 8 season=0.62	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	620b0840ed704447
+37	sample passage 8 season=0.75	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	ae00e3040e507aad
+38	sample passage 8 season=0.86	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4	f83d8242d4930a70
+39	accent v0 season=0.98	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	d912d1b822dfcf7f
+40	accent v0 season=0.0	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	a438d0c42c875a13
+41	accent v0 season=0.02	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	48ec4d065f9e3dfe
+42	accent v0 season=0.25	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	dff749345d2b7a6d
+43	accent v0 season=0.5	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	644d08c0e4268c56
+44	accent v0 season=0.62	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	f5a306c8156428c0
+45	accent v0 season=0.75	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	97443204dc2dc788
+46	accent v0 season=0.86	peak-over-water	false	84	12013	02921901b634eadc	0.28	5	3	0.26	0.03	0.06	0.60	0.41	36.6 0.8 2.4 0.0 25.2 12.9 2.1 1.5 12.7 5.8	75d872458ffc2a45

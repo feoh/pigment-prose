@@ -105,7 +105,19 @@ Measured with `pigment-prose paint-bench` (12 sample seeds at 16:9, warm, render
 
 ## Seasons (task 16)
 
-The season's channels reach the shader as two `vec4`s (`Params.season_a`, `season_b`), from `pigment_core::season::ALPINE.at(year)`. Every seasonal change sits behind one uniform test, `seasonal()`. The mountain and meadow materials keep their approved code as a separate path, because adding seasonal work to them changed how the driver compiled the approved arithmetic: one channel of one pixel by 1/255 in a few images. With the separate paths, midsummer paints the 47 approved images byte for byte. What each channel does, the precedence rules and the tests are in [seasons-and-biomes.md](seasons-and-biomes.md).
+The season's channels reach the shader as two `vec4`s (`Params.season_a`, `season_b`), from `pigment_core::season::ALPINE.at(year)`. Every seasonal change sits behind one uniform test, `seasonal()`. When the seasons were added, midsummer still painted the task 25 images byte for byte. That needed the meadow material to keep its approved code as a separate path, because adding seasonal work to it changed how the driver compiled the approved arithmetic (one channel of one pixel by 1/255 in a few images). What each channel does, the precedence rules and the tests are in [seasons-and-biomes.md](seasons-and-biomes.md).
+
+## Mountainsides (renderer v3, review round 8)
+
+Round 8: "When you look at mountains in a landscape face on, you don't see huge FLAT areas of a single color and texture. Mountainsides have detail all their own. And the interface between the 'green zone' and the more barren peak is also very simplistic and unnatural looking."
+
+- **Anatomy** (`anatomy`): fall lines down the massif, fanning as a slowly varying slant drifts across it. They are fBm streaks, stretched about 7× down the slope, at two scales: broad ribs (0.075 × the massif's rise) and finer couloirs (0.4 of that). The cross-fall gradient shades each rib: toward the light is lighter, away is darker, 0.2 of a plane's shade, within the generator's facet planes. The streak width is the same everywhere. Scaling it with height made the phase race down the slope and turned the streaks into horizontal bands.
+- **Rock:** relief shading, tilted strata, grain, darker couloirs, and broken cliff ledges (a shadow under a lit lip, faded below 1.5–3 px). Pale scree fans lie in the lower rock zone, off the ribs.
+- **Treeline:** 0.1 × rise higher in gullies and 0.06 lower on ribs, ragged with fBm, with tree clumps up to 0.14 × rise above it. Alpine turf (meadow mixed with rock) lies within 0.2 × rise above the line, broken by outcrops on the ribs.
+- **Forest:** half the relief shading, gullies 8 % darker, and avalanche chutes (paler meadow and brush) down the upper gullies.
+- **Snow:** the permanent snow line is 0.09 × rise lower in gullies and 0.05 higher on ribs, ragged at a fine scale. Seasonal snow's height is offset the same way, so it lingers in the gullies.
+
+The mountain is one function (`mountain`) for every season. The approved-image baseline moved to [baseline-16](visual-review/baseline-16/README.md) with this change.
 
 ## Edges and texture (pass 2)
 

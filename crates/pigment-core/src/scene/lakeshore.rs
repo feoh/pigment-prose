@@ -1771,7 +1771,8 @@ impl<'a> Builder<'a> {
         let seed = ts.rocks ^ id.wrapping_mul(0x9e37_79b9_7f4a_7c15);
         let k = |i: i64| unit(seed, i);
         let kind = RockKind::pick(k(0));
-        let tall = width * p.height * kind.stature();
+        // Rocks of one width come low and broad or tall (round 8).
+        let tall = width * p.height * kind.stature() * (0.65 + 0.6 * k(4));
         let n = ((width / (PROFILE_STEP * 0.5)).ceil() as usize).clamp(16, 128);
         let xs = samples(x - 0.5 * width, x + 0.5 * width, width / n as f64);
         let last = xs.len() - 1;
@@ -2049,9 +2050,9 @@ enum RockKind {
 impl RockKind {
     fn pick(u: f64) -> RockKind {
         match u {
-            u if u < 0.32 => RockKind::Boulder,
-            u if u < 0.56 => RockKind::Block,
-            u if u < 0.8 => RockKind::Slab,
+            u if u < 0.3 => RockKind::Boulder,
+            u if u < 0.58 => RockKind::Block,
+            u if u < 0.85 => RockKind::Slab,
             _ => RockKind::Split,
         }
     }
@@ -2079,6 +2080,11 @@ struct RockShape {
     lobes: Vec<(f64, f64, f64)>,
     /// The split boulder's cleft: `(s, height)`.
     cleft: Option<(f64, f64)>,
+    /// Rounded rocks are worn flat on top at this height (1 = not at all).
+    flat: f64,
+    /// How far the crest leans sideways, as a skew of `s` (round 8: rocks
+    /// should not all be symmetric mounds).
+    lean: f64,
 }
 
 impl RockShape {
@@ -2166,12 +2172,18 @@ impl RockShape {
                 ]
             }
         };
+        let flat = match kind {
+            RockKind::Boulder | RockKind::Split => 0.62 + 0.38 * k(140),
+            _ => 1.0,
+        };
         RockShape {
             kind,
             flip,
             knots,
             lobes,
             cleft,
+            flat,
+            lean: 0.7 * (k(141) - 0.5),
         }
     }
 
@@ -2199,11 +2211,30 @@ impl RockShape {
     }
 
     fn orient(&self, s: f64) -> f64 {
+        let s = s + self.lean * s * (1.0 - s);
         if self.flip { 1.0 - s } else { s }
     }
 
+    /// The drawn `s` whose [`orient`](Self::orient) is the knot position `t`
+    /// (the skew is monotone for |lean| < 1, so this is its inverse).
+    fn unorient(&self, t: f64) -> f64 {
+        let t = if self.flip { 1.0 - t } else { t };
+        let l = self.lean;
+        if l.abs() < 1e-9 {
+            return t;
+        }
+        // l s² − (1 + l) s + t = 0, the root in [0, 1].
+        ((1.0 + l) - ((1.0 + l) * (1.0 + l) - 4.0 * l * t).sqrt()) / (2.0 * l)
+    }
+
+    /// Worn flat on top: heights above `flat` are cut back, and the rest
+    /// scaled to the full stature.
+    fn worn(&self, h: f64) -> f64 {
+        h.min(self.flat) / self.flat
+    }
+
     fn faceted(&self, s: f64) -> f64 {
-        piecewise(self.orient(s), &self.knots)
+        self.worn(piecewise(self.orient(s), &self.knots))
     }
 
     /// The rounded silhouette, tapered to 0 at both ends.
@@ -2221,7 +2252,7 @@ impl RockShape {
                     / 5.0
             }
         };
-        h * taper
+        self.worn(h * taper)
     }
 
     /// The silhouette's corners `(s, turn, is the cleft)` (in drawn
@@ -2243,7 +2274,7 @@ impl RockShape {
                 };
                 let is_cleft = self.cleft.is_some_and(|(at, _)| at == b.0);
                 let turn = if is_cleft { f64::INFINITY } else { turn };
-                (self.orient(b.0), turn, is_cleft)
+                (self.unorient(b.0), turn, is_cleft)
             })
             .filter(|&(s, _, _)| (0.06..=0.94).contains(&s))
             .collect();
@@ -2757,8 +2788,8 @@ mod tests {
     fn checksums_are_frozen() {
         // Exact arithmetic only, so these hold on every OS; portable CI
         // checks them on Linux, Windows and macOS. They freeze
-        // GENERATOR_VERSION 2 (task 25; version 1 was approved at the task 08
-        // visual gate): any change needs a version bump.
+        // GENERATOR_VERSION 3 (round 8: varied rock forms; 2 was task 25, 1
+        // the task 08 visual gate): any change needs a version bump.
         let c = corpus();
         let get = |id: &str| &c.iter().find(|(i, _)| i == id).unwrap().1;
         let got = [
@@ -2786,10 +2817,10 @@ mod tests {
         assert_eq!(got, FROZEN, "{got:x?}");
     }
 
-    // GENERATOR_VERSION 2 (task 25: wind, complex rocks).
+    // GENERATOR_VERSION 3.
     const FROZEN: [u64; 3] = [
-        0x78b0_cef2_6f9e_02bc,
-        0xb8ae_3ed2_ebc8_c7a1,
+        0xbdad_82d6_c412_ef06,
+        0xa18b_c157_49c5_2183,
         0x2f8a_d4f0_12b6_1c8a,
     ];
 
@@ -3218,6 +3249,28 @@ mod tests {
             }
         }
         assert!(checked > 1000, "{checked}");
+    }
+
+    #[test]
+    fn rock_shapes_invert_their_orientation() {
+        for (flip, lean) in [(false, 0.0), (true, 0.0), (false, 0.3), (true, -0.34)] {
+            let shape = RockShape {
+                kind: RockKind::Boulder,
+                flip,
+                knots: vec![(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)],
+                lobes: Vec::new(),
+                cleft: None,
+                flat: 1.0,
+                lean,
+            };
+            for i in 0..=20 {
+                let s = i as f64 / 20.0;
+                assert!(
+                    (shape.unorient(shape.orient(s)) - s).abs() < 1e-12,
+                    "{flip} {lean} {s}"
+                );
+            }
+        }
     }
 
     #[test]
