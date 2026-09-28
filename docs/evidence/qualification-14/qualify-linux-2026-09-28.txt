@@ -1,0 +1,691 @@
+
+=== environment ===
+date: 2026-09-28T02:56:12Z
+git: f9f261e
+Linux 7.2.7-1-cachyos x86_64
+rustc 1.98.1 (48a229cea 2026-09-01)
+NVIDIA GeForce RTX 4070 Ti, 615.71.09
+	apiVersion         = 1.4.351
+	deviceName         = NVIDIA GeForce RTX 4070 Ti
+	driverInfo         = 615.71.09
+	apiVersion         = 1.4.354
+	deviceName         = Intel(R) Graphics (RPL-S)
+	driverInfo         = Mesa 26.2.3-arch3.1
+
+=== 1. portable checks (scripts/check.sh) ===
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/main.rs (target/debug/deps/pigment_prose-dc365633c1f9d2b5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_core-55386a1de6959f97)
+
+running 118 tests
+test composite::tests::overlapping_washes_multiply ... ok
+test capability::tests::software_always_ranks_last ... ok
+test composite::tests::paper_survives_a_paper_colored_wash ... ok
+test frame::tests::bad_frames_are_rejected ... ok
+test composite::tests::glazes_only_darken_and_stay_finite ... ok
+test composite::tests::edge_blend_has_no_dark_fringe ... ok
+test composite::tests::a_wash_at_density_one_is_its_pigment ... ok
+test frame::tests::exact_aspect_presets ... ok
+test frame::tests::extents_put_the_short_side_at_one ... ok
+test composite::tests::opaque_fill_hides_what_is_under ... ok
+test frame::tests::mapping_is_resolution_independent ... ok
+test frame::tests::presets_and_orientations_validate ... ok
+test frame::tests::preview_fit_keeps_aspect_and_never_upscales ... ok
+test frame::tests::same_aspect_means_same_scene_key ... ok
+test invalidate::tests::paint_only_changes_keep_the_scene ... ok
+test invalidate::tests::seed_changes_invalidate_everything ... ok
+test job::tests::closures_are_progress_sinks ... ok
+test invalidate::tests::form_and_aspect_rebuild_the_scene ... ok
+test job::tests::late_old_results_never_replace_newer_ones ... ok
+test job::tests::newer_submission_supersedes_pending_and_cancels_running ... ok
+test invalidate::tests::resolution_and_source_text_change_nothing ... ok
+test palette::tests::every_palette_id_has_a_palette ... ok
+test palette::tests::srgb_to_linear_endpoints ... ok
+test palette::tests::the_default_palette_is_green_where_it_should_be ... ok
+test palette::tests::lit_sides_are_lighter_than_shadows ... ok
+test recipe::tests::debug_shows_the_length_of_kept_source_text_only ... ok
+test recipe::tests::documented_example_is_canonical_and_loads ... ok
+test recipe::tests::duplicate_keys_are_rejected_at_any_depth ... ok
+test recipe::tests::canonical_json_round_trips ... ok
+test request::tests::ids_increase ... ok
+test recipe::tests::palette_and_paint_settings_do_not_touch_seeds ... ok
+test scene::lakeshore::tests::plant_weights_cover_the_unit_interval ... ok
+test recipe::tests::source_text_must_match_the_digest ... ok
+test scene::lakeshore::tests::canopies_mix_emergent_and_young_crowns ... ok
+test recipe::tests::errors_never_contain_file_contents ... ok
+test recipe::tests::unknown_algorithms_are_rejected ... ok
+test recipe::tests::omitted_source_text_still_reproduces_the_seed ... ok
+test recipe::tests::variation_changes_the_scene_streams_only ... ok
+test request::tests::memory_sink_rejects_misplaced_bands ... ok
+test scene::lakeshore::tests::meanders_are_smooth ... ok
+test recipe::tests::future_and_unknown_schemas_are_rejected_first ... ok
+test recipe::tests::newer_generator_and_renderer_load_with_notices ... ok
+test recipe::tests::wrong_types_and_bad_values_are_rejected ... ok
+test recipe::tests::schema_table_matches_the_structs ... ok
+test scene::noise::tests::value_noise_hits_lattice_values_and_is_continuous ... ok
+test scene::noise::tests::lattice_is_bounded_and_seeded ... ok
+test scene::raster::tests::rasterizer_fills_front_most_layer ... ok
+test scene::noise::tests::values_are_frozen ... ok
+test scene::raster::tests::simple_and_non_simple_polygons ... ok
+test scene::tests::invalid_scenes_are_rejected ... ok
+test recipe::tests::out_of_range_values_are_rejected_not_clamped ... ok
+test scene::tests::paint_detail_stream_does_not_affect_geometry ... ok
+test scene::tests::pixel_size_does_not_change_the_scene_but_aspect_does ... ok
+test scene::tests::same_key_same_checksum ... ok
+test scene::tests::structure_inputs_change_geometry ... ok
+test scene::tests::test_card_checksum_is_frozen ... ok
+test recipe::tests::unknown_and_missing_fields_are_rejected ... ok
+test seed::tests::derivation_is_repeatable ... ok
+test seed::tests::digest_hex_round_trips_and_rejects_bad_input ... ok
+test seed::tests::from_streams_places_each_domain ... ok
+test seed::tests::labels_are_distinct_and_only_paint_detail_ignores_variation ... ok
+test seed::tests::one_character_edit_gives_an_unrelated_digest ... ok
+test seed::tests::corpus_passages_are_all_in_the_vectors ... ok
+test scene::lakeshore::tests::generators_use_only_exact_arithmetic ... ok
+test recipe::tests::corrupt_and_oversized_files_are_rejected ... ok
+test seed::tests::declared_equivalences_hold ... ok
+test seed::tests::advancing_one_stream_leaves_the_others_alone ... ok
+test seed::tests::rng_matches_the_xoshiro_reference ... ok
+test settings::tests::defaults_validate_and_bad_values_are_rejected_not_clamped ... ok
+test seed::tests::streams_are_distinct ... ok
+test settings::tests::each_control_edits_only_its_own_field_in_its_channel ... ok
+test settings::tests::range_endpoints_are_inclusive ... ok
+test settings::tests::the_three_named_channels_are_separate_main_controls ... ok
+test settings::tests::specs_are_well_formed_and_unique ... ok
+test text::tests::composed_and_decomposed_forms_are_equal ... ok
+test text::tests::empty_and_blank_are_rejected ... ok
+test seed::tests::variation_changes_only_the_structural_streams ... ok
+test text::tests::line_endings_become_lf ... ok
+test text::tests::nonblank_passages_are_accepted_unchanged ... ok
+test text::tests::everything_else_is_kept ... ok
+test tiles::tests::apron_sums_chained_supports ... ok
+test text::tests::normalization_tables_are_the_reviewed_unicode_version ... ok
+test tiles::tests::border_tiles_extend_beyond_the_frame ... ok
+test tiles::tests::budget_policy_matches_the_task_02_8k_measurement ... ok
+test tiles::tests::host_budget_limits_band_height ... ok
+test tiles::tests::impossible_plans_fail_with_reasons ... ok
+test tiles::tests::reverse_order_visits_the_same_tiles_band_by_band ... ok
+test scene::noise::tests::fbm_is_normalized_and_band_limited ... ok
+test text::tests::debug_and_errors_never_show_text ... ok
+test text::tests::normalize_applies_the_input_gate ... ok
+test job::tests::rapid_submissions_stay_bounded ... ok
+test text::tests::size_bound_is_in_bytes_and_inclusive ... ok
+test seed::tests::rng_helpers_stay_in_range ... ok
+test seed::tests::frozen_vectors_reproduce_exactly ... ok
+test scene::lakeshore::tests::checksums_are_frozen ... ok
+test scene::lakeshore::tests::appearance_and_paint_seed_never_touch_geometry ... ok
+test job::tests::close_wakes_a_blocked_worker ... ok
+test scene::lakeshore::tests::variation_changes_the_composition ... ok
+test scene::lakeshore::tests::pixel_size_keeps_the_scene_and_aspect_recomposes_it ... ok
+test scene::lakeshore::tests::layers_run_back_to_front_by_role ... ok
+test scene::lakeshore::tests::same_recipe_same_scene ... ok
+test scene::lakeshore::tests::relief_raises_the_mountain ... ok
+test scene::lakeshore::tests::valley_spurs_have_blunt_tips ... ok
+test scene::lakeshore::tests::form_morphs_the_same_composition ... ok
+test scene::lakeshore::tests::faceting_changes_shape_and_planes ... ok
+test scene::lakeshore::tests::woodland_stands_have_varied_plants ... ok
+test scene::lakeshore::tests::woodland_density_scales_the_woodland_regions ... ok
+test scene::lakeshore::tests::silhouettes_stay_coherent ... ok
+test scene::lakeshore::tests::counts_stay_within_bounds ... ok
+test scene::lakeshore::tests::rocks_have_lit_and_shadowed_planes ... ok
+test scene::lakeshore::tests::vista_templates_score_higher_on_their_devices ... ok
+test scene::lakeshore::tests::dramatic_light_stages_contrast ... ok
+test scene::lakeshore::tests::river_banks_never_break ... ok
+test recipe::tests::the_largest_valid_source_text_fits_the_size_bound ... ok
+test tiles::tests::tiles_cover_every_pixel_exactly_once ... ok
+test scene::lakeshore::tests::woodland_stands_on_land ... ok
+test scene::lakeshore::tests::corpus_scenes_are_valid_in_every_orientation ... ok
+test scene::lakeshore::tests::a_larger_seed_sample_is_valid_at_extreme_forms ... ok
+
+test result: ok. 118 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.22s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_gpu-1103bfa291f2cfb0)
+
+running 3 tests
+test coverage::tests::index_size_is_bounded ... ok
+test coverage::tests::indexed_matches_brute_force ... ok
+test coverage::tests::axes_agree_away_from_edges ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.57s
+
+     Running tests/gpu_hardware.rs (target/debug/deps/gpu_hardware-83fe00c28ad1a352)
+
+running 12 tests
+test cancellation_stops_at_the_next_tile_and_aborts_the_sink ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test compositing_matches_the_reference_model ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test debug_layer_ids_match_the_cpu_rasterizer ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test debug_views_are_identical_tiled_and_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test impossible_tile_plan_is_an_error_not_a_crash ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test output_is_opaque_and_repeatable ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test paint_settings_change_pixels_but_not_the_scene ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_agrees_across_resolutions ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_is_identical_tiled_and_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_is_opaque_repeatable_and_varied ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_is_valid_at_setting_extremes ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tiled_output_is_byte_identical_to_single_tile ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_io-187838f9d332e56f)
+
+running 38 tests
+test document::tests::debug_never_shows_the_prose ... ok
+test atomic::tests::commit_replaces_and_discard_keeps_the_destination ... ok
+test atomic::tests::read_only_directory_is_refused ... ok
+test document::tests::invalid_edits_change_nothing ... ok
+test document::tests::failed_save_keeps_path_dirty_state_and_file ... ok
+test atomic::tests::dropping_an_uncommitted_file_removes_it ... ok
+test document::tests::failed_open_leaves_the_current_document_unchanged ... ok
+test atomic::tests::bad_destinations_fail_before_writing ... ok
+test document::tests::keep_choice_without_prose_saves_no_source ... ok
+test document::tests::kept_prose_round_trips_and_can_be_dropped ... ok
+test export::tests::presets_keep_the_scene_aspect ... ok
+test export::tests::invalid_sizes_fail_before_anything_is_written ... ok
+test export::tests::out_of_memory_at_the_floor_is_reported_and_leaves_no_file ... ok
+test document::tests::dirty_state_follows_real_changes_only ... ok
+test document::tests::source_free_recipes_truly_omit_the_prose ... ok
+test export::tests::unwritable_destinations_fail_before_rendering ... ok
+test document::tests::saving_records_current_versions_and_notices_old_ones ... ok
+test export::tests::tile_plan_errors_are_not_retried ... ok
+test png_sink::tests::unwritable_destinations_fail_at_create ... ok
+test png_sink::tests::dropping_an_unfinished_sink_cleans_up ... ok
+test recipe_file::tests::invalid_recipes_are_never_written ... ok
+test recipe_file::tests::oversized_binary_and_missing_files_are_rejected_without_reading ... ok
+test recipe_file::tests::round_trip_is_canonical_and_byte_stable ... ok
+test recipe_file::documented_messages::sample_messages_are_as_documented ... ok
+test png_sink::tests::invalid_sizes_are_rejected_before_writing ... ok
+test recipe_file::tests::errors_are_redacted ... ok
+test recipe_file::tests::permission_errors_are_reported_and_keep_the_file ... ok
+test recipe_file::tests::unicode_names_and_prose_round_trip ... ok
+test recipe_file::tests::future_schemas_are_rejected ... ok
+test png_sink::tests::misordered_or_short_bands_are_errors ... ok
+test png_sink::tests::abort_removes_the_partial_file_and_keeps_the_old_one ... ok
+test recipe_file::tests::an_interrupted_save_keeps_the_previous_file ... ok
+test recipe_file::tests::truncated_files_are_rejected_at_every_length ... ok
+test export::tests::cancellation_deletes_the_partial_file_and_keeps_the_old_one ... ok
+test png_sink::tests::streams_rgb_srgb_with_no_metadata ... ok
+test png_sink::tests::a_full_disk_is_reported_as_disk_full ... ok
+test export::tests::export_writes_the_whole_image_in_any_tile_order ... ok
+test export::tests::out_of_memory_retries_with_half_the_budget ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.29s
+
+     Running tests/gpu_export.rs (target/debug/deps/gpu_export-dfb1310bea503323)
+
+running 7 tests
+test approved_recipes_repaint_identically_after_save_and_load ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test cancelled_export_leaves_the_old_file_and_no_partial ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test custom_portrait_export_keeps_the_preview_composition ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test eight_k_export_keeps_the_preview_composition ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test impossible_budgets_and_bad_destinations_are_errors ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test kept_prose_never_reaches_the_exported_png ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tiled_png_export_equals_the_single_tile_render ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/recipes.rs (target/debug/deps/recipes-3c6d524eec5dd4ef)
+
+running 2 tests
+
+running 1 test
+test a_saved_recipe_reproduces_after_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+test a_saved_recipe_reproduces_after_restart ... ok
+test approved_recipes_round_trip_and_reproduce_their_scenes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_studio-1bab5f30b7eaf15b)
+
+running 49 tests
+test controls::tests::every_control_is_shown_once_under_its_channel ... ok
+test controls::tests::value_text_names_the_nearer_end ... ok
+test theme::tests::text_meets_contrast_on_every_ground ... ok
+test ui_tests::a_slow_gpu_lowers_the_settled_cap_and_then_fits_the_budget ... ignored, needs a slower hardware GPU named by PIGMENT_SLOW_ADAPTER
+test preview::tests::sizes_keep_the_aspect_and_fit ... ok
+test export::tests::sizes_read_naturally ... ok
+test files::tests::a_bad_file_is_reported_and_leaves_the_document_alone ... ok
+test preview::tests::interaction_previews_are_drawn_at_the_settled_size ... ok
+test theme::tests::the_greys_are_neutral_enough_to_judge_colour ... ok
+test preview::tests::typing_is_debounced_and_resizes_do_not_starve_it ... ok
+test preview::tests::slider_input_renders_small_at_once_then_settles ... ok
+test ui_tests::review_screens ... ignored, needs a hardware GPU; writes review screenshots
+test ui_tests::the_studio_exports_a_real_8k_png_of_the_snapshot ... ignored, needs a hardware GPU; exports an 8K PNG from the studio
+test files::tests::quitting_with_unsaved_work_asks_and_a_failed_save_keeps_the_window ... ok
+test files::tests::unsaved_work_is_never_replaced_without_asking ... ok
+test preview::tests::a_slow_gpu_lowers_the_settled_cap_to_fit_the_budget ... ok
+test preview::tests::failures_and_device_loss_end_the_pending_state ... ok
+test files::tests::cancelled_dialogs_change_nothing ... ok
+test preview::tests::an_out_of_order_old_result_never_replaces_the_newest ... ok
+test export::tests::sizes_keep_the_paintings_exact_proportions ... ok
+test files::tests::save_asks_for_a_path_once_then_saves_in_place ... ok
+test export::tests::suggested_names_never_come_from_the_prose ... ok
+test files::tests::busy_flows_ignore_new_requests ... ok
+test worker::tests::the_ui_is_woken_for_every_result ... ok
+test worker::tests::scene_errors_are_failures_not_panics ... ok
+test export::tests::cancelling_mid_render_removes_the_partial_and_keeps_the_old_file ... ok
+test worker::tests::simulated_device_loss_is_reported_for_every_later_job ... ok
+test worker::tests::renders_and_reuses_the_scene_for_paint_and_size_changes ... ok
+test export::tests::failures_are_reported_with_what_to_do_and_leave_nothing_behind ... ok
+test export::tests::shutdown_cancels_a_running_export_and_cleans_up ... ok
+test worker::tests::shutdown_interrupts_a_slow_render_promptly ... ok
+test worker::tests::shutdown_does_not_hang_when_results_are_not_collected ... ok
+test export::tests::the_worker_wakes_the_ui_for_progress_and_the_end ... ok
+test ui_tests::each_control_invalidates_only_its_stage_and_paint_keeps_geometry ... ok
+test ui_tests::invalid_custom_sizes_are_explained_and_cannot_be_exported ... ok
+test ui_tests::cancelling_an_export_keeps_the_existing_file_and_leaves_no_partial ... ok
+test ui_tests::the_export_dialog_names_real_pixels_and_a_cancelled_destination_writes_nothing ... ok
+test ui_tests::the_preview_says_when_it_shows_earlier_settings ... ok
+test ui_tests::source_free_recipes_open_and_save_without_inventing_prose ... ok
+test ui_tests::closing_during_an_export_asks_and_stopping_leaves_no_partial_file ... ok
+test ui_tests::a_failed_export_says_what_to_do_and_keeps_the_existing_file ... ok
+test ui_tests::replacing_or_closing_unsaved_work_asks_first ... ok
+test worker::tests::a_burst_while_rendering_slowly_stays_bounded_and_ends_on_the_newest ... ok
+test ui_tests::failed_opens_and_saves_are_reported_and_change_nothing ... ok
+test ui_tests::keyboard_alone_adjusts_a_slider_changes_composition_and_saves ... ok
+test export::tests::exports_a_snapshot_that_later_edits_cannot_reach ... ok
+test ui_tests::sliders_moved_during_an_export_do_not_change_it ... ok
+test ui_tests::save_and_reopen_reproduce_settings_scene_and_kept_prose ... ok
+test ui_tests::portrait_and_square_paintings_export_at_their_own_proportions ... ok
+
+test result: ok. 46 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+     Running unittests src/main.rs (target/debug/deps/pigment_studio-9ba56068c63cab92)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gpu_preview.rs (target/debug/deps/gpu_preview-79a06ccaabbc3376)
+
+running 1 test
+test a_request_storm_stays_bounded_and_ends_on_the_newest ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/qualification.rs (target/debug/deps/qualification-180adf23919d6312)
+
+running 4 tests
+test approved_recipes_go_from_scene_to_preview_to_a_tiled_png ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test brush_and_texture_scale_hold_at_two_resolutions ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test repeated_exports_with_previews_stay_bounded ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tile_boundaries_show_no_seams ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_studio
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+=== building release binaries ===
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.10s
+
+=== hardware GPU present? ===
+pigment-prose 0.1.0 (wgpu 30.0.1); 2 adapter(s)
+- NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=Discrete software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_buffer_size=4294967295 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+- Intel(R) Graphics (RPL-S)
+    backend=Vulkan type=Integrated software=false vendor=0x8086 device=0xa780
+    driver=Intel open-source Mesa driver (Mesa 26.2.3-arch3.1)
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=102
+selected: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+
+=== 2. hardware GPU suite (scripts/gpu-tests.sh) ===
+# 2026-09-28T02:56:38Z Linux 7.2.7-1-cachyos x86_64
+rustc 1.98.1 (48a229cea 2026-09-01)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+pigment-prose 0.1.0 (wgpu 30.0.1); 2 adapter(s)
+- NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=Discrete software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_buffer_size=4294967295 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+- Intel(R) Graphics (RPL-S)
+    backend=Vulkan type=Integrated software=false vendor=0x8086 device=0xa780
+    driver=Intel open-source Mesa driver (Mesa 26.2.3-arch3.1)
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=102
+selected: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+pigment-prose 0.1.0 gpu-smoke
+wgpu: 30.0.1
+adapter: NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=Discrete software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_buffer_size=4294967295 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+device limits requested: WebGPU defaults (max_texture_dimension_2d=8192)
+device init + pipelines: 93.89 ms
+scene: test card v3, seed 7, aspect 16:9, geometry checksum cc068b7a51ae091c
+single tile 1920x1080: apron 9 px, 1 tile, GPU tile bytes 33612192, render+readback 3.96 ms, total 12.21 ms, fnv 97250fcf653e3692
+repeat single tile: identical
+Fixed { edge: 512 }: 4x3 tiles of 512x512, apron 9, GPU tile bytes 4344352, render+readback 4.53 ms, total 5.11 ms -> identical
+Fixed { edge: 333 }: 6x4 tiles of 333x333, apron 9, GPU tile bytes 1940652, render+readback 4.16 ms, total 4.79 ms -> identical
+Budget { gpu_bytes: 268435456, host_bytes: 268435456 }: 1x1 tiles of 1920x1080, apron 9, GPU tile bytes 33612192, render+readback 4.34 ms, total 4.92 ms -> identical
+cancellation after tile 1 of 40: Cancelled { tiles_done: 1 }, sink aborted=true -> ok
+preview 1280x720 test card, warm (n=20): median 1.12 ms, p95 1.27 ms
+RESULT: PASS on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running tests/gpu_hardware.rs (target/release/deps/gpu_hardware-42a5c8c215d69450)
+
+running 12 tests
+test cancellation_stops_at_the_next_tile_and_aborts_the_sink ... ok
+test compositing_matches_the_reference_model ... ok
+test debug_layer_ids_match_the_cpu_rasterizer ... ok
+test debug_views_are_identical_tiled_and_single ... ok
+test impossible_tile_plan_is_an_error_not_a_crash ... ok
+test output_is_opaque_and_repeatable ... ok
+test paint_settings_change_pixels_but_not_the_scene ... ok
+test painting_agrees_across_resolutions ... ok
+test painting_is_identical_tiled_and_single ... ok
+test painting_is_opaque_repeatable_and_varied ... ok
+test painting_is_valid_at_setting_extremes ... ok
+test tiled_output_is_byte_identical_to_single_tile ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.06s
+     Running tests/gpu_export.rs (target/release/deps/gpu_export-0c551de4e322e70f)
+
+running 7 tests
+test approved_recipes_repaint_identically_after_save_and_load ... GPU export suite on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+ok
+test cancelled_export_leaves_the_old_file_and_no_partial ... ok
+test custom_portrait_export_keeps_the_preview_composition ... 3000x4000 export, 3x4 tiles of 1000 px, apron 35: 108 ms (89 ms PNG), 9.6 MiB
+600x800 preview vs 3000x4000 downsampled 5x: PSNR 32.1 dB
+ok
+test eight_k_export_keeps_the_preview_composition ... 7680x4320 export, 4x3 tiles of 2048 px, apron 50: 245 ms (188 ms PNG), 22.1 MiB
+960x540 preview vs 8K downsampled 8x: PSNR 34.0 dB
+ok
+test impossible_budgets_and_bad_destinations_are_errors ... ok
+test kept_prose_never_reaches_the_exported_png ... 1600x900 export, 1x1 tiles of 1600 px, apron 12: 13 ms (8 ms PNG), 1.5 MiB
+ok
+test tiled_png_export_equals_the_single_tile_render ... 1001x563 export, 4x3 tiles of 256 px, apron 0: 10 ms (6 ms PNG), 0.6 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 0: 9 ms (6 ms PNG), 0.6 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 0: 4 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 8: 6 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 8: 5 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 8: 4 ms (3 ms PNG), 0.6 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 17: 5 ms (3 ms PNG), 0.7 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 17: 5 ms (3 ms PNG), 0.7 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 17: 4 ms (3 ms PNG), 0.7 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 0: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 8: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 8: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 8: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 17: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 17: 4 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 17: 4 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 0: 5 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 0: 4 ms (3 ms PNG), 0.4 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 8: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 8: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 8: 4 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x3 tiles of 256 px, apron 17: 5 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 4x2 tiles of 333 px, apron 17: 6 ms (3 ms PNG), 0.5 MiB
+1001x563 export, 1x1 tiles of 1001 px, apron 17: 4 ms (3 ms PNG), 0.5 MiB
+ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.43s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+     Running tests/gpu_preview.rs (target/release/deps/gpu_preview-e1c13ae84f1c6f99)
+
+running 1 test
+test a_request_storm_stays_bounded_and_ends_on_the_newest ... preview suite on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+1000 requests in 0.56 s: 571 jobs started, 330 painted, 241 cancelled; 330 shown, 0 stale dropped; scenes built 24 / reused 547
+resident memory: 251.0 MiB before, 252.7 MiB after (growth 1.7 MiB)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/release/deps/pigment_studio-05c99b48a30b51ad)
+
+running 1 test
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/01-launch.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/02-advanced-focus.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/03-unsaved-prompt.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/04-open-failed-and-earlier-settings.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/05-source-free-portrait-old-version.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/06-minimum-window.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/07-painting-only.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/08-export-dialog.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/09-exporting.png
+wrote /tmp/pigment-prose-qual/crates/pigment-studio/../../target/studio-screens/10-exported.png
+test ui_tests::review_screens ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 4.43s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.10s
+     Running tests/qualification.rs (target/release/deps/qualification-6bf5a765efbae5f6)
+
+running 4 tests
+test approved_recipes_go_from_scene_to_preview_to_a_tiled_png ... qualification on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+corpus-16x9 1: 3840×2160 export, 4× downsampled vs 960 preview PSNR 32.3 dB
+corpus-9x16 3: 2160×3840 export, 4× downsampled vs 960 preview PSNR 32.2 dB
+corpus-1x1 5: 3840×3840 export, 4× downsampled vs 960 preview PSNR 37.6 dB
+ok
+test brush_and_texture_scale_hold_at_two_resolutions ... corpus-16x9 4: 1920×1080 vs 2×: PSNR 37.9 dB, coarse 47.4 dB, texture energy 5.45 vs 4.48 (×0.82)
+corpus-1x1 7: 1920×1920 vs 2×: PSNR 38.8 dB, coarse 57.7 dB, texture energy 4.67 vs 3.34 (×0.71)
+ok
+test repeated_exports_with_previews_stay_bounded ... 25 exports and 414 preview requests: resident memory -2.4 MiB after warm-up
+ok
+test tile_boundaries_show_no_seams ... seams: max |tiled − single| 0/255 in 84120 boundary-band pixels, 0/255 inside; boundary step 1.25 vs 1.54 everywhere (×0.82)
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/release/deps/pigment_studio-05c99b48a30b51ad)
+
+running 1 test
+export suite on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+8K export from the studio: 230 ms, 40 slider values while it ran
+test ui_tests::the_studio_exports_a_real_8k_png_of_the_snapshot ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.74s
+
+
+=== 3. benchmark against the provisional targets (default adapter, --strict) ===
+pigment-prose 0.1.0 bench: renderer v1, generator v1, 16:9, default settings, 5 seeds, 9 warm runs each
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+adapter: Discrete Vulkan, driver NVIDIA (615.71.09), wgpu 30.0.1
+host: linux x86_64; cpu: Intel(R) Core(TM) i9-14900K; kernel: 7.2.7-1-cachyos
+
+| Scenario | Measured (p95, or max for n=3) | Target | Verdict | Detail |
+| --- | --- | --- | --- | --- |
+| cold start: device + pipelines + first 1920×1080 preview | 101.05 ms | — | measured | device 80.48 ms, pipelines 6.60 ms, first preview 13.96 ms |
+| interaction preview 960×540 (render + readback) | 0.79 ms | ≤ 33.00 ms | meets | median 0.68 ms, n=45 |
+| settled preview 1920×1080 (render + readback) | 3.15 ms | ≤ 150.00 ms | meets | median 2.57 ms, n=45 |
+| settled preview 3840×2160 (render + readback) | 13.70 ms | ≤ 150.00 ms | meets | median 9.71 ms, n=45 |
+| prose edit → settled 1920×1080 (after the 300 ms debounce) | 5.21 ms | ≤ 250.00 ms | meets | median 4.48 ms, n=9 |
+| 4K export 3840×2160 incl. PNG | 62.00 ms | ≤ 5000.00 ms | meets | median 56.04 ms, 7 MiB file, n=3 |
+| 8K export 7680×4320 incl. PNG | 207.94 ms | ≤ 20000.00 ms | meets | median 207.87 ms, 21 MiB file, n=3 |
+| export cancel → stopped and cleaned up, 16384×9216, cancelled at 50/150/300 ms | 90.37 ms | ≤ 250.00 ms | meets | 90.37 ms, 3.20 ms, 2.49 ms; partial file removed each time |
+
+Not measured here: UI frame gaps and request→shown latency (see `pigment-studio --script`).
+second adapter: Intel(R) Graphics (RPL-S)
+pigment-prose 0.1.0 bench: renderer v1, generator v1, 16:9, default settings, 5 seeds, 9 warm runs each
+device: Intel(R) Graphics (RPL-S) (Vulkan)
+adapter: Integrated Vulkan, driver Intel open-source Mesa driver (Mesa 26.2.3-arch3.1), wgpu 30.0.1
+host: linux x86_64; cpu: Intel(R) Core(TM) i9-14900K; kernel: 7.2.7-1-cachyos
+
+| Scenario | Measured (p95, or max for n=3) | Target | Verdict | Detail |
+| --- | --- | --- | --- | --- |
+| cold start: device + pipelines + first 1920×1080 preview | 152.91 ms | — | measured | device 42.93 ms, pipelines 8.60 ms, first preview 101.38 ms |
+| interaction preview 960×540 (render + readback) | 21.76 ms | ≤ 33.00 ms | meets | median 17.07 ms, n=45 |
+| settled preview 1920×1080 (render + readback) | 81.71 ms | ≤ 150.00 ms | meets | median 65.25 ms, n=45 |
+| settled preview 3840×2160 (render + readback) | 316.62 ms | ≤ 150.00 ms | MISSED | median 245.41 ms, n=45 |
+| prose edit → settled 1920×1080 (after the 300 ms debounce) | 87.23 ms | ≤ 250.00 ms | meets | median 65.29 ms, n=9 |
+| 4K export 3840×2160 incl. PNG | 310.06 ms | ≤ 5000.00 ms | meets | median 302.76 ms, 7 MiB file, n=3 |
+| 8K export 7680×4320 incl. PNG | 1197.61 ms | ≤ 20000.00 ms | meets | median 1189.80 ms, 21 MiB file, n=3 |
+| export cancel → stopped and cleaned up, 16384×9216, cancelled at 50/150/300 ms | 40.34 ms | ≤ 250.00 ms | meets | 40.34 ms, 20.17 ms, 28.23 ms; partial file removed each time |
+
+Not measured here: UI frame gaps and request→shown latency (see `pigment-studio --script`).
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/release/deps/pigment_studio-05c99b48a30b51ad)
+
+running 1 test
+slow-GPU check on Intel(R) Graphics (RPL-S) (Vulkan)
+settled previews capped at 2089 px: 3600 px took 297 ms on this GPU
+first settled preview 3600×2025: 297 ms; cap now 2089 px
+next 5 settled previews at ≤ 2089 px: worst 92 ms (budget 150 ms)
+test ui_tests::a_slow_gpu_lowers_the_settled_cap_and_then_fits_the_budget ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.88s
+
+
+=== 4. studio, real window (--script) ===
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 218 (superseded before starting 0), displayed 214, max in flight 2
+slider values dragged 200, interaction previews shown 208, scenes built during the paint drag 0
+8K export: 400 ms; 36 UI frames while it ran, longest gap 33.1 ms
+UI frames while a job was in flight: 35, longest gap 13.0 ms
+longest busy gaps: 13 ms at 7.04 s, 11 ms at 4.77 s, 11 ms at 7.03 s, 10 ms at 4.89 s, 10 ms at 4.92 s
+request→shown latency: median 10.1 ms, p95 20.2 ms, max 37.9 ms; render+readback median 3.33 ms, max 27.68 ms (n=214)
+close → worker stopped: 4.1 ms (joined: true)
+window captured: (not saved: no --screenshot path)
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] 8K export written (7680×4320, no temporary left)
+[ok] the export's snapshot never changed while sliders moved
+[ok] UI frames kept coming during the export (gap < 250 ms)
+[ok] interaction previews shown while dragging
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 217 (superseded before starting 208), displayed 5, max in flight 2
+slider values dragged 201, interaction previews shown 0, scenes built during the paint drag 0
+8K export: 499 ms; 34 UI frames while it ran, longest gap 53.0 ms
+UI frames while a job was in flight: 1113, longest gap 53.0 ms
+longest busy gaps: 53 ms at 13.85 s, 51 ms at 13.62 s, 37 ms at 13.69 s, 25 ms at 13.65 s, 24 ms at 13.92 s
+request→shown latency: median 1552.5 ms, p95 1892.6 ms, max 1892.6 ms; render+readback median 20.44 ms, max 28.35 ms (n=5)
+close → worker stopped: 8.5 ms (joined: true)
+window captured: (not saved: no --screenshot path)
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] 8K export written (7680×4320, no temporary left)
+[ok] the export's snapshot never changed while sliders moved
+[ok] UI frames kept coming during the export (gap < 250 ms)
+[ok] never displayed an older result after a newer one
+[ok] UI frames kept coming while rendering (gap < 250 ms)
+[ok] closed while a render was in flight
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+preview 5: GPU device lost: simulated device loss
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 5 (superseded before starting 0), displayed 3, max in flight 2
+slider values dragged 200, interaction previews shown 1, scenes built during the paint drag 0
+8K export: 481 ms; 35 UI frames while it ran, longest gap 46.3 ms
+UI frames while a job was in flight: 3, longest gap 18.0 ms
+longest busy gaps: 18 ms at 0.02 s, 10 ms at 4.40 s, 9 ms at 4.43 s
+request→shown latency: median 20.8 ms, p95 31.2 ms, max 31.2 ms; render+readback median 6.49 ms, max 8.87 ms (n=3)
+close → worker stopped: 4.2 ms (joined: true)
+window captured: (not saved: no --screenshot path)
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] device loss shown and previews stopped
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+
+=== 5. privacy: prose and path markers in CLI logs and PNG ===
+pigment-prose 0.1.0 export: generator v1, renderer v1, 1920x1080 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 1x1 tiles of 1920x1080 px, apron 14 px; estimated renderer GPU allocations 32.3 MiB per tile set, host band 7.9 MiB (cost model, not measured)
+timings: device+pipelines 144.15 ms, scene 0.50 ms, setup 8.70 ms, render+readback 3.41 ms, PNG encode+write 12.23 ms, export total 24.62 ms
+measured peak host memory (VmHWM, whole process): 239.7 MiB
+wrote /tmp/pigment-qualify-M909WZ/pathmarker-K81/out-marker-Z52.png (1.9 MiB)
+chunks: IHDR sRGB IDAT IEND
+
+=== 6. offline: generation and export with networking unavailable ===
+pigment-prose 0.1.0 export: generator v1, renderer v1, 3840x2160 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 2x2 tiles of 2048x2048 px, apron 26 px; estimated renderer GPU allocations 65.6 MiB per tile set, host band 30.0 MiB (cost model, not measured)
+timings: device+pipelines 114.26 ms, scene 0.51 ms, setup 7.97 ms, render+readback 13.10 ms, PNG encode+write 48.97 ms, export total 70.24 ms
+measured peak host memory (VmHWM, whole process): 262.4 MiB
+wrote /tmp/pigment-qualify-M909WZ/offline.png (7.6 MiB)
+
+=== 7. unsupported devices ===
+pigment-studio: no adapter name contains "no-such-gpu"; run `pigment-prose gpu-info` to list adapters
+
+=== summary (2026-09-28T025612Z) ===
+portable checks                              PASS
+hardware GPU                                 PASS  (NVIDIA GeForce RTX 4070 Ti (Vulkan))
+hardware GPU suite                           PASS
+benchmark (default adapter)                  PASS
+slow-GPU settled cap (Intel(R) Graphics (RPL-S)) PASS
+studio --script                              PASS
+studio log free of prose                     PASS
+studio --script --preview-delay-ms 1500      PASS
+studio log free of prose --preview-delay-ms 1500 PASS
+studio --script --lose-device-after 3        PASS
+studio log free of prose --lose-device-after 3 PASS
+no prose/path in CLI log or PNG              PASS
+offline CLI export (unshare -rn)             PASS
+offline studio --script (unshare -rn)        PASS
+unknown adapter refused (CLI)                PASS
+unknown adapter: studio explains, exits 1    PASS
+software adapter labelled                    SKIPPED  (no software adapter installed)
+log: /tmp/pp12/qualify-clean.txt

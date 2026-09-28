@@ -12,6 +12,8 @@
 # A SKIPPED step is coverage that did not run on this machine, not a pass.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
+# The privacy step imports scripts/seed-vectors.py; leave no bytecode behind.
+export PYTHONDONTWRITEBYTECODE=1
 stamp="$(date -u +%Y-%m-%dT%H%M%SZ)"
 log="${1:-target/qualification/qualify-$stamp.txt}"
 mkdir -p "$(dirname "$log")"

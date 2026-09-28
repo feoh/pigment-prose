@@ -97,7 +97,7 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 | Monotonic ids, stale results dropped | `RequestIds`; `preview::PreviewView` shows a result only if it is newer than what is on screen. An old failure cannot replace a newer image |
 | Debounce | prose: 300 ms after the last keystroke; preview-area resize: 100 ms; shape, composition, opened recipe and first frame: immediately (`preview::Scheduler`) |
 | Sliders | not debounced: each value renders at once as an **interaction preview** (long edge 960 px), and latest-wins coalescing absorbs the rate. 150 ms after the last slider input, the **settled preview** follows |
-| Size | the largest rectangle of the document's aspect ratio inside the preview area, in physical pixels, capped at a **3840 px** long edge (raised from 1920 in task 12 so the painting fills the area on high-DPI displays; 3840×2160 renders in 9–15 ms here). Settled images are drawn 1:1; interaction previews are scaled up to that size, never stretched (`preview::display_size`) |
+| Size | the largest rectangle of the document's aspect ratio inside the preview area, in physical pixels, capped at a **3840 px** long edge (raised from 1920 in task 12 so the painting fills the area on high-DPI displays; 3840×2160 renders in 9–15 ms here). A GPU that needs more than the 150 ms budget for a settled preview lowers the cap for the rest of the session, never below 1920 px. On the Intel iGPU, 3600 px took 297 ms, the cap became 2089 px, and later settled previews took at most 92 ms. Diagnostics shows the current cap. Settled images are drawn 1:1; interaction previews are scaled up to that size, never stretched (`preview::display_size`) |
 | Stable scene data | the worker reuses the last `Scene` while seeds, form and aspect ratio are unchanged, so resizes and paint-only changes never rebuild it |
 | What is on screen | the app remembers which submission each shown image came from, so it can say whether the painting on screen is the current recipe (`StudioApp::preview_is_current`) |
 | One device | `GpuContext` opens the device, and egui shares it through `WgpuSetup::Existing` |
@@ -142,6 +142,8 @@ Details: [evidence/studio-11](evidence/studio-11/README.md), [evidence/studio-12
 | `export::tests::*` | portable | Size snapping and bounds; suggested names; the worker's snapshot, cancellation, failures, shutdown cleanup and wake-ups, with a tile-by-tile test renderer that can be held at a tile |
 | `ui_tests::the_studio_exports_a_real_8k_png_of_the_snapshot` | hardware (`scripts/gpu-tests.sh`) | An 8K export through the studio with sliders moving: decoded size, format and chunks, no prose or path markers, byte-identical to a direct export of the snapshot |
 | `ui_tests::review_screens` | hardware (`scripts/gpu-tests.sh`) | Renders ten states offscreen with the real painter and theme into `target/studio-screens` |
+| `ui_tests::a_slow_gpu_lowers_the_settled_cap_and_then_fits_the_budget` | hardware, a slower adapter (`qualify.sh` on a machine with one) | The adaptive settled cap through the studio's own preview path |
+| `tests/qualification.rs` | hardware (`scripts/gpu-tests.sh`) | Task 14: approved recipe → preview worker → export worker → tiled PNG; seams in boundary bands; texture scale; repeated exports with previews. See [qualification.md](qualification.md) |
 | `a_request_storm_stays_bounded_and_ends_on_the_newest` | `tests/gpu_preview.rs` (hardware) | Real `PaintRenderer`: bounded work, newest shown, scene reuse, memory growth < 64 MiB |
 
 ## Known limits
