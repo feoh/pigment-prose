@@ -1209,166 +1209,170 @@ impl StudioApp {
         let mut go = None;
         let mut close = false;
         let mut new_shape = None;
-        let modal = egui::Modal::new(egui::Id::new("export"))
-            .backdrop_color(egui::Color32::from_black_alpha(150))
-            .show(ctx, |ui| {
-                ui.set_width(480.0);
-                ui.label(
-                    egui::RichText::new("Export PNG")
-                        .family(theme::semibold())
-                        .size(17.0)
-                        .color(theme::INK),
-                );
-                ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new(
-                        "The painting as it is now: this composition and these settings. \
-                         Later changes do not affect an export that has started.",
-                    )
-                    .color(theme::INK_2),
-                );
-                if self.view.is_pending() || !self.preview_is_current() {
-                    ui.horizontal_wrapped(|ui| {
-                        theme::dot(ui, theme::AMBER);
-                        ui.label(
-                            egui::RichText::new(
-                                "The preview is still painting. The export uses the newest \
-                                 settings, not the image on screen.",
-                            )
-                            .small()
-                            .color(theme::AMBER),
-                        );
-                    });
-                }
-                ui.add_space(12.0);
-                ui.label(theme::header("Shape"));
-                let current = Shape::of(aspect);
-                let label = ui.label(egui::RichText::new("Proportions").color(theme::INK));
-                let selected = current.map_or_else(
-                    || format!("Custom {}:{}", aspect.width, aspect.height),
-                    |s| s.label().to_string(),
-                );
-                egui::ComboBox::from_id_salt("export-shape")
-                    .selected_text(selected)
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for s in Shape::ALL {
-                            if ui.selectable_label(current == Some(s), s.label()).clicked()
-                                && current != Some(s)
-                            {
-                                new_shape = Some(s);
-                            }
-                        }
-                    })
-                    .response
-                    .labelled_by(label.id);
-                ui.label(
-                    egui::RichText::new(
-                        "A different shape is a different composition, not a resize: the \
-                         painting recomposes (the preview behind updates).",
-                    )
-                    .small()
-                    .color(theme::INK_3),
-                );
-                ui.add_space(12.0);
-                ui.label(theme::header("Size"));
-                let form = &mut self.export_form;
-                let preset = |c: SizeChoice| {
-                    let mut f = *form;
-                    f.choice = c;
-                    f.frame(aspect)
-                        .map(|f| format!("{} × {} px", f.width, f.height))
-                        .unwrap_or_default()
-                };
-                let (k4, k8) = (preset(SizeChoice::Uhd4k), preset(SizeChoice::Uhd8k));
-                ui.radio_value(&mut form.choice, SizeChoice::Uhd4k, format!("4K · {k4}"));
-                ui.radio_value(&mut form.choice, SizeChoice::Uhd8k, format!("8K · {k8}"));
-                ui.radio_value(&mut form.choice, SizeChoice::Custom, "Custom size");
-                if form.choice == SizeChoice::Custom {
-                    ui.horizontal(|ui| {
-                        let (mut w, mut h) = (form.width, form.height);
-                        let wl = ui.label("Width");
-                        let wr = ui
-                            .add(egui::DragValue::new(&mut w).range(1..=99_999).suffix(" px"))
-                            .labelled_by(wl.id);
-                        ui.label("×");
-                        let hl = ui.label("Height");
-                        let hr = ui
-                            .add(egui::DragValue::new(&mut h).range(1..=99_999).suffix(" px"))
-                            .labelled_by(hl.id);
-                        if wr.changed() {
-                            form.set_width(aspect, w);
-                        } else if hr.changed() {
-                            form.set_height(aspect, h);
-                        }
-                    });
+        let modal =
+            egui::Modal::new(egui::Id::new("export"))
+                .backdrop_color(egui::Color32::from_black_alpha(150))
+                .show(ctx, |ui| {
+                    ui.set_width(480.0);
                     ui.label(
-                        egui::RichText::new(format!(
-                            "Sizes snap to the painting's exact {}:{} proportions.",
-                            aspect.width, aspect.height
-                        ))
+                        egui::RichText::new("Export PNG")
+                            .family(theme::semibold())
+                            .size(17.0)
+                            .color(theme::INK),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new(
+                            "The painting as it is now: this composition and these settings. \
+                         Later changes do not affect an export that has started.",
+                        )
+                        .color(theme::INK_2),
+                    );
+                    // Always one line, so the dialog does not jump when the
+                    // preview finishes.
+                    let pending = self.view.is_pending() || !self.preview_is_current();
+                    ui.horizontal(|ui| {
+                        theme::dot(ui, if pending { theme::AMBER } else { theme::INK_3 });
+                        ui.label(
+                        egui::RichText::new(if pending {
+                            "The preview is still painting; the export uses the newest settings."
+                        } else {
+                            "The preview on screen shows exactly this."
+                        })
+                        .small()
+                        .color(if pending { theme::AMBER } else { theme::INK_3 }),
+                    );
+                    });
+                    ui.add_space(12.0);
+                    ui.label(theme::header("Shape"));
+                    let current = Shape::of(aspect);
+                    let label = ui.label(egui::RichText::new("Proportions").color(theme::INK));
+                    let selected = current.map_or_else(
+                        || format!("Custom {}:{}", aspect.width, aspect.height),
+                        |s| s.label().to_string(),
+                    );
+                    egui::ComboBox::from_id_salt("export-shape")
+                        .selected_text(selected)
+                        .width(ui.available_width())
+                        .show_ui(ui, |ui| {
+                            for s in Shape::ALL {
+                                if ui.selectable_label(current == Some(s), s.label()).clicked()
+                                    && current != Some(s)
+                                {
+                                    new_shape = Some(s);
+                                }
+                            }
+                        })
+                        .response
+                        .labelled_by(label.id);
+                    ui.label(
+                        egui::RichText::new(
+                            "A different shape is a different composition, not a resize: the \
+                         painting recomposes (the preview behind updates).",
+                        )
                         .small()
                         .color(theme::INK_3),
                     );
-                }
-                ui.add_space(6.0);
-                let frame = form.frame(aspect);
-                match &frame {
-                    Ok(f) => {
+                    ui.add_space(12.0);
+                    ui.label(theme::header("Size"));
+                    let form = &mut self.export_form;
+                    let preset = |c: SizeChoice| {
+                        let mut f = *form;
+                        f.choice = c;
+                        f.frame(aspect)
+                            .map(|f| format!("{} × {} px", f.width, f.height))
+                            .unwrap_or_default()
+                    };
+                    let (k4, k8) = (preset(SizeChoice::Uhd4k), preset(SizeChoice::Uhd8k));
+                    ui.radio_value(&mut form.choice, SizeChoice::Uhd4k, format!("4K · {k4}"));
+                    ui.radio_value(&mut form.choice, SizeChoice::Uhd8k, format!("8K · {k8}"));
+                    ui.radio_value(&mut form.choice, SizeChoice::Custom, "Custom size");
+                    if form.choice == SizeChoice::Custom {
+                        ui.horizontal(|ui| {
+                            let (mut w, mut h) = (form.width, form.height);
+                            let wl = ui.label("Width");
+                            let wr = ui
+                                .add(egui::DragValue::new(&mut w).range(1..=99_999).suffix(" px"))
+                                .labelled_by(wl.id);
+                            ui.label("×");
+                            let hl = ui.label("Height");
+                            let hr = ui
+                                .add(egui::DragValue::new(&mut h).range(1..=99_999).suffix(" px"))
+                                .labelled_by(hl.id);
+                            if wr.changed() {
+                                form.set_width(aspect, w);
+                            } else if hr.changed() {
+                                form.set_height(aspect, h);
+                            }
+                        });
                         ui.label(
                             egui::RichText::new(format!(
-                                "Exports {} × {} px ({:.1} megapixels).",
-                                f.width,
-                                f.height,
-                                f.pixel_count() as f64 / 1e6
-                            ))
-                            .color(theme::INK),
-                        );
-                        let cm = f.width as f64 / 300.0 * 2.54;
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "Only pixels add detail. DPI is just a label for printing: at \
-                                 300 DPI this is {cm:.0} cm ({:.1} in) wide.",
-                                f.width as f64 / 300.0
+                                "Sizes snap to the painting's exact {}:{} proportions.",
+                                aspect.width, aspect.height
                             ))
                             .small()
                             .color(theme::INK_3),
                         );
                     }
-                    Err(e) => {
-                        ui.horizontal_wrapped(|ui| {
-                            theme::dot(ui, theme::CORAL);
+                    ui.add_space(6.0);
+                    let frame = form.frame(aspect);
+                    match &frame {
+                        Ok(f) => {
                             ui.label(
-                                egui::RichText::new(export::size_problem(e)).color(theme::CORAL),
+                                egui::RichText::new(format!(
+                                    "Exports {} × {} px ({:.1} megapixels).",
+                                    f.width,
+                                    f.height,
+                                    f.pixel_count() as f64 / 1e6
+                                ))
+                                .color(theme::INK),
                             );
-                        });
+                            let cm = f.width as f64 / 300.0 * 2.54;
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "Only pixels add detail. DPI is just a label for printing: at \
+                                 300 DPI this is {cm:.0} cm ({:.1} in) wide.",
+                                    f.width as f64 / 300.0
+                                ))
+                                .small()
+                                .color(theme::INK_3),
+                            );
+                        }
+                        Err(e) => {
+                            ui.horizontal_wrapped(|ui| {
+                                theme::dot(ui, theme::CORAL);
+                                ui.label(
+                                    egui::RichText::new(export::size_problem(e))
+                                        .color(theme::CORAL),
+                                );
+                            });
+                        }
                     }
-                }
-                ui.add_space(8.0);
-                ui.label(
-                    egui::RichText::new(
-                        "The PNG holds only the image: no prose, recipe, file path, \
+                    ui.add_space(8.0);
+                    ui.label(
+                        egui::RichText::new(
+                            "The PNG holds only the image: no prose, recipe, file path, \
                          watermark or attribution.",
-                    )
-                    .small()
-                    .color(theme::INK_2),
-                );
-                ui.add_space(16.0);
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let export = ui.add_enabled(frame.is_ok(), theme::primary("Export…"));
-                        theme::focus_on_accent(ui, &export);
-                        if export.clicked()
-                            && let Ok(f) = frame
-                        {
-                            go = Some(f);
-                        }
-                        if ui.button("Cancel").clicked() {
-                            close = true;
-                        }
+                        )
+                        .small()
+                        .color(theme::INK_2),
+                    );
+                    ui.add_space(16.0);
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let export = ui.add_enabled(frame.is_ok(), theme::primary("Export…"));
+                            theme::focus_on_accent(ui, &export);
+                            if export.clicked()
+                                && let Ok(f) = frame
+                            {
+                                go = Some(f);
+                            }
+                            if ui.button("Cancel").clicked() {
+                                close = true;
+                            }
+                        });
                     });
                 });
-            });
         if let Some(s) = new_shape {
             self.set_shape(s.aspect(), now);
         }

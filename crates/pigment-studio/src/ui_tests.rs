@@ -727,8 +727,7 @@ fn review_screens() {
     // 8. The export dialog.
     let mut h = make(Shared::default(), [1440.0, 900.0]);
     h.remove_cursor();
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.step();
     save(&mut h, "08-export-dialog");
 
@@ -766,8 +765,7 @@ fn review_screens() {
         width: 1600,
         height: 900,
     };
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.step();
     h.get_by_label("Export…").click();
     h.step();
@@ -799,6 +797,15 @@ fn harness_with(dialogs: Shared, export: GateRenderer) -> Harness<'static, Studi
         });
     settle(&mut h);
     h
+}
+
+/// Opens the export dialog and lets egui place it (a modal is centred
+/// using its size from the previous frame).
+fn open_export(h: &mut Harness<'static, StudioApp>) {
+    command(h, Key::E);
+    for _ in 0..3 {
+        h.step();
+    }
 }
 
 /// Steps until the export has finished (the outcome has been handled).
@@ -833,8 +840,7 @@ fn the_export_dialog_names_real_pixels_and_a_cancelled_destination_writes_nothin
     let dir = temp("export-cancel-dest");
     let dialogs = Shared::answering([DialogAnswer::Cancelled]);
     let mut h = harness_with(dialogs.clone(), GateRenderer::open());
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("Export PNG");
     h.get_by_label("4K · 3840 × 2160 px").click();
     h.step();
@@ -858,8 +864,7 @@ fn the_export_dialog_names_real_pixels_and_a_cancelled_destination_writes_nothin
 #[test]
 fn invalid_custom_sizes_are_explained_and_cannot_be_exported() {
     let mut h = harness_with(Shared::default(), GateRenderer::open());
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("Custom size").click();
     h.step();
     let aspect = h.state().doc.recipe().frame.aspect();
@@ -893,16 +898,14 @@ fn sliders_moved_during_an_export_do_not_change_it() {
         height: 900,
     };
     let before = h.state().values();
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("Export…").click();
     h.step();
     h.step();
     assert!(h.state().exporter.is_running());
     // One at a time: Export is disabled and Ctrl+E does nothing.
     assert!(!h.state().can_export());
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     assert!(!h.state().show_export);
     h.get_by_label_contains("Exporting snap.png · 1600 × 900 px");
     // The window stays live: move sliders and change composition.
@@ -954,8 +957,7 @@ fn portrait_and_square_paintings_export_at_their_own_proportions() {
         (crate::app::Shape::Portrait, &tall, 800, (800, 1000)),
         (crate::app::Shape::Square, &square, 900, (900, 900)),
     ] {
-        command(&h, Key::E);
-        h.step();
+        open_export(&mut h);
         h.get_by_label("Proportions");
         let a = h.state_mut();
         a.doc
@@ -963,9 +965,10 @@ fn portrait_and_square_paintings_export_at_their_own_proportions() {
             .unwrap();
         a.export_form.choice = SizeChoice::Custom;
         a.export_form.set_width(shape.aspect(), w);
-        h.step();
-        // The modal grew (a custom size row); egui re-centres it a frame
-        // later, so let the layout settle before clicking.
+        // The modal grew (a custom size row) and egui re-centres it a frame
+        // later; let the new shape's preview and the layout settle before
+        // clicking.
+        settle(&mut h);
         h.step();
         h.get_by_label_contains(&format!("Exports {} × {} px", size.0, size.1));
         h.get_by_label("Export…").click();
@@ -988,8 +991,7 @@ fn cancelling_an_export_keeps_the_existing_file_and_leaves_no_partial() {
         width: 1600,
         height: 900,
     };
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("Export…").click();
     h.step();
     gate.release(1);
@@ -1033,8 +1035,7 @@ fn a_failed_export_says_what_to_do_and_keeps_the_existing_file() {
         ..GateRenderer::open()
     };
     let mut h = harness_with(Shared::answering([picked(&dest)]), full);
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("Export…").click();
     h.step();
     until_export_done(&mut h);
@@ -1060,8 +1061,7 @@ fn closing_during_an_export_asks_and_stopping_leaves_no_partial_file() {
         width: 1600,
         height: 900,
     };
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("Export…").click();
     h.step();
     gate.release(1);
@@ -1169,8 +1169,7 @@ fn the_studio_exports_a_real_8k_png_of_the_snapshot() {
     }
     settle(&mut h);
     let snapshot = h.state().doc.clone();
-    command(&h, Key::E);
-    h.step();
+    open_export(&mut h);
     h.get_by_label("8K · 7680 × 4320 px").click();
     h.step();
     h.step();
