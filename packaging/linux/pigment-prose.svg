@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Pigment Prose icon: original artwork for this project (MIT, like the source). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f79c8"/>
+      <stop offset="1" stop-color="#a9c9ea"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fb7c4"/>
+      <stop offset="1" stop-color="#2f6f8a"/>
+    </linearGradient>
+    <clipPath id="tile">
+      <rect x="8" y="8" width="112" height="112" rx="22"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect x="8" y="8" width="112" height="112" fill="url(#sky)"/>
+    <path d="M18 34c8-6 18-6 26-2 6-4 16-4 22 1 6-2 12 0 14 4H18z" fill="#f4f1e8" opacity="0.95"/>
+    <path d="M8 82 L40 50 L52 60 L70 36 L96 66 L120 58 V88 H8z" fill="#cdbf9f"/>
+    <path d="M70 36 L60 50 L66 52 L63 62 L76 48 L70 36z" fill="#f7f4ec"/>
+    <path d="M70 36 L96 66 L84 66 L78 52z" fill="#a8997c" opacity="0.8"/>
+    <path d="M8 78 C28 70 44 74 62 70 C82 66 100 72 120 68 V92 H8z" fill="#6f9f55"/>
+    <rect x="8" y="86" width="112" height="34" fill="url(#lake)"/>
+    <path d="M18 96h28M56 101h36M24 108h22M70 112h30" stroke="#dcecef" stroke-width="2.4" stroke-linecap="round" opacity="0.85"/>
+    <path d="M86 120 C86 104 94 96 104 94 C112 93 120 98 120 104 V120z" fill="#8a9a52"/>
+    <path d="M92 108 L100 99 L108 101 L113 109 L104 113z" fill="#bfae8c"/>
+    <path d="M100 99 L104 113 L113 109 L108 101z" fill="#7f6f86" opacity="0.8"/>
+  </g>
+  <rect x="8" y="8" width="112" height="112" rx="22" fill="none" stroke="#1a1c20" stroke-opacity="0.35" stroke-width="2"/>
+</svg>

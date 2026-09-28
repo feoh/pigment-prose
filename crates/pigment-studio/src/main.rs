@@ -43,6 +43,7 @@ pigment-studio [options]
   --script               run the scripted responsiveness check, then close;
                          exits non-zero if a check fails
   --screenshot FILE.png  where --script saves its capture of the window
+  --version              print the version and exit
 ";
 
 #[derive(Debug, Default)]
@@ -84,6 +85,10 @@ fn parse() -> Result<Args, String> {
             "--display-adapter" => a.display_filter = Some(value("--display-adapter")?),
             "--script" => a.opts.script = true,
             "--screenshot" => a.opts.screenshot = Some(PathBuf::from(value("--screenshot")?)),
+            "--version" => {
+                println!("pigment-studio {}", pigment_core::version::APP_VERSION);
+                std::process::exit(0);
+            }
             "--help" | "-h" => return Err(USAGE.into()),
             other => return Err(format!("unknown argument {other:?}\n\n{USAGE}")),
         }
