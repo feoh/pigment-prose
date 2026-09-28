@@ -1357,3 +1357,20 @@ fn a_slow_gpu_lowers_the_settled_cap_and_then_fits_the_budget() {
     );
     assert!(worst <= SETTLED_BUDGET, "{worst:?}");
 }
+
+/// Task 23: a software adapter (the test stand-in reports one) is never
+/// presented as GPU acceleration: the status line says so in words, and
+/// Diagnostics answers "Hardware acceleration: no".
+#[test]
+fn a_software_adapter_is_labelled_and_never_called_hardware() {
+    let mut h = harness(Shared::default());
+    assert!(h.state().caps_for_test().adapter.software);
+    h.get_by_label("SOFTWARE RENDERER, not GPU accelerated");
+    h.get_by_label_contains("(Other, SOFTWARE)");
+    command(&h, Key::D);
+    h.step();
+    h.step();
+    h.get_by_label("Hardware acceleration");
+    h.get_by_label("no (software rasterizer)");
+    assert!(h.query_by_label("yes").is_none());
+}

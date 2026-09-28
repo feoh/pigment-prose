@@ -1669,6 +1669,11 @@ impl StudioApp {
         self.show_diagnostics = open;
     }
 
+    #[cfg(test)]
+    pub(crate) fn caps_for_test(&self) -> &GpuCapabilities {
+        &self.caps
+    }
+
     pub(crate) fn script_screenshot_path(&self) -> Option<PathBuf> {
         self.opts.screenshot.clone()
     }

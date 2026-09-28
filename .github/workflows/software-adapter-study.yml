@@ -1,0 +1,70 @@
+# Task 23: the CPU-only fallback study. Runs the existing binaries on
+# software graphics adapters on GitHub's GPU-less runners, measures them and
+# compares their paintings with the approved hardware baseline. Manual only
+# (workflow_dispatch): it is an experiment, not a check, and every result is
+# labelled SOFTWARE. Nothing is installed on anyone's machine: lavapipe is
+# installed inside the throwaway Ubuntu runner, and WARP ships with Windows.
+# macOS has no software Metal adapter, so there is no macOS job.
+name: software-adapter-study
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  study:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-lavapipe
+            os: ubuntu-latest
+          - name: windows-warp
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # master, 2026-09
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install lavapipe (Mesa software Vulkan), runner only
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libvulkan1 vulkan-tools
+      - name: Build
+        run: cargo build --release --locked -p pigment-cli
+      - name: Run the study
+        shell: bash
+        run: |
+          set -x
+          mkdir -p study
+          B=./target/release/pigment-prose
+          PY="$(command -v python3 || command -v python)"
+          {
+            echo "# ${{ matrix.name }}: $(date -u +%Y-%m-%dT%H:%M:%SZ), $(uname -srm)"
+            $B gpu-info --allow-software --gl || true
+            echo "## gpu-smoke (must not pass on a software adapter)"
+            $B gpu-smoke --allow-software; echo "gpu-smoke exit status: $?"
+            echo "## paint-bench"
+            $B paint-bench --allow-software --sizes 960,1920,3840 --sample 3 --runs 3 || echo "paint-bench failed: $?"
+            echo "## 4K export"
+            $B export --allow-software --sample 3 --size 4k --out study/export-4k.png || echo "4K export failed: $?"
+            echo "## 8K export"
+            $B export --allow-software --sample 3 --size 8k --out study/export-8k.png || echo "8K export failed: $?"
+            echo "## corpus contact sheet vs the approved baseline"
+            $B contact-sheet --allow-software --out study/corpus-16x9.png --cells study/corpus-16x9 --cell 400 --cols 5 || echo "contact-sheet failed: $?"
+            "$PY" scripts/png-compare.py docs/visual-review/baseline-08/corpus-16x9 study/corpus-16x9 || echo "comparison status: $?"
+          } 2>&1 | tee study/study-${{ matrix.name }}.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: ${{ matrix.name }}
+          path: study/
+          retention-days: 14
