@@ -100,15 +100,15 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 | Size | the largest rectangle of the document's aspect ratio inside the preview area, in physical pixels, capped at a **3840 px** long edge (raised from 1920 in task 12 so the painting fills the area on high-DPI displays; 3840×2160 renders in 9–15 ms here). A GPU that needs more than the 150 ms budget for a settled preview lowers the cap for the rest of the session, never below 1920 px. On the Intel iGPU, 3600 px took 297 ms, the cap became 2089 px, and later settled previews took at most 92 ms. Diagnostics shows the current cap. Settled images are drawn 1:1; interaction previews are scaled up to that size, never stretched (`preview::display_size`) |
 | Stable scene data | the worker reuses the last `Scene` while seeds, form and aspect ratio are unchanged, so resizes and paint-only changes never rebuild it |
 | What is on screen | the app remembers which submission each shown image came from, so it can say whether the painting on screen is the current recipe (`StudioApp::preview_is_current`) |
-| One device | `GpuContext` opens the device, and egui shares it through `WgpuSetup::Existing` |
+| Devices | egui creates the window's device on the best adapter that can present. The painter shares it when that is the painting adapter (`GpuContext::from_existing`), and otherwise opens its own device on its adapter (multi-GPU systems, below) |
 | Shutdown | closing the window closes the mailbox, cancels the running job, interrupts a simulated delay and joins the worker |
 
 ## GPU initialization and failures
 
 - **Capability service:** `GpuContext::new(&AdapterPolicy)` uses portable WebGPU limits, ranks discrete over integrated, and refuses software rasterizers unless `--allow-software` is given (then labelled everywhere).
 - **Initialization failure** (no adapter, only software, no match for `--adapter`, device refused): the error is printed, and a window titled "Pigment Prose needs a hardware GPU" shows the reason with driver hints and every adapter found, with Copy details and Quit. It exits with status 1 and never claims acceleration.
-- **Device lost:** the preview stops and says "The GPU was reset (device lost)… Save your recipe, then restart Pigment Prose to continue." Saving still works. No more jobs are submitted. Tested with `--lose-device-after N`; a real driver reset has not been exercised.
-- **Adapter that cannot present** (known limitation): on this machine, `--adapter intel` picks the Intel iGPU, which can paint but is not connected to the display. The app explains this and exits with status 2. Tracked as "studio on multi-GPU systems".
+- **Device lost:** the preview stops and says "The GPU was reset (device lost)… Save your recipe, then restart Pigment Prose to continue." Saving still works. No more jobs are submitted. When the painter has its own device (multi-GPU), the window keeps working. Tested with `--lose-device-after N`; a real driver reset has not been exercised.
+- **Multi-GPU systems:** the painting adapter (the policy's choice, or `--adapter NAME`) and the adapter showing the window can differ. The window goes on the best-ranked adapter that claims it can present (discrete first, ties to the painter); `--display-adapter NAME` overrides that. When both are the same adapter they share one device; otherwise each has its own, and previews cross by CPU readback as always. Diagnostics shows "Window shown on". On this machine, `--adapter intel` paints on the Intel iGPU and shows the window on the NVIDIA card (script PASS). `--display-adapter intel` cannot present, because the compositor cannot import that GPU's buffers even though its driver accepts the surface; the app names the adapter, suggests `--display-adapter` and exits 2. Measurements and the reasoning are in the [ADR 0001 amendment](decisions/0001-renderer-and-desktop-shell.md#amendment-2026-09-28-the-windows-device-on-multi-gpu-systems).
 
 ## Accessibility and scaling
 
@@ -150,6 +150,6 @@ Details: [evidence/studio-11](evidence/studio-11/README.md), [evidence/studio-12
 
 - The native dialogs are exercised by hand only ([checklist](evidence/studio-12/README.md#manual-interaction-checklist), [export checks](evidence/studio-13/README.md#manual-checks-for-the-owner)). The overwrite question is the platform dialog's. Without a running XDG desktop portal (some minimal window managers), the dialogs cannot open and behave as cancelled.
 - The prose entry and the Advanced header take their accessible names from the small-caps headers ("PROSE", "ADVANCED").
-- One device for the window and the painter: an adapter that cannot present to the window is refused (see above).
+- Hybrid laptops (PRIME/Optimus) and multi-GPU Windows and macOS systems have not been run. A driver that claims to present but cannot is only caught when the window opens (exit 2, with advice).
 - Device loss needs a restart.
 - Windows (Direct3D 12) and macOS (Metal): **not run**. Portable CI builds and unit-tests the crate there, including the headless UI tests, but no window has been opened (tasks 21–22).

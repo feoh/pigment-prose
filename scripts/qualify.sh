@@ -72,8 +72,17 @@ if [ -n "$second" ]; then
   else
     record "slow-GPU settled cap ($name)" FAIL
   fi
+  # Painting on the second adapter; the window shows wherever it can.
+  if [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]; then
+    if $studio --script --adapter "$name" >"$work/second.log" 2>&1; then
+      record "studio painting on $name" PASS "$(sed -n 's/^window: //p' "$work/second.log")"
+    else
+      cat "$work/second.log"; record "studio painting on $name" FAIL
+    fi
+  fi
 else
   record "slow-GPU settled cap" SKIPPED "no second, integrated adapter"
+  record "studio on a second adapter" SKIPPED "no second adapter"
 fi
 
 step "4. studio, real window (--script)"

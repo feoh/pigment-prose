@@ -32,7 +32,7 @@ Checked directly: the wgpu requirements (crates.io dependency metadata), eframe'
 ## Decision
 
 - **Renderer:** Rust (edition 2024, toolchain pinned to 1.98) + **wgpu 30.0.1**. WebGPU core features only, device opened with `wgpu::Limits::default()`, WGSL compute passes evaluated per tile in whole-image coordinates. Backends: Vulkan (Linux, verified), Direct3D 12 (Windows, unverified), Metal (macOS, unverified).
-- **Shell (task 11):** **eframe/egui 0.36** with the wgpu backend, sharing one `Arc<GpuContext>` through `egui_wgpu::WgpuSetup::Existing`. Native dialogs come from **rfd**. No second UI framework.
+- **Shell (task 11):** **eframe/egui 0.36** with the wgpu backend, sharing one device with the renderer. Since 2026-09-28 the window's device is created by egui on an adapter that can present, and the painter shares it when it is the same adapter ([amendment](#amendment-2026-09-28-the-windows-device-on-multi-gpu-systems)). Native dialogs come from **rfd**. No second UI framework.
 - **Preview display:** the MVP reads the preview tile back through the same `TileSink` path as export and uploads it as an egui texture. Preview and export then share one code path, and the spike's preview timings include readback (2.16 ms at 1280×720). Zero-copy display through `register_native_texture` stays available, because the shell and renderer share a wgpu version. Adopt it only if task 11 measures upload as a bottleneck.
 
 ## Consequences
@@ -47,3 +47,24 @@ Checked directly: the wgpu requirements (crates.io dependency metadata), eframe'
 ## Unverified at the time of this decision
 
 No shell code exists yet. Direct3D 12 and Metal are unverified, as are packaging on any OS, rfd's Linux backend on the user's desktop session, and the accessibility behaviour listed above.
+
+## Amendment (2026-09-28): the window's device on multi-GPU systems
+
+**Problem.** Task 11 shared one device through `WgpuSetup::Existing`, so the window had to be shown on the painting adapter. On the development machine, `--adapter intel` picks the Intel iGPU, which paints fine but cannot show a window whose monitors are on the NVIDIA card. egui-wgpu panicked while creating the surface.
+
+**Measured (Linux, KDE Plasma Wayland, RTX 4070 Ti + Intel UHD, `pigment-studio --script`, [log](../evidence/multi-gpu-linux-2026-09-28.txt)):**
+
+| Setup | NVIDIA per-process GPU memory | Request → shown p95 | Result |
+| --- | --- | --- | --- |
+| One device shared by window and painter (NVIDIA) | 262 MiB | 20 ms | PASS |
+| Two devices on the same NVIDIA GPU (`--separate-display`) | 458 MiB (+196 MiB) | 20 ms | PASS |
+| Painter on the Intel iGPU, window on the NVIDIA (two devices, two GPUs) | 259 MiB (the window's device) | 150 ms (the iGPU's own speed) | PASS |
+| Window forced onto the Intel iGPU (`--display-adapter intel`) | — | — | explained, exit 2 |
+
+A second device on the same GPU costs about 196 MiB and buys nothing, because previews already cross by CPU readback. So:
+
+**Decision.** egui creates the window's device (`WgpuSetup::CreateNew`) on the **best-ranked adapter that claims it can present** to the window's surface. Discrete comes first, ties go to the painting adapter, and it uses the painter's portable limits (`pigment_gpu::context::device_descriptor`). When that is the painting adapter, the painter **shares** the window's device (`GpuContext::from_existing`), as before, which is the common case. When it is not, the painter opens its own device on its own adapter. `--display-adapter NAME` overrides the choice.
+
+**Why not prefer the painting adapter for the window:** a driver can claim surface support that it cannot deliver. The Intel Vulkan driver reports the Wayland surface as supported, but the compositor, whose outputs are on the NVIDIA card, cannot import its buffers ("importing the supplied dmabufs failed"). Ranking discrete first puts the window on the card that drives the monitors on a desktop, and on the discrete GPU through PRIME on typical hybrid laptops. If a driver still fails at the surface, the app names the adapter, points to `--display-adapter` and exits 2.
+
+**Consequences.** With separate devices, a device loss on the painter's GPU no longer takes the window with it; the app still asks for a restart. Zero-copy display (`register_native_texture`) is possible only when the device is shared, which is unchanged in practice. Hybrid laptops (PRIME/Optimus on Linux) and the Windows and macOS equivalents are **unverified** (tasks 21–22).

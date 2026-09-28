@@ -14,10 +14,16 @@ fn backends(include_gl: bool) -> wgpu::Backends {
     }
 }
 
-pub fn instance(include_gl: bool) -> wgpu::Instance {
+/// The instance descriptor for the policy's backends (also used for the
+/// window's instance, task "studio on multi-GPU systems").
+pub fn instance_descriptor(include_gl: bool) -> wgpu::InstanceDescriptor {
     let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
     desc.backends = backends(include_gl);
-    wgpu::Instance::new(desc)
+    desc
+}
+
+pub fn instance(include_gl: bool) -> wgpu::Instance {
+    wgpu::Instance::new(instance_descriptor(include_gl))
 }
 
 /// Software rasterizers. Some GL drivers report llvmpipe as `Other`, so the

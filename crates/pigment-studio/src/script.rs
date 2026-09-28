@@ -75,6 +75,8 @@ pub struct Report {
     /// (time from close to worker joined, joined).
     pub shutdown: Option<(Duration, bool)>,
     pub device: String,
+    /// The adapter showing the window, and whether its device is shared.
+    pub display: String,
     /// A render delay was simulated, so busy-time checks apply.
     pub delayed: bool,
     /// A device loss was simulated (`--lose-device-after`): the check is
@@ -210,6 +212,9 @@ impl Report {
             checks.push(("window captured", shot.is_ok()));
         }
         let mut out = format!("device: {}\n", self.device);
+        if !self.display.is_empty() {
+            out += &format!("window: {}\n", self.display);
+        }
         out += &format!(
             "keystrokes {}, resizes {}, previews submitted {} (superseded before starting {}), displayed {}, max in flight {}\n",
             self.keystrokes,

@@ -103,6 +103,9 @@ pub struct StudioOptions {
     /// Where the script saves its capture of the window.
     pub screenshot: Option<PathBuf>,
     pub worker: WorkerOptions,
+    /// The adapter showing the window, and whether the painter shares its
+    /// device (set by the binary once the window exists).
+    pub display: Option<(String, bool)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1094,7 +1097,12 @@ impl StudioApp {
             } else {
                 theme::INK_2
             }))
-            .on_hover_text("The GPU that paints the preview");
+            .on_hover_text(match &self.opts.display {
+                Some((d, false)) => {
+                    format!("The GPU that paints the preview. The window is shown on {d}.")
+                }
+                _ => "The GPU that paints the preview".to_string(),
+            });
             if sw {
                 ui.label(
                     egui::RichText::new("SOFTWARE RENDERER, not GPU accelerated")
@@ -1604,6 +1612,19 @@ impl StudioApp {
                             },
                         );
                         row("Driver", format!("{} ({})", a.driver, a.driver_info));
+                        if let Some((display, shared)) = &self.opts.display {
+                            row(
+                                "Window shown on",
+                                format!(
+                                    "{display}{}",
+                                    if *shared {
+                                        ", sharing the painter's device"
+                                    } else {
+                                        ", its own device (previews cross by CPU)"
+                                    }
+                                ),
+                            );
+                        }
                         row("wgpu", caps.wgpu_version.to_string());
                         row("Max 2D texture", l.max_texture_dimension_2d.to_string());
                         row("Max buffer", format!("{} MiB", l.max_buffer_size >> 20));

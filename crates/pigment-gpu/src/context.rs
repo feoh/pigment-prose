@@ -1,5 +1,6 @@
-//! The opened device, shared by every renderer and (task 11) by the egui
-//! shell through `egui_wgpu::WgpuSetup::Existing`.
+//! The opened device, shared by every renderer. The studio either shares
+//! egui's device (when the window shows on the painting adapter) or opens
+//! its own on another adapter ([`GpuContext::from_existing`]).
 
 use std::sync::{Arc, Mutex};
 
@@ -22,6 +23,20 @@ pub struct GpuContext {
     uncaptured: Arc<Mutex<Option<String>>>,
 }
 
+/// The device every renderer needs: **WebGPU's portable default limits** and
+/// no optional features. The window's device is requested with the same
+/// descriptor, so the painter can share it.
+pub fn device_descriptor() -> wgpu::DeviceDescriptor<'static> {
+    wgpu::DeviceDescriptor {
+        label: Some("pigment-prose"),
+        required_features: wgpu::Features::empty(),
+        required_limits: wgpu::Limits::default(),
+        experimental_features: Default::default(),
+        memory_hints: wgpu::MemoryHints::Performance,
+        trace: Default::default(),
+    }
+}
+
 impl GpuContext {
     /// Select an adapter and open a device with **WebGPU's portable default
     /// limits** and no optional features, so nothing silently depends on one
@@ -30,20 +45,35 @@ impl GpuContext {
     pub fn new(policy: &AdapterPolicy) -> Result<GpuContext, RenderError> {
         let instance = adapter::instance(policy.include_gl);
         let (adapter, report) = adapter::select(&instance, policy)?;
-        let limits = wgpu::Limits::default();
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("pigment-prose"),
-            required_features: wgpu::Features::empty(),
-            required_limits: limits.clone(),
-            experimental_features: Default::default(),
-            memory_hints: wgpu::MemoryHints::Performance,
-            trace: Default::default(),
-        }))
-        .map_err(|e| RenderError::DeviceRequest {
-            adapter: report.name.clone(),
-            detail: e.to_string(),
-        })?;
+        let (device, queue) = pollster::block_on(adapter.request_device(&device_descriptor()))
+            .map_err(|e| RenderError::DeviceRequest {
+                adapter: report.name.clone(),
+                detail: e.to_string(),
+            })?;
+        Ok(GpuContext::wrap(instance, adapter, report, device, queue))
+    }
 
+    /// Wraps a device someone else opened (the window's), which must have
+    /// been requested with [`device_descriptor`]. Installs the device-lost
+    /// and error hooks and reports the adapter's capabilities.
+    pub fn from_existing(
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    ) -> GpuContext {
+        let report = adapter::report(&adapter);
+        GpuContext::wrap(instance, adapter, report, device, queue)
+    }
+
+    fn wrap(
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        report: pigment_core::capability::AdapterReport,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    ) -> GpuContext {
+        let limits = wgpu::Limits::default();
         let lost = Arc::new(Mutex::new(None));
         {
             let lost = lost.clone();
@@ -62,7 +92,7 @@ impl GpuContext {
             }));
         }
 
-        Ok(GpuContext {
+        GpuContext {
             instance,
             capabilities: GpuCapabilities {
                 adapter: report,
@@ -74,7 +104,7 @@ impl GpuContext {
             queue,
             lost,
             uncaptured,
-        })
+        }
     }
 
     /// `Err(DeviceLost)` once the driver has reported device loss. The
