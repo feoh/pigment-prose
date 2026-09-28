@@ -442,17 +442,28 @@ pub(crate) mod tests {
             ..Default::default()
         };
         let w = PreviewWorker::spawn(r, opts, || {});
-        let mut worst_submit = Duration::ZERO;
+        let mut submits = Vec::new();
         for i in 1..=200u64 {
+            let payload = job("Typing fast", 64, 36);
             let t = Instant::now();
-            w.submit(RequestId(i), job("Typing fast", 64, 36));
-            worst_submit = worst_submit.max(t.elapsed());
+            w.submit(RequestId(i), payload);
+            submits.push(t.elapsed());
             assert!(w.in_flight() <= 2);
             std::thread::sleep(Duration::from_millis(1));
         }
+        // A submit that waited on the 150 ms render would make most of the
+        // burst slow. One or two long ones are the test machine descheduling
+        // this thread (seen once on a loaded macOS CI runner: 140 ms).
+        submits.sort();
+        let p95 = submits[submits.len() * 95 / 100];
+        let slow = submits
+            .iter()
+            .filter(|d| **d > Duration::from_millis(50))
+            .count();
         assert!(
-            worst_submit < Duration::from_millis(20),
-            "submit never waits on the render: {worst_submit:?}"
+            p95 < Duration::from_millis(20) && slow <= 2,
+            "submit waited on the render: p95 {p95:?}, {slow} over 50 ms, worst {:?}",
+            submits.last()
         );
         let mut results = Vec::new();
         let deadline = Instant::now() + Duration::from_secs(5);
