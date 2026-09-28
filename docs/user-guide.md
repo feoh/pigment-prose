@@ -72,6 +72,7 @@ Keep the exported PNG if you need that exact image forever; keep the recipe to m
 
 Pigment Prose paints on the GPU and **needs a hardware GPU with Vulkan**. It is tested on an NVIDIA GeForce RTX 4070 Ti (driver 615.71.09) and an Intel Raptor Lake-S integrated GPU, on CachyOS with KDE Plasma (Wayland). **CPU-only rendering is not currently supported or promised.**
 
+- **The first start after installing, or after a graphics driver update, can be slow**, while the driver compiles and caches the painter's shaders. The window opens at once and says "Preparing the GPU painter". Measured on the test machine: about 4 seconds on the NVIDIA driver and about 35 seconds on Mesa's Intel driver, which also needs about 4 GB of memory while it compiles. Later starts take a fraction of a second.
 - The status line under the painting names the GPU in use and how long the preview took.
 - **Diagnostics** (Ctrl+D) lists the adapter, backend, driver, limits and preview counters. Include them when reporting a problem.
 - If no suitable GPU is found, a window titled "Pigment Prose needs a hardware GPU" explains why, lists what was found and offers **Copy details**.

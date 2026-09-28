@@ -29,6 +29,7 @@ use crate::export::tests::GateRenderer;
 use crate::export::{Exporter, SizeChoice, SizeForm};
 use crate::files::tests::FakeDialogs;
 use crate::files::{DialogAnswer, DialogRequest, Dialogs, Parent};
+use crate::painter::{Preparation, Readiness};
 use crate::preview::Quality;
 use crate::script::Report;
 use crate::worker::tests::FlatRenderer;
@@ -1392,4 +1393,61 @@ fn the_no_gpu_window_offers_an_installed_software_renderer_only_as_a_labelled_ch
     let hint = crate::app::software_hint(&adapters).unwrap();
     assert!(hint.contains("llvmpipe") && hint.contains("--allow-software"));
     assert!(hint.contains("not GPU") && hint.contains("SOFTWARE RENDERER"));
+}
+
+#[test]
+fn the_window_opens_and_explains_while_the_painter_is_prepared() {
+    // Task 15: the shader compiles off the UI thread (a minute on some GPUs
+    // the first time); the window runs meanwhile and says what it is doing.
+    let (release, gate) = std::sync::mpsc::channel::<()>();
+    let prep = Preparation::start(
+        move || {
+            gate.recv().unwrap();
+            Ok(FlatRenderer::default())
+        },
+        || {},
+    );
+    let worker = PreviewWorker::spawn(prep.renderer(), WorkerOptions::default(), || {});
+    let mut studio = StudioApp::new(
+        worker,
+        caps(),
+        StudioOptions::default(),
+        Arc::new(Mutex::new(Report::default())),
+        Box::new(Shared::default()),
+        Exporter::spawn(prep.renderer(), || {}),
+    );
+    let p = prep.clone();
+    studio.set_readiness(Arc::new(move || p.readiness()));
+    let mut h = Harness::builder()
+        .with_size([1280.0, 900.0])
+        .build_eframe(move |cc| {
+            crate::theme::install(&cc.egui_ctx);
+            studio
+        });
+    for _ in 0..10 {
+        h.step();
+    }
+    assert!(
+        h.query_by_label_contains("Preparing the GPU painter")
+            .is_some(),
+        "no explanation while preparing"
+    );
+    assert!(
+        h.query_by_label("Preview: Preparing").is_some(),
+        "status word"
+    );
+    // The controls work meanwhile: another composition queues a preview.
+    h.get_by_label("Another composition").click();
+    h.step();
+    assert_eq!(h.state().doc.recipe().seed.variation, Variation(1));
+    assert!(h.state().view.shown.is_none());
+
+    release.send(()).unwrap();
+    settle(&mut h);
+    assert!(
+        h.query_by_label_contains("Preparing the GPU painter")
+            .is_none()
+    );
+    assert!(h.query_by_label("Preview: Current").is_some());
+    assert_eq!(prep.readiness(), Readiness::Ready);
 }

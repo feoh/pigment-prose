@@ -26,6 +26,7 @@ use crate::export::{self, Busy, ExportJob, ExportOutcome, Exporter, SizeChoice, 
 use crate::files::{
     self, Choice, DialogAnswer, DialogRequest, Dialogs, Effect, FileFlow, Intent, Parent, Step,
 };
+use crate::painter::Readiness;
 use crate::preview::{
     PreviewView, Quality, SETTLED_LONG_EDGE, Scheduler, adapt_settled_cap, display_size,
     preview_size,
@@ -201,6 +202,9 @@ pub struct StudioApp {
     pub(crate) close_when_export_ends: bool,
     pub(crate) confirm_export_close: bool,
     title: String,
+    /// Whether the painter is ready (task 15: its shader compiles off the UI
+    /// thread). `None` in tests with a ready-made renderer.
+    readiness: Option<Arc<dyn Fn() -> Readiness + Send + Sync>>,
 }
 
 impl std::fmt::Debug for StudioApp {
@@ -269,7 +273,19 @@ impl StudioApp {
             close_when_export_ends: false,
             confirm_export_close: false,
             title: String::new(),
+            readiness: None,
         }
+    }
+
+    /// Where the painter's preparation stands (see [`crate::painter`]).
+    pub fn set_readiness(&mut self, readiness: Arc<dyn Fn() -> Readiness + Send + Sync>) {
+        self.readiness = Some(readiness);
+    }
+
+    fn preparing(&self) -> bool {
+        self.readiness
+            .as_ref()
+            .is_some_and(|r| r() == Readiness::Preparing)
     }
 
     /// The document as the controls edit it.
@@ -1093,6 +1109,8 @@ impl StudioApp {
             ("GPU reset", theme::CORAL)
         } else if self.view.error.is_some() {
             ("Preview failed", theme::CORAL)
+        } else if self.shown.is_none() && self.preparing() {
+            ("Preparing", theme::AMBER)
         } else if self.view.is_pending() {
             ("Painting…", theme::AMBER)
         } else if self.shown.is_none() {
@@ -1186,9 +1204,34 @@ impl StudioApp {
             return;
         }
         let (Some(tex), Some(shown)) = (&self.texture, self.view.shown) else {
+            let (note, color) = if let Some(e) = &self.view.error {
+                (
+                    format!("The preview failed: {e}"),
+                    ui.visuals().error_fg_color,
+                )
+            } else if self.preparing() {
+                (
+                    "Preparing the GPU painter…\n\
+                     The first start after installing Pigment Prose or updating the \
+                     graphics driver compiles its shaders. On some GPUs that takes \
+                     up to a minute; later starts are quick."
+                        .to_string(),
+                    theme::INK_2,
+                )
+            } else {
+                (String::new(), theme::INK_2)
+            };
             ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                ui.centered_and_justified(|ui| {
-                    ui.add(egui::Spinner::new().size(32.0));
+                ui.vertical_centered(|ui| {
+                    ui.add_space((rect.height() * 0.5 - 60.0).max(0.0));
+                    if self.view.error.is_none() {
+                        ui.add(egui::Spinner::new().size(32.0));
+                        ui.add_space(14.0);
+                    }
+                    if !note.is_empty() {
+                        ui.set_max_width(rect.width().min(460.0));
+                        ui.label(egui::RichText::new(note).color(color));
+                    }
                 });
             });
             return;
@@ -1766,8 +1809,12 @@ impl eframe::App for StudioApp {
                 self.file_intent(Intent::Quit, &ctx, parent, now);
             }
         }
+        // The script measures a working painter, so it starts once the
+        // painter is prepared (the preparation wakes the window).
         if let Some(mut script) = self.script.take() {
-            script.step(self, &ctx, now);
+            if !self.preparing() {
+                script.step(self, &ctx, now);
+            }
             self.script = Some(script);
         }
         if self.notice.as_ref().is_some_and(|n| {

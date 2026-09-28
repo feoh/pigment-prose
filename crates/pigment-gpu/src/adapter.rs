@@ -122,7 +122,9 @@ pub fn select(
 
 pub fn driver_help() -> String {
     "Check that a hardware GPU driver is installed and visible:\n  \
-     Linux: install the vendor Vulkan driver (nvidia-utils, or mesa-vulkan-drivers) and check `vulkaninfo --summary`\n  \
+     Linux: install the Vulkan loader and your GPU's Vulkan driver (Arch: vulkan-icd-loader with\n    \
+     nvidia-utils, vulkan-intel or vulkan-radeon; Debian/Ubuntu: libvulkan1 with the NVIDIA driver\n    \
+     or mesa-vulkan-drivers), then check `vulkaninfo --summary`\n  \
      Windows: update the GPU driver (Direct3D 12 or Vulkan)\n  \
      macOS: Metal is built in; the Mac must support Metal\n\
      WGPU_BACKEND=vulkan|dx12|metal forces a backend when diagnosing."

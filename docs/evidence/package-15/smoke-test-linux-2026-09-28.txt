@@ -1,0 +1,135 @@
+archive: ~/src/personal/pigment-prose/target/package/pigment-prose-0.1.0-x86_64-linux.tar.zst
+=== checksum matches
+pigment-prose-0.1.0-x86_64-linux.tar.zst: OK
+=== unpacks
+=== installs with --prefix
+Installed Pigment Prose:
+  programs: /tmp/pigment-smoke-ZdfIzh/prefix/bin/pigment-studio, /tmp/pigment-smoke-ZdfIzh/prefix/bin/pigment-prose
+  menu entry: /tmp/pigment-smoke-ZdfIzh/prefix/share/applications/pigment-prose.desktop
+  notices and guide: /tmp/pigment-smoke-ZdfIzh/prefix/share/doc/pigment-prose/
+  uninstall: /tmp/pigment-smoke-ZdfIzh/prefix/share/pigment-prose/uninstall.sh
+Note: /tmp/pigment-smoke-ZdfIzh/prefix/bin is not on your PATH; run the programs by their full path, or add it.
+=== pigment-studio --version
+pigment-studio 0.1.0
+=== pigment-prose --version
+pigment-prose 0.1.0
+=== notices, license, guide and build info installed
+=== menu entry validates and runs the installed binary
+=== binaries carry no build-host paths
+Pigment Prose 0.1.0 for x86_64 Linux
+commit: c1c43b43f59a22424e39e7153172f471b0d1c3cf
+commit date (SOURCE_DATE_EPOCH): 1790595766
+toolchain: rustc 1.98.1 (48a229cea 2026-09-01), cargo 1.98.1 (797e8a9bc 2026-08-05)
+target: x86_64-unknown-linux-gnu, release profile, cargo build --locked
+Cargo.lock sha256: 571c29ff996aac6c118e084daf90ad97f61b0b9038c8c5b03f0a711037d67285
+requires glibc >= 2.44
+pigment-prose 0.1.0 (wgpu 30.0.1); 2 adapter(s)
+- NVIDIA GeForce RTX 4070 Ti
+    backend=Vulkan type=Discrete software=false vendor=0x10de device=0x2782
+    driver=NVIDIA (615.71.09)
+    max_texture_dimension_2d=32768 max_buffer_size=4294967295 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=524288
+- Intel(R) Graphics (RPL-S)
+    backend=Vulkan type=Integrated software=false vendor=0x8086 device=0xa780
+    driver=Intel open-source Mesa driver (Mesa 26.2.3-arch3.1)
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=102
+selected: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+=== studio --script (preview, drags, 8K export, close)
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan); window on NVIDIA GeForce RTX 4070 Ti (Vulkan) (one shared device)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+window: NVIDIA GeForce RTX 4070 Ti (Vulkan) (shared device)
+keystrokes 68, resizes 2, previews submitted 216 (superseded before starting 0), displayed 203, max in flight 2
+slider values dragged 199, interaction previews shown 197, scenes built during the paint drag 0
+8K export: 441 ms; 34 UI frames while it ran, longest gap 30.0 ms
+UI frames while a job was in flight: 47, longest gap 11.1 ms
+longest busy gaps: 11 ms at 4.78 s, 11 ms at 6.78 s, 11 ms at 4.91 s, 11 ms at 5.13 s, 11 ms at 0.01 s
+request→shown latency: median 10.1 ms, p95 20.4 ms, max 30.7 ms; render+readback median 3.94 ms, max 26.12 ms (n=203)
+close → worker stopped: 4.1 ms (joined: true)
+window captured: /tmp/pigment-smoke-ZdfIzh/window.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] 8K export written (7680×4320, no temporary left)
+[ok] the export's snapshot never changed while sliders moved
+[ok] UI frames kept coming during the export (gap < 250 ms)
+[ok] interaction previews shown while dragging
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+=== CLI reopens an approved recipe and exports 8K
+pigment-prose 0.1.0 export: generator v2, renderer v2, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
+timings: device+pipelines 121.08 ms, scene 0.54 ms, setup 9.24 ms, render+readback 43.97 ms, PNG encode+write 160.85 ms, export total 214.18 ms
+measured peak host memory (VmHWM, whole process): 292.4 MiB
+wrote /tmp/pigment-smoke-ZdfIzh/recipe-8k.png (21.5 MiB)
+=== 8K PNG decodes: 7680x4320, IHDR sRGB IDAT IEND only
+decoded recipe-8k.png: 7680x4320, chunks IHDR sRGB IDAT IEND, 22506358 bytes
+=== offline: CLI 8K export (unshare -rn)
+pigment-prose 0.1.0 export: generator v2, renderer v2, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
+plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
+timings: device+pipelines 100.97 ms, scene 0.55 ms, setup 9.27 ms, render+readback 42.40 ms, PNG encode+write 164.78 ms, export total 216.57 ms
+measured peak host memory (VmHWM, whole process): 293.2 MiB
+wrote /tmp/pigment-smoke-ZdfIzh/offline-8k.png (21.5 MiB)
+=== offline export is byte-identical
+=== offline: studio --script (unshare -rn)
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan); window on NVIDIA GeForce RTX 4070 Ti (Vulkan) (one shared device)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+window: NVIDIA GeForce RTX 4070 Ti (Vulkan) (shared device)
+keystrokes 68, resizes 2, previews submitted 223 (superseded before starting 0), displayed 215, max in flight 2
+slider values dragged 200, interaction previews shown 209, scenes built during the paint drag 0
+8K export: 421 ms; 39 UI frames while it ran, longest gap 23.1 ms
+UI frames while a job was in flight: 37, longest gap 19.9 ms
+longest busy gaps: 20 ms at 7.04 s, 12 ms at 6.79 s, 11 ms at 7.09 s, 10 ms at 4.56 s, 10 ms at 4.52 s
+request→shown latency: median 10.1 ms, p95 20.2 ms, max 39.9 ms; render+readback median 3.63 ms, max 19.04 ms (n=215)
+close → worker stopped: 4.1 ms (joined: true)
+window captured: (not saved: no --screenshot path)
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] 8K export written (7680×4320, no temporary left)
+[ok] the export's snapshot never changed while sliders moved
+[ok] UI frames kept coming during the export (gap < 250 ms)
+[ok] interaction previews shown while dragging
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+=== uninstall
+Pigment Prose is uninstalled. Your recipes and images were not touched.
+=== uninstall removed every installed file
+
+=== summary
+PASS  checksum matches
+PASS  unpacks
+PASS  installs with --prefix
+PASS  pigment-studio --version
+PASS  pigment-prose --version
+PASS  notices, license, guide and build info installed
+PASS  menu entry validates and runs the installed binary
+PASS  binaries carry no build-host paths
+PASS  studio --script (preview, drags, 8K export, close)
+PASS  CLI reopens an approved recipe and exports 8K
+PASS  8K PNG decodes: 7680x4320, IHDR sRGB IDAT IEND only
+PASS  offline: CLI 8K export (unshare -rn)
+PASS  offline export is byte-identical
+PASS  offline: studio --script (unshare -rn)
+PASS  uninstall
+PASS  uninstall removed every installed file

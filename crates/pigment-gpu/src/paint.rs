@@ -92,6 +92,18 @@ impl PaintRenderer {
     }
 
     /// The scene's buffers, reused while the same `Arc<Scene>` is rendered.
+    /// Another renderer on the same context sharing this one's compiled
+    /// pipelines, with its own scene cache: the studio's previews and
+    /// exports each get one without compiling the shader twice (task 15).
+    pub fn sibling(&self) -> PaintRenderer {
+        PaintRenderer {
+            ctx: self.ctx.clone(),
+            materials: self.materials.clone(),
+            paint: self.paint.clone(),
+            last_scene: Mutex::new(None),
+        }
+    }
+
     fn scene_buffers(&self, scene: &Arc<Scene>) -> SceneBuffers {
         let mut last = self
             .last_scene

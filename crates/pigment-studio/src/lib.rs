@@ -16,6 +16,7 @@ pub mod app;
 pub mod controls;
 pub mod export;
 pub mod files;
+pub mod painter;
 pub mod preview;
 pub mod script;
 pub mod theme;
