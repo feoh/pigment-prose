@@ -11,6 +11,11 @@
 //! at the full preview size, that no older result was ever displayed after
 //! a newer one, and that the paint drag rebuilt no scene.
 //!
+//! Task 13: it then exports an 8K PNG to a temporary folder while dragging
+//! a slider the whole time, and checks that the UI kept drawing, that the
+//! running job's snapshot never changed, and that the file decodes at
+//! 7680×4320 with no temporary file left beside it. The folder is deleted.
+//!
 //! Frames are requested continuously, so the gap between frames measures
 //! whether the UI thread was ever blocked, in particular while the worker
 //! runs a render slowed by `--preview-delay-ms`.
@@ -90,6 +95,12 @@ pub struct Report {
     pub after_another: Option<Settled>,
     /// Another Composition changed the variation and nothing else.
     pub another_kept_seed_and_settings: Option<bool>,
+    /// The 8K export: (file decoded at 7680×4320 and nothing else left in
+    /// the folder, the job's snapshot never changed, elapsed).
+    pub export: Option<(bool, bool, Duration)>,
+    /// Longest gap between UI frames while the export ran.
+    pub max_frame_gap_exporting: Duration,
+    pub frames_exporting: u32,
 }
 
 fn ms(d: Duration) -> f64 {
@@ -155,6 +166,19 @@ impl Report {
                 "Another Composition kept the prose seed and every setting",
                 self.another_kept_seed_and_settings == Some(true),
             ));
+            checks.push((
+                "8K export written (7680×4320, no temporary left)",
+                self.export.is_some_and(|e| e.0),
+            ));
+            checks.push((
+                "the export's snapshot never changed while sliders moved",
+                self.export.is_some_and(|e| e.1),
+            ));
+            checks.push((
+                "UI frames kept coming during the export (gap < 250 ms)",
+                self.frames_exporting > 0
+                    && self.max_frame_gap_exporting < Duration::from_millis(250),
+            ));
             if !self.delayed {
                 // With a slow simulated GPU every drag job is superseded
                 // before it finishes, so only an undelayed run shows them.
@@ -202,6 +226,14 @@ impl Report {
             self.paint_drag_scene_builds
                 .map_or("?".to_string(), |n| n.to_string()),
         );
+        if let Some((_, _, t)) = self.export {
+            out += &format!(
+                "8K export: {:.0} ms; {} UI frames while it ran, longest gap {:.1} ms\n",
+                ms(t),
+                self.frames_exporting,
+                ms(self.max_frame_gap_exporting)
+            );
+        }
         out += &format!(
             "UI frames while a job was in flight: {}, longest gap {:.1} ms\n",
             self.frames_busy,
@@ -254,6 +286,7 @@ enum Stage {
     Drag(Slider),
     SettleDrag(Slider),
     SettleAnother,
+    Exporting,
     Capturing,
     Closing,
 }
@@ -301,6 +334,9 @@ pub struct Script {
         pigment_core::recipe::Recipe,
         pigment_core::settings::ControlValues,
     )>,
+    export_dir: Option<std::path::PathBuf>,
+    export_job: Option<crate::export::ExportJob>,
+    export_stable: bool,
 }
 
 impl Script {
@@ -313,6 +349,9 @@ impl Script {
             stage_since: Instant::now(),
             scenes_built: 0,
             before_another: None,
+            export_dir: None,
+            export_job: None,
+            export_stable: true,
         }
     }
 
@@ -329,6 +368,12 @@ impl Script {
         let busy = app.worker.in_flight() > 0;
         {
             let mut r = app.report.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(prev) = self.last_frame
+                && self.stage == Stage::Exporting
+            {
+                r.frames_exporting += 1;
+                r.max_frame_gap_exporting = r.max_frame_gap_exporting.max(now - prev);
+            }
             if let Some(prev) = self.last_frame
                 && busy
             {
@@ -455,8 +500,17 @@ impl Script {
                     r.after_another = Some(result);
                     r.another_kept_seed_and_settings = Some(kept);
                     drop(r);
-                    app.open_advanced = Some(true);
-                    self.capture(app, ctx, now);
+                    self.start_export(app, ctx, now);
+                }
+            }
+            Stage::Exporting => {
+                // Keep dragging a slider for as long as the export runs.
+                let e = (now - self.stage_since).as_secs_f64();
+                let v = 0.5 + 0.45 * (e * 9.0).sin();
+                app.set_control(&EDGE_LOOSENESS, (v * 100.0).round() / 100.0, now, true);
+                match app.exporter.running() {
+                    Some(r) => self.export_stable &= self.export_job.as_ref() == Some(&r.job),
+                    None => self.finish_export(app, ctx, now),
                 }
             }
             Stage::Capturing => {
@@ -505,6 +559,52 @@ impl Script {
 }
 
 impl Script {
+    /// Starts an 8K export into a fresh temporary folder.
+    fn start_export(&mut self, app: &mut StudioApp, ctx: &egui::Context, now: Instant) {
+        let dir =
+            std::env::temp_dir().join(format!("pigment-studio-script-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let frame = pigment_core::frame::Frame::largest_with_aspect(
+            app.doc.recipe().frame.aspect(),
+            pigment_io::export::LONG_EDGE_8K,
+        );
+        let started = std::fs::create_dir_all(&dir).is_ok()
+            && frame.is_ok_and(|f| app.start_export_to(f, dir.join("script-8k.png")).is_ok());
+        self.export_job = app.exporter.running().map(|r| r.job);
+        self.export_dir = Some(dir);
+        if started {
+            self.to(Stage::Exporting, now);
+        } else {
+            app.report.lock().unwrap_or_else(|e| e.into_inner()).export =
+                Some((false, false, Duration::ZERO));
+            app.open_advanced = Some(true);
+            self.capture(app, ctx, now);
+        }
+    }
+
+    /// Checks the exported file, removes the folder, then captures.
+    fn finish_export(&mut self, app: &mut StudioApp, ctx: &egui::Context, now: Instant) {
+        let elapsed = now - self.stage_since;
+        let dir = self.export_dir.clone().unwrap_or_default();
+        let decoded = std::fs::File::open(dir.join("script-8k.png"))
+            .ok()
+            .and_then(|f| {
+                png::Decoder::new(std::io::BufReader::new(f))
+                    .read_info()
+                    .ok()
+            })
+            .map(|r| (r.info().width, r.info().height));
+        let alone = std::fs::read_dir(&dir).is_ok_and(|d| d.count() == 1);
+        let _ = std::fs::remove_dir_all(&dir);
+        app.report.lock().unwrap_or_else(|e| e.into_inner()).export = Some((
+            decoded == Some((7680, 4320)) && alone,
+            self.export_stable,
+            elapsed,
+        ));
+        app.open_advanced = Some(true);
+        self.capture(app, ctx, now);
+    }
+
     /// Captures the window. Whether a simulated device loss was shown is
     /// judged here, so it holds whichever stage the loss happened in.
     fn capture(&mut self, app: &StudioApp, ctx: &egui::Context, now: Instant) {

@@ -1,0 +1,86 @@
+$ pigment-studio --script --screenshot window.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 215 (superseded before starting 0), displayed 212, max in flight 2
+slider values dragged 200, interaction previews shown 206, scenes built during the paint drag 0
+8K export: 360 ms; 32 UI frames while it ran, longest gap 21.0 ms
+UI frames while a job was in flight: 33, longest gap 16.5 ms
+longest busy gaps: 17 ms at 0.02 s, 11 ms at 7.03 s, 10 ms at 4.61 s, 10 ms at 5.19 s, 10 ms at 6.79 s
+request→shown latency: median 10.1 ms, p95 20.2 ms, max 39.5 ms; render+readback median 2.79 ms, max 19.12 ms (n=212)
+close → worker stopped: 4.3 ms (joined: true)
+window captured: docs/evidence/studio-13/window.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] 8K export written (7680×4320, no temporary left)
+[ok] the export's snapshot never changed while sliders moved
+[ok] UI frames kept coming during the export (gap < 250 ms)
+[ok] interaction previews shown while dragging
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit status: 0
+
+$ pigment-studio --script --preview-delay-ms 1500 --screenshot /tmp/pp12/w13-delayed.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 215 (superseded before starting 206), displayed 5, max in flight 2
+slider values dragged 197, interaction previews shown 0, scenes built during the paint drag 0
+8K export: 400 ms; 33 UI frames while it ran, longest gap 29.6 ms
+UI frames while a job was in flight: 1091, longest gap 29.6 ms
+longest busy gaps: 30 ms at 13.76 s, 22 ms at 13.78 s, 21 ms at 13.62 s, 21 ms at 9.32 s, 20 ms at 9.34 s
+request→shown latency: median 1550.6 ms, p95 1903.8 ms, max 1903.8 ms; render+readback median 11.89 ms, max 28.32 ms (n=5)
+close → worker stopped: 6.2 ms (joined: true)
+window captured: /tmp/pp12/w13-delayed.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] 8K export written (7680×4320, no temporary left)
+[ok] the export's snapshot never changed while sliders moved
+[ok] UI frames kept coming during the export (gap < 250 ms)
+[ok] never displayed an older result after a newer one
+[ok] UI frames kept coming while rendering (gap < 250 ms)
+[ok] closed while a render was in flight
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit status: 0
+
+$ pigment-studio --script --lose-device-after 3
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+preview 4: GPU device lost: simulated device loss
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 4 (superseded before starting 0), displayed 3, max in flight 1
+slider values dragged 200, interaction previews shown 1, scenes built during the paint drag 0
+8K export: 480 ms; 35 UI frames while it ran, longest gap 50.9 ms
+UI frames while a job was in flight: 2, longest gap 29.0 ms
+longest busy gaps: 29 ms at 0.03 s, 10 ms at 4.40 s
+request→shown latency: median 38.3 ms, p95 40.1 ms, max 40.1 ms; render+readback median 5.56 ms, max 19.99 ms (n=3)
+close → worker stopped: 4.3 ms (joined: true)
+window captured: (not saved: no --screenshot path)
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] device loss shown and previews stopped
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit status: 0
+

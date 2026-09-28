@@ -15,7 +15,7 @@ use egui_kittest::kittest::Queryable;
 use pigment_core::capability::{
     AdapterReport, BackendKind, DeviceKind, GpuCapabilities, LimitsReport,
 };
-use pigment_core::frame::AspectRatio;
+use pigment_core::frame::{AspectRatio, Frame};
 use pigment_core::invalidate::Invalidation;
 use pigment_core::scene::lakeshore::LakeshoreGenerator;
 use pigment_core::scene::{SceneGenerator, SceneKey};
@@ -25,6 +25,8 @@ use pigment_core::version::GENERATOR_VERSION;
 use pigment_io::Document;
 
 use crate::app::{NoticeKind, StudioApp, StudioOptions};
+use crate::export::tests::GateRenderer;
+use crate::export::{Exporter, SizeChoice, SizeForm};
 use crate::files::tests::FakeDialogs;
 use crate::files::{DialogAnswer, DialogRequest, Dialogs, Parent};
 use crate::preview::Quality;
@@ -85,6 +87,10 @@ impl Dialogs for Shared {
 }
 
 fn app(dialogs: Shared) -> StudioApp {
+    app_with(dialogs, GateRenderer::open())
+}
+
+fn app_with(dialogs: Shared, export: GateRenderer) -> StudioApp {
     let worker = PreviewWorker::spawn(FlatRenderer::default(), WorkerOptions::default(), || {});
     StudioApp::new(
         worker,
@@ -92,6 +98,7 @@ fn app(dialogs: Shared) -> StudioApp {
         StudioOptions::default(),
         Arc::new(Mutex::new(Report::default())),
         Box::new(dialogs),
+        Exporter::spawn(export, || {}),
     )
 }
 
@@ -589,6 +596,7 @@ fn review_screens() {
     let make = |dialogs: Shared, size: [f32; 2]| {
         let renderer = PaintRenderer::new(ctx.clone()).unwrap();
         let worker = PreviewWorker::spawn(renderer, WorkerOptions::default(), || {});
+        let exporter = Exporter::spawn(PaintRenderer::new(ctx.clone()).unwrap(), || {});
         let caps = caps.clone();
         let mut h = Harness::builder()
             .with_size(size)
@@ -602,6 +610,7 @@ fn review_screens() {
                     StudioOptions::default(),
                     Arc::new(Mutex::new(Report::default())),
                     Box::new(dialogs),
+                    exporter,
                 )
             });
         settle(&mut h);
@@ -714,4 +723,557 @@ fn review_screens() {
     command(&h, Key::Backslash);
     settle(&mut h);
     save(&mut h, "07-painting-only");
+
+    // 8. The export dialog.
+    let mut h = make(Shared::default(), [1440.0, 900.0]);
+    h.remove_cursor();
+    command(&h, Key::E);
+    h.step();
+    h.step();
+    save(&mut h, "08-export-dialog");
+
+    // 9–10. An export in progress (held at a tile so it can be seen), then
+    // its result.
+    let gate = GateRenderer::default();
+    let dest = dir.join("exported.png");
+    let mut h = {
+        let renderer = PaintRenderer::new(ctx.clone()).unwrap();
+        let worker = PreviewWorker::spawn(renderer, WorkerOptions::default(), || {});
+        let exporter = Exporter::spawn(gate.clone(), || {});
+        let caps = caps.clone();
+        let dialogs = Shared::answering([picked(&dest)]);
+        let mut h = Harness::builder()
+            .with_size([1440.0, 900.0])
+            .with_pixels_per_point(2.0)
+            .wgpu_setup(setup())
+            .build_eframe(move |cc| {
+                crate::theme::install(&cc.egui_ctx);
+                StudioApp::new(
+                    worker,
+                    caps,
+                    StudioOptions::default(),
+                    Arc::new(Mutex::new(Report::default())),
+                    Box::new(dialogs),
+                    exporter,
+                )
+            });
+        settle(&mut h);
+        h
+    };
+    h.remove_cursor();
+    h.state_mut().export_form = SizeForm {
+        choice: SizeChoice::Custom,
+        width: 1600,
+        height: 900,
+    };
+    command(&h, Key::E);
+    h.step();
+    h.step();
+    h.get_by_label("Export…").click();
+    h.step();
+    gate.release(3);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while h.query_by_label_contains("Tile 3 of").is_none() {
+        assert!(Instant::now() < deadline);
+        h.step();
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    h.remove_cursor();
+    h.step();
+    save(&mut h, "09-exporting");
+    gate.release(u32::MAX);
+    until_export_done(&mut h);
+    h.remove_cursor();
+    h.step();
+    save(&mut h, "10-exported");
+}
+
+// ---- export (task 13) ----------------------------------------------------
+
+fn harness_with(dialogs: Shared, export: GateRenderer) -> Harness<'static, StudioApp> {
+    let mut h = Harness::builder()
+        .with_size([1280.0, 900.0])
+        .build_eframe(move |cc| {
+            crate::theme::install(&cc.egui_ctx);
+            app_with(dialogs, export)
+        });
+    settle(&mut h);
+    h
+}
+
+/// Steps until the export has finished (the outcome has been handled).
+fn until_export_done(h: &mut Harness<'static, StudioApp>) {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while h.state().exporter.is_running() || h.state().export_pending.is_some() {
+        assert!(Instant::now() < deadline, "export did not finish");
+        h.step();
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    h.step();
+    h.step();
+}
+
+fn decoded_size(path: &Path) -> (u32, u32) {
+    let d = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(path).unwrap()));
+    let r = d.read_info().unwrap();
+    (r.info().width, r.info().height)
+}
+
+fn dir_names(dir: &Path) -> Vec<String> {
+    let mut v: Vec<String> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn the_export_dialog_names_real_pixels_and_a_cancelled_destination_writes_nothing() {
+    let dir = temp("export-cancel-dest");
+    let dialogs = Shared::answering([DialogAnswer::Cancelled]);
+    let mut h = harness_with(dialogs.clone(), GateRenderer::open());
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("Export PNG");
+    h.get_by_label("4K · 3840 × 2160 px").click();
+    h.step();
+    h.get_by_label_contains("Exports 3840 × 2160 px");
+    h.get_by_label_contains("no prose, recipe, file path");
+    h.get_by_label("Export…").click();
+    h.step();
+    h.step();
+    assert_eq!(
+        dialogs.shown(),
+        [DialogRequest::ExportPng {
+            suggested: "painting-3840x2160.png".into()
+        }]
+    );
+    until_export_done(&mut h);
+    assert!(!h.state().exporter.is_running());
+    assert!(dir_names(&dir).is_empty());
+    assert!(h.state().notice.is_none(), "nothing to report");
+}
+
+#[test]
+fn invalid_custom_sizes_are_explained_and_cannot_be_exported() {
+    let mut h = harness_with(Shared::default(), GateRenderer::open());
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("Custom size").click();
+    h.step();
+    let aspect = h.state().doc.recipe().frame.aspect();
+    h.state_mut().export_form.set_width(aspect, 32);
+    h.step();
+    h.get_by_label_contains("at least 64 px");
+    let disabled = |h: &Harness<'static, StudioApp>| {
+        h.get_by_label("Export…");
+        h.query_by(|n| n.label().as_deref() == Some("Export…") && n.is_disabled())
+            .is_some()
+    };
+    assert!(disabled(&h));
+    h.state_mut().export_form.set_width(aspect, 30000);
+    h.step();
+    h.get_by_label_contains("at most 16384 px");
+    h.state_mut().export_form.set_width(aspect, 2000);
+    h.step();
+    h.get_by_label_contains("Exports 2000 × 1125 px");
+    assert!(!disabled(&h));
+}
+
+#[test]
+fn sliders_moved_during_an_export_do_not_change_it() {
+    let dir = temp("export-snapshot");
+    let dest = dir.join("snap.png");
+    let gate = GateRenderer::default(); // holds every tile
+    let mut h = harness_with(Shared::answering([picked(&dest)]), gate.clone());
+    h.state_mut().export_form = SizeForm {
+        choice: SizeChoice::Custom,
+        width: 1600,
+        height: 900,
+    };
+    let before = h.state().values();
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("Export…").click();
+    h.step();
+    h.step();
+    assert!(h.state().exporter.is_running());
+    // One at a time: Export is disabled and Ctrl+E does nothing.
+    assert!(!h.state().can_export());
+    command(&h, Key::E);
+    h.step();
+    assert!(!h.state().show_export);
+    h.get_by_label_contains("Exporting snap.png · 1600 × 900 px");
+    // The window stays live: move sliders and change composition.
+    h.state_mut().set_control(
+        &pigment_core::settings::EDGE_LOOSENESS,
+        0.95,
+        Instant::now(),
+        false,
+    );
+    h.state_mut().another_composition(Instant::now());
+    settle(&mut h);
+    assert!(
+        h.state().exporter.is_running(),
+        "still held at the first tile"
+    );
+    gate.release(u32::MAX);
+    until_export_done(&mut h);
+    let seen = gate.seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 1);
+    assert_eq!(
+        seen[0].appearance, before.appearance,
+        "the snapshot, not the edit"
+    );
+    assert_eq!(seen[0].seeds.stream(Domain::Composition), {
+        let d =
+            Document::from_prose(crate::app::DEFAULT_PROSE, pigment_core::frame::UHD_4K).unwrap();
+        d.seeds().stream(Domain::Composition)
+    });
+    assert_eq!(decoded_size(&dest), (1600, 900));
+    let n = h.state().notice.clone().unwrap();
+    assert!(
+        n.sticky && n.path.as_deref() == Some(dest.as_path()),
+        "{n:?}"
+    );
+    assert!(n.text.contains("snap.png") && n.text.contains("1600 × 900 px"));
+    h.get_by_label("Copy path");
+    assert!(h.state().can_export());
+}
+
+#[test]
+fn portrait_and_square_paintings_export_at_their_own_proportions() {
+    let dir = temp("export-shapes");
+    let (tall, square) = (dir.join("tall.png"), dir.join("square.png"));
+    let mut h = harness_with(
+        Shared::answering([picked(&tall), picked(&square)]),
+        GateRenderer::open(),
+    );
+    for (shape, dest, w, size) in [
+        (crate::app::Shape::Portrait, &tall, 800, (800, 1000)),
+        (crate::app::Shape::Square, &square, 900, (900, 900)),
+    ] {
+        command(&h, Key::E);
+        h.step();
+        h.get_by_label("Proportions");
+        let a = h.state_mut();
+        a.doc
+            .set_frame(Frame::largest_with_aspect(shape.aspect(), 3840).unwrap())
+            .unwrap();
+        a.export_form.choice = SizeChoice::Custom;
+        a.export_form.set_width(shape.aspect(), w);
+        h.step();
+        // The modal grew (a custom size row); egui re-centres it a frame
+        // later, so let the layout settle before clicking.
+        h.step();
+        h.get_by_label_contains(&format!("Exports {} × {} px", size.0, size.1));
+        h.get_by_label("Export…").click();
+        h.step();
+        until_export_done(&mut h);
+        assert!(dest.exists(), "{dest:?}: {:?}", h.state().notice);
+        assert_eq!(decoded_size(dest), size);
+    }
+}
+
+#[test]
+fn cancelling_an_export_keeps_the_existing_file_and_leaves_no_partial() {
+    let dir = temp("export-cancel");
+    let dest = dir.join("old.png");
+    std::fs::write(&dest, b"previous export").unwrap();
+    let gate = GateRenderer::default();
+    let mut h = harness_with(Shared::answering([picked(&dest)]), gate.clone());
+    h.state_mut().export_form = SizeForm {
+        choice: SizeChoice::Custom,
+        width: 1600,
+        height: 900,
+    };
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("Export…").click();
+    h.step();
+    gate.release(1);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while h.query_by_label_contains("Tile 1 of").is_none() {
+        assert!(
+            Instant::now() < deadline,
+            "no tile progress shown: {:?}",
+            h.state().exporter.running().map(|r| r.progress)
+        );
+        h.step();
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    h.get_by_label("Cancel export").click();
+    h.step();
+    until_export_done(&mut h);
+    assert_eq!(std::fs::read(&dest).unwrap(), b"previous export");
+    assert_eq!(dir_names(&dir), ["old.png"]);
+    assert!(
+        h.state()
+            .notice
+            .as_ref()
+            .unwrap()
+            .text
+            .contains("Export cancelled")
+    );
+}
+
+#[test]
+fn a_failed_export_says_what_to_do_and_keeps_the_existing_file() {
+    let dir = temp("export-disk");
+    let dest = dir.join("full.png");
+    std::fs::write(&dest, b"old").unwrap();
+    let full = GateRenderer {
+        fail_with: Some(pigment_core::error::RenderError::Sink(
+            pigment_core::error::SinkError {
+                kind: pigment_core::error::SinkErrorKind::DiskFull,
+                detail: "no space left on device".into(),
+            },
+        )),
+        ..GateRenderer::open()
+    };
+    let mut h = harness_with(Shared::answering([picked(&dest)]), full);
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("Export…").click();
+    h.step();
+    until_export_done(&mut h);
+    let n = h.state().notice.clone().unwrap();
+    assert_eq!(n.kind, NoticeKind::Error);
+    assert!(
+        n.text.contains("disk is full") && n.text.contains("unchanged"),
+        "{}",
+        n.text
+    );
+    assert_eq!(std::fs::read(&dest).unwrap(), b"old");
+    assert_eq!(dir_names(&dir), ["full.png"]);
+}
+
+#[test]
+fn closing_during_an_export_asks_and_stopping_leaves_no_partial_file() {
+    let dir = temp("export-close");
+    let dest = dir.join("closing.png");
+    let gate = GateRenderer::default();
+    let mut h = harness_with(Shared::answering([picked(&dest)]), gate.clone());
+    h.state_mut().export_form = SizeForm {
+        choice: SizeChoice::Custom,
+        width: 1600,
+        height: 900,
+    };
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("Export…").click();
+    h.step();
+    gate.release(1);
+    let close = |h: &mut Harness<'static, StudioApp>| {
+        h.input_mut()
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default()
+            .events
+            .push(egui::ViewportEvent::Close);
+        h.step();
+    };
+    // Keep exporting: nothing happens.
+    close(&mut h);
+    assert!(viewport_commands(&h).contains(&egui::ViewportCommand::CancelClose));
+    h.step();
+    h.get_by_label("An export is still running");
+    h.get_by_label("Keep exporting").click();
+    h.step();
+    assert!(h.state().exporter.is_running());
+    // Stop and close: the export is cancelled, then the window closes.
+    close(&mut h);
+    h.step();
+    h.get_by_label("Stop export and close").click();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut closed = false;
+    while !closed {
+        assert!(Instant::now() < deadline, "did not close");
+        h.step();
+        closed = viewport_commands(&h).contains(&egui::ViewportCommand::Close);
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    assert!(!h.state().exporter.is_running());
+    assert!(dir_names(&dir).is_empty(), "{:?}", dir_names(&dir));
+}
+
+/// PNG chunk types in file order.
+fn chunk_types(bytes: &[u8]) -> Vec<String> {
+    assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+    let mut out = Vec::new();
+    let mut i = 8;
+    while i + 8 <= bytes.len() {
+        let len = u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+        out.push(String::from_utf8_lossy(&bytes[i + 4..i + 8]).into_owned());
+        i += 12 + len;
+    }
+    out
+}
+
+/// Task 13 acceptance on hardware: an 8K PNG exported through the studio's
+/// own export path (dialog, snapshot, export worker) with the real painter,
+/// while sliders move mid-export. Decoded, its size and chunk list are
+/// checked, it must not contain the prose or local path markers, and it
+/// must equal, byte for byte, a direct `export_png` of the snapshot on the
+/// same device.
+#[test]
+#[ignore = "needs a hardware GPU; exports an 8K PNG from the studio"]
+fn the_studio_exports_a_real_8k_png_of_the_snapshot() {
+    use pigment_core::capability::AdapterPolicy;
+    use pigment_core::job::{CancelToken, NoProgress};
+    use pigment_core::request::{RenderPurpose, RenderRequest, RenderTarget, RequestId};
+    use pigment_core::tiles::{TileOrder, TilePolicy};
+    use pigment_gpu::{GpuContext, PaintRenderer};
+
+    const PROSE_MARKER: &str = "Quillwort-7Q3 zephyr lantern over marbled tarns";
+    let dir = temp("export-8k-pathmarker-K81");
+    let dest = dir.join("dest-marker-Z52.png");
+    let ctx = Arc::new(GpuContext::new(&AdapterPolicy::default()).expect("hardware GPU"));
+    eprintln!("export suite on {}", ctx.capabilities.label());
+    let caps = ctx.capabilities.clone();
+    let worker = PreviewWorker::spawn(
+        PaintRenderer::new(ctx.clone()).unwrap(),
+        WorkerOptions::default(),
+        || {},
+    );
+    let exporter = Exporter::spawn(PaintRenderer::new(ctx.clone()).unwrap(), || {});
+    let dialogs = Shared::answering([picked(&dest)]);
+    let mut h = Harness::builder()
+        .with_size([1280.0, 900.0])
+        .build_eframe(move |cc| {
+            crate::theme::install(&cc.egui_ctx);
+            StudioApp::new(
+                worker,
+                caps,
+                StudioOptions::default(),
+                Arc::new(Mutex::new(Report::default())),
+                Box::new(dialogs),
+                exporter,
+            )
+        });
+    settle(&mut h);
+    // A document with the marker prose, kept for its recipe, saved under a
+    // path marker, with some settings off their defaults.
+    {
+        let a = h.state_mut();
+        a.draft = PROSE_MARKER.to_string();
+        a.doc.set_keep_source_text(true);
+        a.set_control(
+            &pigment_core::settings::WASH_GOUACHE,
+            0.6,
+            Instant::now(),
+            false,
+        );
+        a.another_composition(Instant::now());
+    }
+    settle(&mut h);
+    let snapshot = h.state().doc.clone();
+    command(&h, Key::E);
+    h.step();
+    h.get_by_label("8K · 7680 × 4320 px").click();
+    h.step();
+    h.step();
+    h.get_by_label("Export…").click();
+    h.step();
+    // Move sliders while it runs.
+    let t = Instant::now();
+    let mut moved = 0;
+    while h.state().exporter.is_running() || h.state().export_pending.is_some() {
+        assert!(
+            t.elapsed() < Duration::from_secs(60),
+            "8K export did not finish"
+        );
+        let v = 0.2 + 0.6 * ((moved % 10) as f64 / 10.0);
+        h.state_mut().set_control(
+            &pigment_core::settings::EDGE_LOOSENESS,
+            v,
+            Instant::now(),
+            true,
+        );
+        moved += 1;
+        h.step();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    h.step();
+    eprintln!(
+        "8K export from the studio: {:.0} ms, {moved} slider values while it ran",
+        t.elapsed().as_secs_f64() * 1e3
+    );
+    assert!(moved > 0);
+    let n = h.state().notice.clone().expect("a result");
+    assert_eq!(n.kind, NoticeKind::Info, "{}", n.text);
+
+    let bytes = std::fs::read(&dest).unwrap();
+    assert_eq!(decoded_size(&dest), (7680, 4320));
+    {
+        let d = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(&dest).unwrap()));
+        let r = d.read_info().unwrap();
+        assert_eq!(r.info().color_type, png::ColorType::Rgb);
+        assert_eq!(r.info().bit_depth, png::BitDepth::Eight);
+        assert_eq!(r.info().srgb, Some(png::SrgbRenderingIntent::Perceptual));
+    }
+    let mut kinds = chunk_types(&bytes);
+    kinds.dedup();
+    assert_eq!(kinds, ["IHDR", "sRGB", "IDAT", "IEND"]);
+    // Only long markers: a short string turns up by chance in 22 MB of
+    // compressed pixels. Case-sensitive, as written.
+    let found = |m: &str| bytes.windows(m.len()).any(|w| w == m.as_bytes());
+    for marker in [
+        PROSE_MARKER,
+        "Quillwort-7Q3",
+        "marbled tarns",
+        "pathmarker-K81",
+        "dest-marker-Z52",
+        "pigment-ui-",
+        "recipe",
+    ] {
+        assert!(!found(marker), "{marker:?} leaked into the PNG");
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    if home.len() > 5 {
+        assert!(!found(&home), "the home path leaked");
+    }
+
+    // The same snapshot exported directly: byte-identical on this device.
+    let r = snapshot.recipe();
+    let scene = LakeshoreGenerator
+        .generate(&snapshot.seeds(), &r.form, r.frame.aspect())
+        .unwrap();
+    let request = RenderRequest {
+        id: RequestId(1),
+        purpose: RenderPurpose::Export,
+        scene: Arc::new(scene),
+        seeds: snapshot.seeds(),
+        appearance: snapshot.appearance(),
+        target: RenderTarget {
+            width: 7680,
+            height: 4320,
+            policy: TilePolicy::default_export(),
+            order: TileOrder::RowMajor,
+        },
+    };
+    let direct = dir.join("direct.png");
+    let renderer = PaintRenderer::new(ctx.clone()).unwrap();
+    pigment_io::export_png(
+        &renderer,
+        &request,
+        &direct,
+        pigment_io::PngCompression::Fast,
+        &CancelToken::new(),
+        &mut NoProgress,
+    )
+    .unwrap();
+    assert!(
+        std::fs::read(&direct).unwrap() == bytes,
+        "the studio's export differs from the snapshot's direct export"
+    );
+    assert!(
+        (h.state().values().appearance.painting.edge_looseness
+            - snapshot.appearance().painting.edge_looseness)
+            .abs()
+            > 1e-9,
+        "the sliders really did move"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

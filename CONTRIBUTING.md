@@ -38,7 +38,7 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 ## Test layers
 
 1. **Portable unit tests** (`crates/*/src/**`, `#[cfg(test)]`): contracts, validation, tile planning, the job model, invalidation, frozen seed and scene checksums, and the studio's interaction tests (headless egui_kittest with a CPU stand-in renderer). They run in CI on Linux, Windows and macOS (`.github/workflows/ci.yml`). Any exact-value fixture here must hold on all three platforms (tiers 0–1 in the architecture doc).
-2. **Hardware GPU tests** (`crates/pigment-gpu/tests/gpu_hardware.rs`, `crates/pigment-io/tests/gpu_export.rs`, `crates/pigment-studio/tests/gpu_preview.rs` and `ui_tests::review_screens`, `#[ignore = "needs a hardware GPU…"]`): tiled vs single-tile byte identity, repeatability, cancellation, limits. Run them manually on real hardware and save the log under `docs/evidence/` with the date and OS in the file name.
+2. **Hardware GPU tests** (`crates/pigment-gpu/tests/gpu_hardware.rs`, `crates/pigment-io/tests/gpu_export.rs`, `crates/pigment-studio/tests/gpu_preview.rs`, `ui_tests::review_screens` and `ui_tests::the_studio_exports_a_real_8k_png_of_the_snapshot`, `#[ignore = "needs a hardware GPU…"]`): tiled vs single-tile byte identity, repeatability, cancellation, limits. Run them manually on real hardware and save the log under `docs/evidence/` with the date and OS in the file name.
 3. **Visual review** (task 08 onward): contact sheets judged by a person against [docs/art-direction.md](docs/art-direction.md). Automated checks never count as visual approval.
 
 ## Evidence and claims

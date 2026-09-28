@@ -14,6 +14,7 @@ use eframe::egui::Key;
 use pigment_core::capability::GpuCapabilities;
 use pigment_core::error::{RenderError, TextError};
 use pigment_core::frame::{AspectRatio, Frame};
+use pigment_core::job::Phase;
 use pigment_core::request::{RequestId, RequestIds};
 use pigment_core::seed::Variation;
 use pigment_core::settings::{Channel, ControlSpec, ControlValues, Group};
@@ -21,7 +22,10 @@ use pigment_io::Document;
 use raw_window_handle::HasWindowHandle;
 
 use crate::controls::{self, Edit};
-use crate::files::{self, Choice, Dialogs, Effect, FileFlow, Intent, Parent, Step};
+use crate::export::{self, Busy, ExportJob, ExportOutcome, Exporter, SizeChoice, SizeForm};
+use crate::files::{
+    self, Choice, DialogAnswer, DialogRequest, Dialogs, Effect, FileFlow, Intent, Parent, Step,
+};
 use crate::preview::{PreviewView, Quality, Scheduler, display_size, preview_size};
 use crate::script::{Report, Script};
 use crate::theme;
@@ -111,6 +115,10 @@ pub struct Notice {
     pub kind: NoticeKind,
     pub text: String,
     pub at: Instant,
+    /// Stays until dismissed even when it is only information.
+    pub sticky: bool,
+    /// A file the message is about (offered for copying).
+    pub path: Option<PathBuf>,
 }
 
 /// A submitted preview: what it renders and at which quality.
@@ -160,6 +168,14 @@ pub struct StudioApp {
     /// Keyboard focus last frame, to scroll a newly focused control into
     /// view.
     last_focus: Option<egui::Id>,
+    pub(crate) exporter: Exporter,
+    pub(crate) export_form: SizeForm,
+    pub(crate) show_export: bool,
+    /// A job whose destination is being chosen.
+    pub(crate) export_pending: Option<ExportJob>,
+    /// "Stop export and close" was chosen: close once it has stopped.
+    pub(crate) close_when_export_ends: bool,
+    pub(crate) confirm_export_close: bool,
     title: String,
 }
 
@@ -190,6 +206,7 @@ impl StudioApp {
         opts: StudioOptions,
         report: Arc<Mutex<Report>>,
         dialogs: Box<dyn Dialogs>,
+        exporter: Exporter,
     ) -> StudioApp {
         let doc = Document::from_prose(DEFAULT_PROSE, Shape::Wide.frame())
             .expect("default prose is valid");
@@ -220,6 +237,12 @@ impl StudioApp {
             allow_close: false,
             open_advanced: None,
             last_focus: None,
+            exporter,
+            export_form: SizeForm::default(),
+            show_export: false,
+            export_pending: None,
+            close_when_export_ends: false,
+            confirm_export_close: false,
             title: String::new(),
         }
     }
@@ -468,7 +491,113 @@ impl StudioApp {
             kind,
             text,
             at: now,
+            sticky: false,
+            path: None,
         });
+    }
+
+    // ---- export ----------------------------------------------------------
+
+    /// A snapshot of the painting as it is now, for an export of `frame`.
+    fn export_job(&self, frame: Frame, destination: PathBuf) -> ExportJob {
+        ExportJob {
+            seeds: self.doc.seeds(),
+            form: self.doc.recipe().form,
+            aspect: self.doc.recipe().frame.aspect(),
+            appearance: self.doc.appearance(),
+            frame,
+            destination,
+        }
+    }
+
+    /// Whether an export can start now.
+    pub fn can_export(&self) -> bool {
+        !self.exporter.is_running()
+            && self.export_pending.is_none()
+            && !self.files.busy()
+            && !self.view.device_lost
+    }
+
+    /// Starts exporting the current painting at `frame` to `destination`,
+    /// skipping the dialogs (the scripted check and tests).
+    pub fn start_export_to(&mut self, frame: Frame, destination: PathBuf) -> Result<(), Busy> {
+        self.apply_draft();
+        let job = self.export_job(frame, destination);
+        self.exporter.start(job)
+    }
+
+    /// Export pressed in the export dialog: take the snapshot now, then ask
+    /// where to write it.
+    fn export_chosen(&mut self, frame: Frame, parent: Option<&dyn Parent>) {
+        self.apply_draft();
+        let suggested = export::suggested_name(self.doc.path(), frame);
+        self.export_pending = Some(self.export_job(frame, PathBuf::new()));
+        self.dialogs
+            .start(DialogRequest::ExportPng { suggested }, parent);
+        self.show_export = false;
+    }
+
+    fn poll_export(&mut self, ctx: &egui::Context, now: Instant) {
+        if self.export_pending.is_some()
+            && let Some(answer) = self.dialogs.poll()
+        {
+            let job = self.export_pending.take().expect("pending");
+            // A cancelled destination dialog exports nothing.
+            if let DialogAnswer::Picked(destination) = answer {
+                let job = ExportJob { destination, ..job };
+                if self.exporter.start(job).is_err() {
+                    self.notify(
+                        NoticeKind::Warning,
+                        "Another export is still running; wait for it or cancel it.".into(),
+                        now,
+                    );
+                }
+            }
+        }
+        let Some(outcome) = self.exporter.take_finished() else {
+            return;
+        };
+        match outcome {
+            ExportOutcome::Written {
+                destination,
+                bytes,
+                width,
+                height,
+                ..
+            } => {
+                let folder = destination
+                    .parent()
+                    .map(|d| d.display().to_string())
+                    .unwrap_or_default();
+                self.notice = Some(Notice {
+                    kind: NoticeKind::Info,
+                    text: format!(
+                        "Exported {} ({width} × {height} px, {}) to {folder}.",
+                        files::display_name(&destination),
+                        export::format_bytes(bytes)
+                    ),
+                    at: now,
+                    sticky: true,
+                    path: Some(destination),
+                });
+            }
+            ExportOutcome::Cancelled => self.notify(
+                NoticeKind::Info,
+                "Export cancelled. Nothing was written, and any existing file is unchanged.".into(),
+                now,
+            ),
+            ExportOutcome::Failed { destination, error } => {
+                self.notify(
+                    NoticeKind::Error,
+                    export::failure_message(&error, &destination),
+                    now,
+                );
+            }
+        }
+        if self.close_when_export_ends {
+            self.close_when_export_ends = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
     }
 
     fn apply_effects(&mut self, effects: Vec<Effect>, ctx: &egui::Context, now: Instant) {
@@ -568,8 +697,21 @@ impl StudioApp {
             ) {
                 self.file_intent(Intent::SaveAs, &ctx, parent, now);
             }
-            ui.add_enabled(false, theme::quiet("Export PNG…"))
-                .on_disabled_hover_text("Exporting images arrives in a later version");
+            let exporting = self.exporter.is_running();
+            if ui
+                .add_enabled(self.can_export(), theme::quiet("Export PNG…"))
+                .on_hover_text(format!("Export the painting as a PNG ({})", cmd("E")))
+                .on_disabled_hover_text(if exporting {
+                    "One export at a time: this one is still running"
+                } else if self.view.device_lost {
+                    "The GPU was reset; restart Pigment Prose to export"
+                } else {
+                    "Finish the open dialog first"
+                })
+                .clicked()
+            {
+                self.show_export = true;
+            }
             ui.add_space(12.0);
             let unsaved = self.unsaved();
             if unsaved {
@@ -622,7 +764,8 @@ impl StudioApp {
                     .color(color),
             );
             // Leave room for Dismiss; long messages wrap.
-            let room = (ui.available_width() - 90.0).max(120.0);
+            let room =
+                (ui.available_width() - if n.path.is_some() { 200.0 } else { 90.0 }).max(120.0);
             ui.scope(|ui| {
                 ui.set_max_width(room);
                 ui.add(egui::Label::new(egui::RichText::new(&n.text).color(theme::INK)).wrap());
@@ -632,6 +775,14 @@ impl StudioApp {
                     .add(theme::quiet("Dismiss"))
                     .on_hover_text("Hide this message")
                     .clicked();
+                if let Some(path) = &n.path
+                    && ui
+                        .add(theme::quiet("Copy path"))
+                        .on_hover_text(path.display().to_string())
+                        .clicked()
+                {
+                    ui.ctx().copy_text(path.display().to_string());
+                }
             });
         });
         if dismiss {
@@ -1050,6 +1201,290 @@ impl StudioApp {
         }
     }
 
+    fn export_modal(&mut self, ctx: &egui::Context, parent: Option<&dyn Parent>, now: Instant) {
+        if !self.show_export {
+            return;
+        }
+        let aspect = self.doc.recipe().frame.aspect();
+        let mut go = None;
+        let mut close = false;
+        let mut new_shape = None;
+        let modal = egui::Modal::new(egui::Id::new("export"))
+            .backdrop_color(egui::Color32::from_black_alpha(150))
+            .show(ctx, |ui| {
+                ui.set_width(480.0);
+                ui.label(
+                    egui::RichText::new("Export PNG")
+                        .family(theme::semibold())
+                        .size(17.0)
+                        .color(theme::INK),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(
+                        "The painting as it is now: this composition and these settings. \
+                         Later changes do not affect an export that has started.",
+                    )
+                    .color(theme::INK_2),
+                );
+                if self.view.is_pending() || !self.preview_is_current() {
+                    ui.horizontal_wrapped(|ui| {
+                        theme::dot(ui, theme::AMBER);
+                        ui.label(
+                            egui::RichText::new(
+                                "The preview is still painting. The export uses the newest \
+                                 settings, not the image on screen.",
+                            )
+                            .small()
+                            .color(theme::AMBER),
+                        );
+                    });
+                }
+                ui.add_space(12.0);
+                ui.label(theme::header("Shape"));
+                let current = Shape::of(aspect);
+                let label = ui.label(egui::RichText::new("Proportions").color(theme::INK));
+                let selected = current.map_or_else(
+                    || format!("Custom {}:{}", aspect.width, aspect.height),
+                    |s| s.label().to_string(),
+                );
+                egui::ComboBox::from_id_salt("export-shape")
+                    .selected_text(selected)
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for s in Shape::ALL {
+                            if ui.selectable_label(current == Some(s), s.label()).clicked()
+                                && current != Some(s)
+                            {
+                                new_shape = Some(s);
+                            }
+                        }
+                    })
+                    .response
+                    .labelled_by(label.id);
+                ui.label(
+                    egui::RichText::new(
+                        "A different shape is a different composition, not a resize: the \
+                         painting recomposes (the preview behind updates).",
+                    )
+                    .small()
+                    .color(theme::INK_3),
+                );
+                ui.add_space(12.0);
+                ui.label(theme::header("Size"));
+                let form = &mut self.export_form;
+                let preset = |c: SizeChoice| {
+                    let mut f = *form;
+                    f.choice = c;
+                    f.frame(aspect)
+                        .map(|f| format!("{} × {} px", f.width, f.height))
+                        .unwrap_or_default()
+                };
+                let (k4, k8) = (preset(SizeChoice::Uhd4k), preset(SizeChoice::Uhd8k));
+                ui.radio_value(&mut form.choice, SizeChoice::Uhd4k, format!("4K · {k4}"));
+                ui.radio_value(&mut form.choice, SizeChoice::Uhd8k, format!("8K · {k8}"));
+                ui.radio_value(&mut form.choice, SizeChoice::Custom, "Custom size");
+                if form.choice == SizeChoice::Custom {
+                    ui.horizontal(|ui| {
+                        let (mut w, mut h) = (form.width, form.height);
+                        let wl = ui.label("Width");
+                        let wr = ui
+                            .add(egui::DragValue::new(&mut w).range(1..=99_999).suffix(" px"))
+                            .labelled_by(wl.id);
+                        ui.label("×");
+                        let hl = ui.label("Height");
+                        let hr = ui
+                            .add(egui::DragValue::new(&mut h).range(1..=99_999).suffix(" px"))
+                            .labelled_by(hl.id);
+                        if wr.changed() {
+                            form.set_width(aspect, w);
+                        } else if hr.changed() {
+                            form.set_height(aspect, h);
+                        }
+                    });
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Sizes snap to the painting's exact {}:{} proportions.",
+                            aspect.width, aspect.height
+                        ))
+                        .small()
+                        .color(theme::INK_3),
+                    );
+                }
+                ui.add_space(6.0);
+                let frame = form.frame(aspect);
+                match &frame {
+                    Ok(f) => {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Exports {} × {} px ({:.1} megapixels).",
+                                f.width,
+                                f.height,
+                                f.pixel_count() as f64 / 1e6
+                            ))
+                            .color(theme::INK),
+                        );
+                        let cm = f.width as f64 / 300.0 * 2.54;
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Only pixels add detail. DPI is just a label for printing: at \
+                                 300 DPI this is {cm:.0} cm ({:.1} in) wide.",
+                                f.width as f64 / 300.0
+                            ))
+                            .small()
+                            .color(theme::INK_3),
+                        );
+                    }
+                    Err(e) => {
+                        ui.horizontal_wrapped(|ui| {
+                            theme::dot(ui, theme::CORAL);
+                            ui.label(
+                                egui::RichText::new(export::size_problem(e)).color(theme::CORAL),
+                            );
+                        });
+                    }
+                }
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(
+                        "The PNG holds only the image: no prose, recipe, file path, \
+                         watermark or attribution.",
+                    )
+                    .small()
+                    .color(theme::INK_2),
+                );
+                ui.add_space(16.0);
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let export = ui.add_enabled(frame.is_ok(), theme::primary("Export…"));
+                        theme::focus_on_accent(ui, &export);
+                        if export.clicked()
+                            && let Ok(f) = frame
+                        {
+                            go = Some(f);
+                        }
+                        if ui.button("Cancel").clicked() {
+                            close = true;
+                        }
+                    });
+                });
+            });
+        if let Some(s) = new_shape {
+            self.set_shape(s.aspect(), now);
+        }
+        if close || (go.is_none() && modal.should_close()) {
+            self.show_export = false;
+        }
+        if let Some(f) = go {
+            self.export_chosen(f, parent);
+        }
+    }
+
+    /// The running export: what, where it is, and Cancel.
+    fn export_bar(&mut self, ui: &mut egui::Ui) {
+        let Some(r) = self.exporter.running() else {
+            return;
+        };
+        let mut cancel = false;
+        ui.horizontal(|ui| {
+            theme::dot(ui, theme::AMBER);
+            ui.label(
+                egui::RichText::new(format!(
+                    "Exporting {} · {} × {} px",
+                    files::display_name(&r.job.destination),
+                    r.job.frame.width,
+                    r.job.frame.height
+                ))
+                .color(theme::INK),
+            );
+            let (stage, fraction) = match (r.cancelling, r.progress) {
+                (true, _) => ("Stopping…".to_string(), None),
+                (_, None) => ("Starting…".to_string(), None),
+                (_, Some(p)) => match p.phase {
+                    Phase::Scene => ("Building the scene".into(), None),
+                    Phase::Setup => ("Preparing".into(), None),
+                    Phase::Tiles => (
+                        format!("Tile {} of {}", p.done, p.total),
+                        Some(p.done as f32 / p.total.max(1) as f32),
+                    ),
+                    Phase::Finalize => ("Writing the file".into(), None),
+                },
+            };
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                cancel = ui
+                    .add_enabled(!r.cancelling, egui::Button::new("Cancel export"))
+                    .on_hover_text(
+                        "Stop at the next tile. Nothing is written, and any existing file is kept.",
+                    )
+                    .clicked();
+                // Tiles counted by the renderer; no time estimate.
+                let bar = match fraction {
+                    Some(f) => egui::ProgressBar::new(f).text(stage.clone()),
+                    None => egui::ProgressBar::new(0.0)
+                        .animate(true)
+                        .text(stage.clone()),
+                };
+                ui.add(bar.desired_width(260.0).fill(theme::ACCENT_DIM));
+            });
+        });
+        if cancel {
+            self.exporter.cancel();
+        }
+    }
+
+    /// Closing while an export runs: keep it, or stop it and then close.
+    fn export_close_modal(&mut self, ctx: &egui::Context) {
+        if !self.confirm_export_close {
+            return;
+        }
+        let mut keep = false;
+        let mut stop = false;
+        let modal = egui::Modal::new(egui::Id::new("export-close"))
+            .backdrop_color(egui::Color32::from_black_alpha(150))
+            .show(ctx, |ui| {
+                ui.set_width(420.0);
+                ui.label(
+                    egui::RichText::new("An export is still running")
+                        .family(theme::semibold())
+                        .size(17.0)
+                        .color(theme::INK),
+                );
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new("Stopping it writes nothing and keeps any existing file.")
+                        .color(theme::INK_2),
+                );
+                ui.add_space(18.0);
+                ui.horizontal(|ui| {
+                    stop = ui
+                        .add(
+                            egui::Button::new(
+                                egui::RichText::new("Stop export and close").color(theme::CORAL),
+                            )
+                            .fill(egui::Color32::TRANSPARENT)
+                            .stroke(egui::Stroke::new(1.0, theme::SEAM_STRONG)),
+                        )
+                        .clicked();
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let k = ui.add(theme::primary("Keep exporting"));
+                        if ui.memory(|m| m.focused().is_none()) {
+                            k.request_focus();
+                        }
+                        theme::focus_on_accent(ui, &k);
+                        keep = k.clicked();
+                    });
+                });
+            });
+        if keep || (!stop && modal.should_close()) {
+            self.confirm_export_close = false;
+        }
+        if stop {
+            self.confirm_export_close = false;
+            self.close_when_export_ends = true;
+            self.exporter.cancel();
+        }
+    }
+
     fn confirm_modal(&mut self, ctx: &egui::Context, parent: Option<&dyn Parent>, now: Instant) {
         let Step::Confirm { then } = self.files.step else {
             return;
@@ -1204,6 +1639,9 @@ impl StudioApp {
         if take(M::COMMAND, Key::O) {
             self.file_intent(Intent::Open, ctx, parent, now);
         }
+        if take(M::COMMAND, Key::E) && self.can_export() {
+            self.show_export = true;
+        }
         if take(M::ALT, Key::ArrowRight) {
             self.another_composition(now);
         }
@@ -1232,8 +1670,17 @@ impl eframe::App for StudioApp {
         let parent: Option<&dyn Parent> = frame.window_handle().is_ok().then_some(&*frame as _);
         self.collect(&ctx, now);
         self.poll_files(&ctx, parent, now);
+        self.poll_export(&ctx, now);
         self.shortcuts(&ctx, parent, now);
-        if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
+        if ctx.input(|i| i.viewport().close_requested())
+            && !self.allow_close
+            && self.exporter.is_running()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if !self.close_when_export_ends {
+                self.confirm_export_close = true;
+            }
+        } else if ctx.input(|i| i.viewport().close_requested()) && !self.allow_close {
             self.apply_draft();
             if self.unsaved() || self.files.busy() {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -1244,11 +1691,9 @@ impl eframe::App for StudioApp {
             script.step(self, &ctx, now);
             self.script = Some(script);
         }
-        if self
-            .notice
-            .as_ref()
-            .is_some_and(|n| n.kind == NoticeKind::Info && now - n.at > INFO_NOTICE_FOR)
-        {
+        if self.notice.as_ref().is_some_and(|n| {
+            n.kind == NoticeKind::Info && !n.sticky && now - n.at > INFO_NOTICE_FOR
+        }) {
             self.notice = None;
         }
 
@@ -1256,6 +1701,11 @@ impl eframe::App for StudioApp {
             .frame(theme::panel_frame(egui::Margin::symmetric(14, 0)))
             .exact_size(38.0)
             .show(ui, |ui| self.actions_bar(ui, parent, now));
+        if self.exporter.is_running() {
+            egui::Panel::top("export")
+                .frame(theme::panel_frame(egui::Margin::symmetric(14, 6)))
+                .show(ui, |ui| self.export_bar(ui));
+        }
         if self.notice.is_some() {
             egui::Panel::top("notice")
                 .frame(theme::panel_frame(egui::Margin::symmetric(14, 6)))
@@ -1316,6 +1766,12 @@ impl eframe::App for StudioApp {
             self.diagnostics(&ctx);
         }
         self.confirm_modal(&ctx, parent, now);
+        self.export_modal(&ctx, parent, now);
+        self.export_close_modal(&ctx);
+        if self.exporter.is_running() {
+            // Progress arrives with a wake-up; keep a slow tick in case.
+            ctx.request_repaint_after(Duration::from_millis(250));
+        }
         self.update_title(&ctx);
 
         if let Some(q) = self.scheduler.take_due(now) {
@@ -1326,6 +1782,7 @@ impl eframe::App for StudioApp {
         }
         if let Some(n) = &self.notice
             && n.kind == NoticeKind::Info
+            && !n.sticky
         {
             ctx.request_repaint_after(INFO_NOTICE_FOR.saturating_sub(now - n.at));
         }
@@ -1333,6 +1790,8 @@ impl eframe::App for StudioApp {
 
     fn on_exit(&mut self) {
         let t = Instant::now();
+        // A running export is cancelled and its partial file removed first.
+        self.exporter.shutdown(Duration::from_secs(5));
         let joined = self.worker.shutdown(Duration::from_secs(2));
         let mut r = self.report.lock().unwrap_or_else(|e| e.into_inner());
         r.shutdown = Some((t.elapsed(), joined));

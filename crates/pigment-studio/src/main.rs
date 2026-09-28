@@ -19,6 +19,7 @@ use pigment_core::capability::AdapterPolicy;
 use pigment_gpu::{GpuContext, PaintRenderer, adapter};
 
 use pigment_studio::app::{StudioApp, StudioOptions};
+use pigment_studio::export::Exporter;
 use pigment_studio::files::NativeDialogs;
 use pigment_studio::script::{self, Report};
 use pigment_studio::worker::PreviewWorker;
@@ -125,12 +126,15 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    // Previews and exports each get a renderer on the shared device, so an
+    // export never queues behind previews or blocks them.
     let ctx = GpuContext::new(&args.policy).and_then(|ctx| {
         let ctx = Arc::new(ctx);
         let renderer = PaintRenderer::new(ctx.clone())?;
-        Ok((ctx, renderer))
+        let export_renderer = PaintRenderer::new(ctx.clone())?;
+        Ok((ctx, renderer, export_renderer))
     });
-    let (ctx, renderer) = match ctx {
+    let (ctx, renderer, export_renderer) = match ctx {
         Ok(v) => v,
         Err(e) => {
             eprintln!("pigment-studio: {e}");
@@ -166,12 +170,15 @@ fn main() -> ExitCode {
                 PreviewWorker::spawn(renderer, opts.worker, move || egui_ctx.request_repaint());
             let egui_ctx = cc.egui_ctx.clone();
             let dialogs = NativeDialogs::new(move || egui_ctx.request_repaint());
+            let egui_ctx = cc.egui_ctx.clone();
+            let exporter = Exporter::spawn(export_renderer, move || egui_ctx.request_repaint());
             Ok(Box::new(StudioApp::new(
                 worker,
                 caps,
                 opts,
                 rep,
                 Box::new(dialogs),
+                exporter,
             )))
         }),
     );

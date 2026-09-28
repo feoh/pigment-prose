@@ -16,4 +16,6 @@ log="${1:-/dev/null}"
   # The studio window's states rendered offscreen with the real painter
   # (PNGs in target/studio-screens, or $PIGMENT_SCREENS).
   cargo test --release --locked -p pigment-studio --lib review_screens -- --ignored --nocapture
+  # An 8K PNG exported through the studio's own export path (task 13).
+  cargo test --release --locked -p pigment-studio --lib the_studio_exports_a_real_8k_png -- --ignored --nocapture
 } 2>&1 | tee "$log"

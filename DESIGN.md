@@ -198,8 +198,11 @@ The top bar is the only navigation: the wordmark, the file actions, the document
 ### State chip and status word (signature)
 The painting always says what it is. The status line ends with a dot and a word: **Current** (tertiary), **Painting…** or **Earlier settings** (amber), **Preview failed** or **GPU reset** (coral). When the image on screen is not the current recipe, a chip at its top-left says so: a raised fill with a strong-seam outline, a coloured dot and small ink text.
 
+### Export bar
+While an export runs, a panel strip under the top bar shows an amber dot, "Exporting NAME · W × H px", a 260 pt bar filled in deep signal that counts the renderer's tiles ("Tile 5 of 12"), or an animated bar for stages without counts ("Building the scene", "Writing the file"), and a default **Cancel export** button. There is no percentage and no time estimate.
+
 ### Notice bar
-A panel-coloured strip under the top bar: a coloured dot, a SemiBold state word (Done, Note, Problem), then the message in ink, with Dismiss on the right. "Done" messages clear after 6 s; notes and problems stay until dismissed.
+A panel-coloured strip under the top bar: a coloured dot, a SemiBold state word (Done, Note, Problem), then the message in ink, with Dismiss on the right. "Done" messages clear after 6 s, except an export's result, which stays and offers **Copy path**. Notes and problems stay until dismissed.
 
 ## Do's and Don'ts
 

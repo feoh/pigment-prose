@@ -31,7 +31,13 @@ pub const DEFAULT_FILE_NAME: &str = "painting.recipe.json";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DialogRequest {
     Open,
-    Save { suggested: String },
+    Save {
+        suggested: String,
+    },
+    /// Where to write an exported PNG (task 13).
+    ExportPng {
+        suggested: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,8 +86,12 @@ impl NativeDialogs {
 
 impl Dialogs for NativeDialogs {
     fn start(&mut self, request: DialogRequest, parent: Option<&dyn Parent>) {
+        let filter = match request {
+            DialogRequest::ExportPng { .. } => ("PNG image", "png"),
+            _ => ("Pigment Prose recipe", "json"),
+        };
         let mut d = rfd::FileDialog::new()
-            .add_filter("Pigment Prose recipe", &["json"])
+            .add_filter(filter.0, &[filter.1])
             .set_can_create_directories(true);
         if let Some(p) = parent {
             d = d.set_parent(p);
@@ -100,6 +110,10 @@ impl Dialogs for NativeDialogs {
             }
             DialogRequest::Save { suggested } => {
                 let d = d.set_title("Save recipe").set_file_name(suggested);
+                std::thread::spawn(move || answer(d.save_file()));
+            }
+            DialogRequest::ExportPng { suggested } => {
+                let d = d.set_title("Export PNG").set_file_name(suggested);
                 std::thread::spawn(move || answer(d.save_file()));
             }
         }

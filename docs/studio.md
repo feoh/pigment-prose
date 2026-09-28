@@ -1,6 +1,6 @@
-# The desktop studio (tasks 11–12)
+# The desktop studio (tasks 11–13)
 
-`pigment-studio` (`crates/pigment-studio`) is the desktop app: an eframe/egui 0.36 window around the approved painting renderer ([ADR 0001](decisions/0001-renderer-and-desktop-shell.md)). Task 11 delivered the shell and the preview lifecycle. Task 12 added the artistic controls, compositions, recipe open/save and the visual design (product context: [PRODUCT.md](../PRODUCT.md); visual system: [DESIGN.md](../DESIGN.md)). The export dialog is task 13. Evidence: [evidence/studio-11](evidence/studio-11/README.md), [evidence/studio-12](evidence/studio-12/README.md).
+`pigment-studio` (`crates/pigment-studio`) is the desktop app: an eframe/egui 0.36 window around the approved painting renderer ([ADR 0001](decisions/0001-renderer-and-desktop-shell.md)). Task 11 delivered the shell and the preview lifecycle. Task 12 added the artistic controls, compositions, recipe open/save and the visual design (product context: [PRODUCT.md](../PRODUCT.md); visual system: [DESIGN.md](../DESIGN.md)). Task 13 added export. Evidence: [evidence/studio-11](evidence/studio-11/README.md), [evidence/studio-12](evidence/studio-12/README.md), [evidence/studio-13](evidence/studio-13/README.md).
 
 ![The studio window on Linux, RTX 4070 Ti, 2× scale](evidence/studio-12/window.png)
 
@@ -12,8 +12,9 @@ cargo run --release -p pigment-studio -- --script --preview-delay-ms 1500 --scre
 
 ## Layout
 
-- **Top bar:** the wordmark; **Open…**, **Save** and **Save As…**; **Export PNG…** (reserved: visible and disabled, with a hover note); the document name (Untitled or the file name), with an amber dot while there are unsaved changes; then **Painting only** and **Diagnostics** on the right. The window title follows the document ("*name — Pigment Prose").
-- **Notice bar** (only when there is something to say): the result of the last file operation. "Done" confirmations clear after 6 s; notes (a recipe from an older generator or renderer) and problems stay until dismissed. Messages name the file, never its contents.
+- **Top bar:** the wordmark; **Open…**, **Save**, **Save As…** and **Export PNG…**; the document name (Untitled or the file name), with an amber dot while there are unsaved changes; then **Painting only** and **Diagnostics** on the right. The window title follows the document ("*name — Pigment Prose").
+- **Export bar** (only while an export runs): the file, its pixel size, the stage ("Tile 5 of 12", "Writing the file") on a bar that counts tiles, and **Cancel export**.
+- **Notice bar** (only when there is something to say): the result of the last file operation or export. "Done" confirmations clear after 6 s; notes (a recipe from an older generator or renderer) and problems stay until dismissed. Messages name the file, never its contents.
 - **Control column (resizable, 300–600 pt, scrolls):**
   - **Prose:** the editor, the byte count and the seed code (the first 8 hex digits of the text's digest: what the painting is made from), and the explicit **Save the prose in the recipe file** checkbox, with a note saying which way it is set.
   - **Composition:** the variation number, **Previous**, **Another composition** (the primary action) and **Shape** (16:9, 3:2, 1:1, 4:5, 9:16, or "Custom W:H" for a recipe with another ratio). A new shape keeps the document's size class and recomposes the painting.
@@ -52,6 +53,22 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 - **Source-free recipes** (saved without prose) open with an empty editor and a note: the painting is rebuilt from the stored seed, and the words cannot be recovered. No prose is invented. Typing in the editor starts a new painting from that text. Saving again stays source free.
 - A recipe from an older generator or renderer opens with a note ("made with renderer v0; this version (v1) may paint differently"). The recorded versions update when it is saved.
 
+## Export
+
+`crates/pigment-studio/src/export.rs` over task 09's `pigment_io::export_png` ([export.md](export.md#from-the-studio-task-13)).
+
+- **Export PNG…** (Ctrl+E) opens a dialog that states what is exported: the painting as it is now, this composition and these settings. It warns when the preview is still painting, because the export uses the newest settings, not the image on screen.
+- **Shape** in the dialog changes the document's proportions, and says that this recomposes the painting; it is not a resize.
+- **Size:** 4K or 8K presets, shown with their real pixel sizes for this shape (16:9: 3840×2160 and 7680×4320; 4:5: 3072×3840 and 6144×7680; 1:1: 3840×3840 and 7680×7680), or a custom width and height that snap to the painting's exact proportions. The dialog shows the exact output ("Exports 7680 × 4320 px (33.2 megapixels)") and explains that DPI is only a print label. Sizes outside 64–16384 px or 4:1 are explained, and Export… is disabled.
+- **Snapshot:** pressing Export… copies the seeds, form, aspect ratio, appearance and size at that moment; then the save dialog asks where. Moving sliders or changing composition afterwards never reaches the export (tested byte for byte on the GPU). The prose is not part of an export job.
+- **Destination:** the platform save dialog, suggesting `painting-WxH.png` or the recipe's name (never the prose), with its own overwrite question. Cancelling it exports nothing.
+- **One export at a time**, on its own thread with its own renderer on the shared device. Previews keep working, and Export PNG… is disabled while one runs.
+- **Progress** is the renderer's own count of tiles, then "Writing the file". There is no percentage of time and no time estimate.
+- **Cancel export** stops at the next tile. The partial file is removed and an existing file is kept.
+- **Result:** "Exported NAME (W × H px, SIZE) to FOLDER" with **Copy path**. Failures say what to do: a full disk, an unwritable folder, GPU memory, a GPU reset. Any existing file is unchanged.
+- **Closing the window during an export** asks: **Keep exporting**, or **Stop export and close** (cancels, removes the partial file, then closes, still asking about unsaved changes). Quitting by other means cancels the export and waits up to 5 s for the cleanup.
+- **The PNG holds only the image:** `IHDR`, `sRGB`, `IDAT` and `IEND`. No prose, recipe, path, watermark or attribution, and the recipe is not embedded.
+
 ## Keyboard
 
 | Keys | Action |
@@ -63,6 +80,7 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 | Delete or Backspace on a slider | back to the default |
 | Alt+Right / Alt+Left (⌥ on macOS) | Another composition / Previous |
 | Ctrl+O, Ctrl+S, Ctrl+Shift+S (⌘ on macOS) | Open, Save, Save As |
+| Ctrl+E | Export PNG… |
 | Ctrl+\\ | Painting only |
 | Ctrl+D | Diagnostics |
 | Ctrl+Q | Quit (asks if there are unsaved changes) |
@@ -73,7 +91,8 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 
 | Rule | Implementation |
 | --- | --- |
-| The UI thread never waits on the GPU or a dialog | One render thread (`worker::PreviewWorker`) owns `PaintRenderer` and loops on `job::Mailbox`. The UI submits snapshots (`PreviewJob`) and drains results without blocking. File dialogs run on a helper thread. The only wait is shutdown, bounded at 2 s |
+| The UI thread never waits on the GPU or a dialog | One render thread (`worker::PreviewWorker`) owns `PaintRenderer` and loops on `job::Mailbox`. The UI submits snapshots (`PreviewJob`) and drains results without blocking. File dialogs run on a helper thread. The only waits are at shutdown: the preview worker (2 s) and a running export's cleanup (5 s) |
+| Exports | a separate thread with its own `PaintRenderer` (`export::Exporter`), one job at a time, never superseded by previews |
 | Bounded queue | `Mailbox`: one pending slot. A new job replaces the pending one and cancels the running one. The result channel holds 2 |
 | Monotonic ids, stale results dropped | `RequestIds`; `preview::PreviewView` shows a result only if it is newer than what is on screen. An old failure cannot replace a newer image |
 | Debounce | prose: 300 ms after the last keystroke; preview-area resize: 100 ms; shape, composition, opened recipe and first frame: immediately (`preview::Scheduler`) |
@@ -115,16 +134,19 @@ Details: [evidence/studio-11](evidence/studio-11/README.md), [evidence/studio-12
 
 | Test | Where | Covers |
 | --- | --- | --- |
-| `pigment-studio --script` | the real window | Types 68 characters and resizes twice, then waits to settle and rejects a deliberately stale result. Drags Form, then Edge Looseness, one value per frame for 1 s each, and checks that each settles on the newest values at full size, with no scene built during the paint drag and no older result ever displayed after a newer one. Asks for Another Composition and checks the variation changed and nothing else. Captures the window, then closes while a render is in flight. With `--preview-delay-ms`, UI frame gaps must stay < 250 ms; with `--lose-device-after N`, the device-loss state must show. Exit status 0 only if every check passes |
+| `pigment-studio --script` | the real window | Types 68 characters and resizes twice, then waits to settle and rejects a deliberately stale result. Drags Form, then Edge Looseness, one value per frame for 1 s each, and checks that each settles on the newest values at full size, with no scene built during the paint drag and no older result ever displayed after a newer one. Asks for Another Composition and checks the variation changed and nothing else. Exports an 8K PNG while dragging a slider throughout, and checks the file, the snapshot and the UI frame gaps. Captures the window, then closes while a render is in flight. With `--preview-delay-ms`, UI frame gaps must stay < 250 ms; with `--lose-device-after N`, the device-loss state must show. Exit status 0 only if every check passes |
 | `ui_tests::*` | `crates/pigment-studio/src/ui_tests.rs` (portable, headless egui_kittest with a CPU stand-in renderer and scripted dialogs) | Every control's invalidation, including worker scene reuse and unchanged geometry checksums for paint-only changes. Another Composition keeps the seed, settings and paint-detail stream. Keyboard only: Tab to Form, the arrow, page, Home/End and Delete keys, Alt+arrows, Ctrl+\\ and Ctrl+S. The unsaved prompt on Open and on window close. Source-free recipes open and save without prose. Save and reopen reproduce the settings, scene and kept prose. Failed opens, cancelled dialogs and write failures. The "earlier settings" chip |
 | `files::tests::*` | portable | The open/save state machine: dialogs asked once, cancel changes nothing, save-then-open, failed save keeps the window open, read-only files, busy flows |
 | `controls::tests`, `theme::tests`, `preview::tests`, `worker::tests` | portable | Every control shown once under its channel; value text; contrast and neutral greys; interaction/settled scheduling and display size; the worker's bounds and shutdown |
-| `ui_tests::review_screens` | hardware (`scripts/gpu-tests.sh`) | Renders seven states offscreen with the real painter and theme into `target/studio-screens` |
+| `ui_tests::*` export tests (task 13) | portable | The dialog's real pixel sizes; a cancelled destination; invalid sizes; sliders and composition changed mid-export leaving the snapshot unchanged; one export at a time; portrait and square; Cancel export; a full disk; closing during an export (keep, or stop and close) |
+| `export::tests::*` | portable | Size snapping and bounds; suggested names; the worker's snapshot, cancellation, failures, shutdown cleanup and wake-ups, with a tile-by-tile test renderer that can be held at a tile |
+| `ui_tests::the_studio_exports_a_real_8k_png_of_the_snapshot` | hardware (`scripts/gpu-tests.sh`) | An 8K export through the studio with sliders moving: decoded size, format and chunks, no prose or path markers, byte-identical to a direct export of the snapshot |
+| `ui_tests::review_screens` | hardware (`scripts/gpu-tests.sh`) | Renders ten states offscreen with the real painter and theme into `target/studio-screens` |
 | `a_request_storm_stays_bounded_and_ends_on_the_newest` | `tests/gpu_preview.rs` (hardware) | Real `PaintRenderer`: bounded work, newest shown, scene reuse, memory growth < 64 MiB |
 
 ## Known limits
 
-- The native dialogs are exercised by hand only ([checklist](evidence/studio-12/README.md#manual-interaction-checklist)). Without a running XDG desktop portal (some minimal window managers), the dialogs cannot open and behave as cancelled.
+- The native dialogs are exercised by hand only ([checklist](evidence/studio-12/README.md#manual-interaction-checklist), [export checks](evidence/studio-13/README.md#manual-checks-for-the-owner)). The overwrite question is the platform dialog's. Without a running XDG desktop portal (some minimal window managers), the dialogs cannot open and behave as cancelled.
 - The prose entry and the Advanced header take their accessible names from the small-caps headers ("PROSE", "ADVANCED").
 - One device for the window and the painter: an adapter that cannot present to the window is refused (see above).
 - Device loss needs a restart.

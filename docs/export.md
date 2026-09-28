@@ -1,4 +1,4 @@
-# High-resolution PNG export (task 09)
+# High-resolution PNG export (tasks 09 and 13)
 
 `pigment_io::export_png` renders a painting at the requested pixel size, tile by tile, straight into a PNG. The whole image never has to fit on the GPU or in host memory, and the output is never an upscaled preview. The export dialog (task 13) calls this backend. Evidence: [evidence/export-09](evidence/export-09/README.md).
 
@@ -14,6 +14,10 @@ let report = export_png(&renderer, &request, &destination, PngCompression::Fast,
 ```
 
 From the command line: `pigment-prose export --out FILE.png (--recipe R.recipe.json | --sample N | --passage ID) [--size 4k|8k|WxH]` (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
+
+## From the studio (task 13)
+
+The studio's **Export PNG…** ([studio.md](studio.md#export)) builds an `ExportJob` snapshot when the user presses Export…: seeds, form, aspect ratio, appearance, frame and destination. Its export thread then builds the scene and calls `export_png` with `TilePolicy::default_export()`, `TileOrder::RowMajor` and `PngCompression::Fast`, exactly like the CLI. The studio's export thread has its own `PaintRenderer` on the shared device, and it runs one job at a time. On the RTX 4070 Ti, an 8K export from the studio is **byte-identical** to a direct `export_png` of the same snapshot, and it takes 224–231 ms (hardware test), or 360–480 ms in the real window while a slider is dragged (evidence: [studio-13](evidence/studio-13/README.md)). Overwrite confirmation is the platform save dialog's. Custom sizes in the dialog snap to the scene's exact ratio, so a request never reaches `validate_target` with a mismatched size.
 
 ## Sizes
 
@@ -59,7 +63,7 @@ From the command line: `pigment-prose export --out FILE.png (--recipe R.recipe.j
 - **Atomic finalize** (`pigment_io::atomic::AtomicFile`): the PNG is written to a hidden temporary file beside the destination (`.NAME.<pid>-<n>.pigment-tmp`). `finish` flushes the file and syncs it to disk (`fsync`), renames it over the destination, then syncs the directory entry on Unix. `std::fs::rename` replaces atomically on Linux and macOS and uses `MoveFileExW(MOVEFILE_REPLACE_EXISTING)` on Windows. An existing destination is replaced only by a complete file.
 - **Cancel or error:** the temporary file is deleted and an existing destination is kept (`cancelled_export_leaves_the_old_file_and_no_partial`; the CLI log shows `--cancel-after 5` leaving the old file and no temporary). Dropping a `PngSink` without finishing also deletes the temporary, so a panic cannot leave a partial file. Cancellation is checked before every tile. Worst-case latency is one tile plus the encoding of a just-completed band: about 6 ms + 140 ms at 16K (227 ms / 40 tiles; 704 ms / 5 bands), about 5 ms + 70 ms at 8K. That is within the 250 ms target.
 - **Errors** are structured and carry no prose: `RenderError::InvalidRequest` (size, aspect ratio, overflow), `TilePlan`, `OutOfMemory` (after retries), `DeviceLost`, `Gpu`, and `Sink(SinkError { kind: Io | DiskFull | Encode | Other })`. `StorageFull` and `QuotaExceeded` I/O errors become `DiskFull` even when the png crate re-wraps them. Sink details name the destination the user chose, for the UI; they never reach the image.
-- **Overwrite confirmation** belongs to the UI (task 13), not this backend.
+- **Overwrite confirmation** belongs to the UI (the platform save dialog, task 13), not this backend.
 - **Known limits:** a replaced file's permissions are not copied; the new file gets the process defaults. On Windows the final rename fails, and the old file is kept, while another program holds the destination open. The temporary file needs as much free space as the finished PNG, in the destination's directory.
 
 ## Tests
