@@ -34,6 +34,21 @@ use crate::script::{Report, Script};
 use crate::theme;
 use crate::worker::{PreviewJob, PreviewOutcome, PreviewResult, PreviewWorker, WorkerOptions};
 
+/// For the "needs a hardware GPU" window (task 23): when the system has a
+/// software rasterizer, say that it can be used on request and what it
+/// costs. It is a slow, labelled fallback, never GPU acceleration, so it is
+/// never chosen automatically.
+pub fn software_hint(adapters: &[pigment_core::capability::AdapterReport]) -> Option<String> {
+    let sw = adapters.iter().find(|a| a.software)?;
+    Some(format!(
+        "A software renderer is installed ({}). Starting with --allow-software \
+         paints with it instead: previews and exports are many times slower, and the \
+         window says SOFTWARE RENDERER wherever the GPU is named. It is not GPU \
+         acceleration.",
+        sw.name
+    ))
+}
+
 /// A synthetic default passage, so the first launch shows a painting.
 pub const DEFAULT_PROSE: &str = "Morning light on the lake; wind in the pines below the ridge.";
 

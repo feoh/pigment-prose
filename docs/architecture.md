@@ -256,7 +256,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | 13 export UI | **Done.** Spec: [studio.md](studio.md#export); evidence: [evidence/studio-13](evidence/studio-13/README.md). `pigment-studio/src/export.rs` (`SizeForm`, `ExportJob` snapshot, `Exporter` worker, failure messages); the dialog, export bar and close-during-export prompt in `app.rs`; progress from `job::Progress` (tile counts, no ETA) |
 | 14 qualification | **Done.** [qualification.md](qualification.md); evidence: [qualification-14](evidence/qualification-14/qualify-linux-2026-09-28.txt). `scripts/qualify.sh` (the whole sequence), `pigment-prose bench` (targets), `crates/pigment-studio/tests/qualification.rs` (end to end, seams in boundary bands, texture scale, repeated exports), the adaptive settled cap (`pigment_studio::preview::adapt_settled_cap`) |
 | 15 Linux package | `packaging/linux/`, third-party notices, `docs/user-guide.md` |
-| 23 CPU study | `docs/cpu-fallback-decision.md`; any CPU path implements `request::Renderer` and must report `software_adapter: true` |
+| 23 CPU study | **Done.** [cpu-fallback-decision.md](cpu-fallback-decision.md): defer a CPU renderer and keep the GPU requirement. The opt-in `--allow-software` mode stays labelled and unsupported. Measured on CI: lavapipe paints the approved images at 63 dB with exports inside their targets and previews about 5× over; WARP crashes with the painting shader (flagged for task 21); macOS has no software adapter. Any future CPU path implements `request::Renderer` and must report `software_adapter: true` |
 
 ## Known limits of this task
 

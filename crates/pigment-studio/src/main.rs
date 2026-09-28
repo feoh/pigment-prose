@@ -302,9 +302,18 @@ fn init_failure(args: &Args, message: String) -> ExitCode {
         allow_software: true,
         include_gl: true,
     };
-    let adapters: Vec<String> = adapter::enumerate(&instance, &everything)
+    let reports: Vec<_> = adapter::enumerate(&instance, &everything)
         .into_iter()
-        .map(|(_, r)| {
+        .map(|(_, r)| r)
+        .collect();
+    let hint = if args.policy.allow_software {
+        None
+    } else {
+        pigment_studio::app::software_hint(&reports)
+    };
+    let adapters: Vec<String> = reports
+        .into_iter()
+        .map(|r| {
             format!(
                 "{} ({:?}, {:?}{})",
                 r.name,
@@ -321,6 +330,7 @@ fn init_failure(args: &Args, message: String) -> ExitCode {
         .flatten();
     let app = InitFailure {
         message,
+        hint,
         adapters,
         screenshot,
         frames: 0,
@@ -342,6 +352,8 @@ fn init_failure(args: &Args, message: String) -> ExitCode {
 #[derive(Debug)]
 struct InitFailure {
     message: String,
+    /// A software renderer exists and can be chosen on request.
+    hint: Option<String>,
     adapters: Vec<String>,
     screenshot: Option<PathBuf>,
     frames: u32,
@@ -364,6 +376,10 @@ impl eframe::App for InitFailure {
             }
             for a in &self.adapters {
                 ui.label(egui::RichText::new(format!("• {a}")).monospace());
+            }
+            if let Some(h) = &self.hint {
+                ui.add_space(12.0);
+                ui.label(h);
             }
             ui.add_space(12.0);
             ui.horizontal(|ui| {

@@ -1374,3 +1374,22 @@ fn a_software_adapter_is_labelled_and_never_called_hardware() {
     h.get_by_label("no (software rasterizer)");
     assert!(h.query_by_label("yes").is_none());
 }
+
+#[test]
+fn the_no_gpu_window_offers_an_installed_software_renderer_only_as_a_labelled_choice() {
+    let mut adapters = vec![caps().adapter];
+    adapters[0].software = false;
+    assert_eq!(
+        crate::app::software_hint(&adapters),
+        None,
+        "no software renderer: no hint"
+    );
+    adapters.push(pigment_core::capability::AdapterReport {
+        name: "llvmpipe (LLVM 20.1.2, 256 bits)".into(),
+        software: true,
+        ..caps().adapter
+    });
+    let hint = crate::app::software_hint(&adapters).unwrap();
+    assert!(hint.contains("llvmpipe") && hint.contains("--allow-software"));
+    assert!(hint.contains("not GPU") && hint.contains("SOFTWARE RENDERER"));
+}

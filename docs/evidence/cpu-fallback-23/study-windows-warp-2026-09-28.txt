@@ -1,0 +1,61 @@
+# windows-warp: 2026-09-28T03:34:02Z, MINGW64_NT-10.0-26100 3.6.10-710e5275.x86_64 x86_64
+pigment-prose 0.1.0 (wgpu 30.0.1); 1 adapter(s)
+- Microsoft Basic Render Driver
+    backend=Dx12 type=Cpu software=true vendor=0x1414 device=0x008c
+    driver=10.0.26100.33438 ()
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=262144
+selected: Microsoft Basic Render Driver (Dx12)
+## gpu-smoke (must not pass on a software adapter)
+pigment-prose 0.1.0 gpu-smoke
+wgpu: 30.0.1
+adapter: Microsoft Basic Render Driver
+    backend=Dx12 type=Cpu software=true vendor=0x1414 device=0x008c
+    driver=10.0.26100.33438 ()
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=262144
+device limits requested: WebGPU defaults (max_texture_dimension_2d=8192)
+device init + pipelines: 595.91 ms
+WARNING: software adapter; results are NOT GPU evidence
+scene: test card v3, seed 7, aspect 16:9, geometry checksum cc068b7a51ae091c
+single tile 1920x1080: apron 9 px, 1 tile, GPU tile bytes 33612192, render+readback 12651.32 ms, total 12653.34 ms, fnv 48aeb4c239bab535
+repeat single tile: identical
+Fixed { edge: 512 }: 4x3 tiles of 512x512, apron 9, GPU tile bytes 4344352, render+readback 12518.80 ms, total 12521.23 ms -> identical
+Fixed { edge: 333 }: 6x4 tiles of 333x333, apron 9, GPU tile bytes 1940652, render+readback 12613.39 ms, total 12615.78 ms -> identical
+Budget { gpu_bytes: 268435456, host_bytes: 268435456 }: 1x1 tiles of 1920x1080, apron 9, GPU tile bytes 33612192, render+readback 12293.97 ms, total 12295.51 ms -> identical
+cancellation after tile 1 of 40: Cancelled { tiles_done: 1 }, sink aborted=true -> ok
+preview 1280x720 test card, warm (n=20): median 3235.07 ms, p95 8022.92 ms
+RESULT: FAIL
+error: software adapter: not GPU evidence
+gpu-smoke exit status: 1 (expected: non-zero)
+## paint-bench
+pigment-prose 0.1.0 paint-bench: renderer v1, generator v1, aspect 16:9, 3 sample seeds, 3 runs (2 warm-up)
+device: Microsoft Basic Render Driver (Dx12, SOFTWARE)
+WARNING: software adapter; results are NOT GPU evidence
+scene generation (CPU): median 1.15 ms, max 1.37 ms
+D:\a\_temp\f1cb4f16-de98-476c-8f7e-a5eb1f3e235f.sh: line 19:   132 Segmentation fault         $B paint-bench --allow-software --sizes 960,1920,3840 --sample 3 --runs 3
+paint-bench failed: 139
+## 4K export
+pigment-prose 0.1.0 export: generator v1, renderer v1, 3840x2160 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: Microsoft Basic Render Driver (Dx12, SOFTWARE) (wgpu 30.0.1)
+WARNING: software adapter; results are NOT GPU evidence
+4K export failed: 127
+## 8K export
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: Microsoft Basic Render Driver (Dx12, SOFTWARE) (wgpu 30.0.1)
+WARNING: software adapter; results are NOT GPU evidence
+D:\a\_temp\f1cb4f16-de98-476c-8f7e-a5eb1f3e235f.sh: line 19:   134 Segmentation fault         $B export --allow-software --sample 3 --size 8k --out study/export-8k.png
+8K export failed: 139
+## corpus contact sheet vs the approved baseline
+contact-sheet failed: 127
+01.png: MISSING in study\corpus-16x9
+02.png: MISSING in study\corpus-16x9
+03.png: MISSING in study\corpus-16x9
+04.png: MISSING in study\corpus-16x9
+05.png: MISSING in study\corpus-16x9
+06.png: MISSING in study\corpus-16x9
+07.png: MISSING in study\corpus-16x9
+08.png: MISSING in study\corpus-16x9
+09.png: MISSING in study\corpus-16x9
+10.png: MISSING in study\corpus-16x9
+comparison status: 1

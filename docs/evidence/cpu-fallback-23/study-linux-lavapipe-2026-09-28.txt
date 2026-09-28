@@ -1,0 +1,76 @@
+# linux-lavapipe: 2026-09-28T03:30:14Z, Linux 6.17.0-1022-azure x86_64
+pigment-prose 0.1.0 (wgpu 30.0.1); 1 adapter(s)
+- llvmpipe (LLVM 20.1.2, 256 bits)
+    backend=Vulkan type=Cpu software=true vendor=0x10005 device=0x0000
+    driver=llvmpipe (Mesa 25.2.8-0ubuntu0.24.04.2 (LLVM 20.1.2))
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=134217728
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=48
+selected: llvmpipe (LLVM 20.1.2, 256 bits) (Vulkan)
+## gpu-smoke (must not pass on a software adapter)
+pigment-prose 0.1.0 gpu-smoke
+wgpu: 30.0.1
+adapter: llvmpipe (LLVM 20.1.2, 256 bits)
+    backend=Vulkan type=Cpu software=true vendor=0x10005 device=0x0000
+    driver=llvmpipe (Mesa 25.2.8-0ubuntu0.24.04.2 (LLVM 20.1.2))
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=134217728
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=48
+device limits requested: WebGPU defaults (max_texture_dimension_2d=8192)
+device init + pipelines: 754.20 ms
+WARNING: software adapter; results are NOT GPU evidence
+scene: test card v3, seed 7, aspect 16:9, geometry checksum cc068b7a51ae091c
+single tile 1920x1080: apron 9 px, 1 tile, GPU tile bytes 33612192, render+readback 2292.43 ms, total 2472.54 ms, fnv e6051db35de5f708
+repeat single tile: identical
+Fixed { edge: 512 }: 4x3 tiles of 512x512, apron 9, GPU tile bytes 4344352, render+readback 1512.46 ms, total 1513.02 ms -> identical
+Fixed { edge: 333 }: 6x4 tiles of 333x333, apron 9, GPU tile bytes 1940652, render+readback 1479.46 ms, total 1479.99 ms -> identical
+Budget { gpu_bytes: 268435456, host_bytes: 268435456 }: 1x1 tiles of 1920x1080, apron 9, GPU tile bytes 33612192, render+readback 1802.16 ms, total 1802.91 ms -> identical
+cancellation after tile 1 of 40: Cancelled { tiles_done: 1 }, sink aborted=true -> ok
+preview 1280x720 test card, warm (n=20): median 349.44 ms, p95 361.75 ms
+RESULT: FAIL
+error: software adapter: not GPU evidence
+gpu-smoke exit status: 1 (expected: non-zero)
+## paint-bench
+pigment-prose 0.1.0 paint-bench: renderer v1, generator v1, aspect 16:9, 3 sample seeds, 3 runs (2 warm-up)
+device: llvmpipe (LLVM 20.1.2, 256 bits) (Vulkan, SOFTWARE)
+WARNING: software adapter; results are NOT GPU evidence
+scene generation (CPU): median 0.51 ms, max 0.70 ms
+960x540 render + readback: median 178.18 ms, worst scene 182.42 ms; whole render call (setup, render, sink): worst scene 182.65 ms
+1920x1080 render + readback: median 692.37 ms, worst scene 712.55 ms; whole render call (setup, render, sink): worst scene 713.17 ms
+3840x2160 render + readback: median 2731.04 ms, worst scene 2858.06 ms; whole render call (setup, render, sink): worst scene 2860.98 ms
+## 4K export
+pigment-prose 0.1.0 export: generator v1, renderer v1, 3840x2160 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: llvmpipe (LLVM 20.1.2, 256 bits) (Vulkan, SOFTWARE) (wgpu 30.0.1)
+WARNING: software adapter; results are NOT GPU evidence
+  1 / 4 tiles
+  3 / 4 tiles
+plan: 2x2 tiles of 2048x2048 px, apron 26 px; estimated renderer GPU allocations 65.6 MiB per tile set, host band 30.0 MiB (cost model, not measured)
+timings: device+pipelines 2090.57 ms, scene 0.81 ms, setup 2.68 ms, render+readback 2441.16 ms, PNG encode+write 56.84 ms, export total 2581.86 ms
+measured peak host memory (VmHWM, whole process): 430.6 MiB
+wrote study/export-4k.png (7.6 MiB)
+## 8K export
+pigment-prose 0.1.0 export: generator v1, renderer v1, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: llvmpipe (LLVM 20.1.2, 256 bits) (Vulkan, SOFTWARE) (wgpu 30.0.1)
+WARNING: software adapter; results are NOT GPU evidence
+  1 / 12 tiles
+  2 / 12 tiles
+  3 / 12 tiles
+  5 / 12 tiles
+  6 / 12 tiles
+  7 / 12 tiles
+  9 / 12 tiles
+plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
+timings: device+pipelines 2116.86 ms, scene 0.82 ms, setup 2.70 ms, render+readback 9825.16 ms, PNG encode+write 207.50 ms, export total 10264.39 ms
+measured peak host memory (VmHWM, whole process): 491.5 MiB
+wrote study/export-8k.png (23.0 MiB)
+## corpus contact sheet vs the approved baseline
+wrote study/corpus-16x9.png (2036x468, 10 cells in 652.73 ms) and study/corpus-16x9.txt
+01.png: PSNR 63.3 dB, max channel difference 1/255, 3.0% of channels differ
+02.png: PSNR 63.3 dB, max channel difference 1/255, 3.1% of channels differ
+03.png: PSNR 63.4 dB, max channel difference 1/255, 3.0% of channels differ
+04.png: PSNR 63.4 dB, max channel difference 1/255, 3.0% of channels differ
+05.png: PSNR 63.2 dB, max channel difference 1/255, 3.1% of channels differ
+06.png: PSNR 63.2 dB, max channel difference 1/255, 3.1% of channels differ
+07.png: PSNR 63.5 dB, max channel difference 1/255, 2.9% of channels differ
+08.png: PSNR 63.1 dB, max channel difference 1/255, 3.2% of channels differ
+09.png: PSNR 63.1 dB, max channel difference 1/255, 3.2% of channels differ
+10.png: PSNR 63.0 dB, max channel difference 1/255, 3.3% of channels differ
+10 images; worst PSNR 63.0 dB

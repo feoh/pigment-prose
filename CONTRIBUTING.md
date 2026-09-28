@@ -22,6 +22,7 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | **Hardware GPU checks** | `scripts/gpu-tests.sh [LOG_FILE]` |
 | **Full qualification** (clean checkout; [docs/qualification.md](docs/qualification.md)) | `scripts/qualify.sh [LOG_FILE]`: exit 0 only if nothing failed, 2 if no hardware GPU (BLOCKED) |
 | Qualification benchmark against the targets | `cargo run --release -p pigment-cli -- bench [--adapter NAME] [--strict]` |
+| Software-adapter study (task 23, CI runners, manual) | `gh workflow run software-adapter-study.yml`; compare paintings with `python3 scripts/png-compare.py REF_DIR CANDIDATE_DIR` |
 | List adapters | `cargo run --release -p pigment-cli -- gpu-info` |
 | GPU smoke test | `cargo run --release -p pigment-cli -- gpu-smoke [--width W --height H --tile T --adapter NAME]` |
 | Contact sheet (paintings or debug views) | `cargo run --release -p pigment-cli -- contact-sheet --out SHEET.png [--aspect 9:16] [--view paint\|flat\|regions] [--sample N \| --samples I,J] [--palette ID --haze H ...]`; see [docs/visual-review/](docs/visual-review/) |

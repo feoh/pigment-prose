@@ -88,7 +88,7 @@ Things an automated run cannot judge. Run `cargo run --release -p pigment-studio
 
 | Not covered | Why | Where it goes |
 | --- | --- | --- |
-| A software adapter labelled SOFTWARE and never passing | none installed on this machine (qualify.sh step 7 SKIPPED). The logic is in `adapter::is_software` and the `--allow-software` paths | a machine with lavapipe or llvmpipe; no driver was installed for this |
+| A software adapter labelled SOFTWARE and never passing, on this machine | none installed here (qualify.sh step 7 SKIPPED), and no driver was installed for this. It **is** covered on CI runners by the manual software-adapter study (task 23): lavapipe and WARP are labelled SOFTWARE and `gpu-smoke` fails on both, as designed ([decision](cpu-fallback-decision.md)) | — |
 | A real screen-reader session (Orca, Narrator, VoiceOver) | not run; the AT-SPI tree is checked ([dump](evidence/studio-12/atspi-tree-linux-2026-09-28.txt)) | task 24 or a manual session |
 | A real GPU driver reset | not reproducible on demand; simulated with `--lose-device-after` | — |
 | A real full filesystem | would need root to mount a small one; simulated with failing writers | — |
