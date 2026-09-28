@@ -208,6 +208,8 @@ pub enum PaletteId {
     Lakeshore,
     /// Low gold evening light.
     GoldenEvening,
+    /// Warm stone and sand with cool violet shadows.
+    Desert,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

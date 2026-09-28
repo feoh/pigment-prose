@@ -13,6 +13,7 @@
 //! See `docs/architecture.md` for the full contract, the cross-reference
 //! table and which task owns each unimplemented piece.
 
+pub mod biome;
 pub mod capability;
 pub mod composite;
 pub mod error;

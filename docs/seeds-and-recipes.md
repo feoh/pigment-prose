@@ -87,7 +87,7 @@ The PRNG is part of `pigment-seed/1`. Changing the digest, the stream derivation
 | `season.year` | number | 0…1, the normalized year (0 and 1 midwinter, 0.5 midsummer; [seasons](seasons-and-biomes.md)) |
 | `source_text` | string | **optional**. Present only if the user chose to keep the prose (task 10). It must pass the input gate and reproduce `seed.digest`. |
 
-Every key except `source_text` is required. There are no defaults, so a missing value never turns into a different painting.
+Every key except `source_text` is required. There are no defaults, so a missing value never turns into a different painting. Under the current single-profile registry, schema-1 and schema-2 recipes implicitly select the only implemented biome, `alpine`; no recipe bytes or settings are changed by this registration. When a second biome is approved, a new schema must add an explicit stable biome identifier and migrate legacy recipes to `alpine`. Unknown identifiers must be rejected, not defaulted.
 
 **Schema 1** (before seasons, task 16) is schema 2 without `season` (`recipe::SCHEMA_V1`). A schema 1 file is checked against that table, so its own mistakes are reported as such (a `season` key in a schema 1 file is an unknown field). Then it gets `season.year = 0.5`, midsummer, the look every schema 1 painting was made with, and loads as schema 2. It paints exactly as before: the 47 approved schema 1 recipes repaint byte for byte. Saving writes schema 2 (`Recipe::from_json_with_schema` reports which schema a file was in).
 

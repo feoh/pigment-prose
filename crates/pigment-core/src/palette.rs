@@ -169,12 +169,53 @@ pub const GOLDEN_EVENING: Palette = Palette {
     dry_grass: Srgb(0xd8a860),
 };
 
-pub const PALETTES: [&Palette; 2] = [&LAKESHORE, &GOLDEN_EVENING];
+/// Warm mineral earths, pale sunlit sand and blue-violet shade; foliage is
+/// sparse and muted rather than a recolored lakeshore canopy.
+pub const DESERT: Palette = Palette {
+    id: PaletteId::Desert,
+    name: "Rock and sand",
+    paper: Srgb(0xf5eddb),
+    sky_zenith: Srgb(0x4f8eb0),
+    sky_horizon: Srgb(0xe8c99c),
+    sun: Srgb(0xffe3a5),
+    haze: Srgb(0xc9b9ae),
+    cloud: mat(0xfff5df, 0x8d91a9),
+    storm: Srgb(0x665d70),
+    far: mat(0xc49c82, 0x77718f),
+    rock: mat(0xc98254, 0x574d70),
+    snow: mat(0xffffff, 0xa6bad8),
+    forest: mat(0x8c8751, 0x484b3f),
+    foliage_warm: Srgb(0xb4a15c),
+    foliage_cool: Srgb(0x657263),
+    meadow: mat(0xb79b62, 0x71644f),
+    moss: Srgb(0x8e8958),
+    water_deep: Srgb(0x285c70),
+    water_far: Srgb(0x9dbfc0),
+    water_sheen: Srgb(0xf0e5c6),
+    sand: mat(0xe2bc7d, 0x86718a),
+    plants: [
+        mat(0x9d9852, 0x555641),
+        mat(0x7b8060, 0x41483e),
+        mat(0xc2aa67, 0x777050),
+        mat(0x9a8a50, 0x54503d),
+        mat(0xaaa060, 0x625743),
+        mat(0x927451, 0x4a3c45),
+    ],
+    bark: Srgb(0xcab58c),
+    wood: Srgb(0x76543d),
+    blossom: [Srgb(0xd58c78), Srgb(0xf2d7b8)],
+    autumn: [Srgb(0xd5ad4e), Srgb(0xc8793e), Srgb(0x9d4e43)],
+    twigs: mat(0x847363, 0x51434b),
+    dry_grass: Srgb(0xd0ac65),
+};
+
+pub const PALETTES: [&Palette; 3] = [&LAKESHORE, &GOLDEN_EVENING, &DESERT];
 
 pub fn palette(id: PaletteId) -> &'static Palette {
     match id {
         PaletteId::Lakeshore => &LAKESHORE,
         PaletteId::GoldenEvening => &GOLDEN_EVENING,
+        PaletteId::Desert => &DESERT,
     }
 }
 

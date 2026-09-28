@@ -168,6 +168,23 @@ pub const ALPINE: SeasonProfile = SeasonProfile {
     ],
 };
 
+/// A restrained stylized rocky-desert cycle: brief, subdued wet-season
+/// greening and flowering; a long dry season. It does not imply snow, a
+/// tropical wet season or an ecological/weather simulation. The phase is an
+/// authored appearance control, independent of scene geometry.
+pub const DESERT: SeasonProfile = SeasonProfile {
+    name: "rocky desert",
+    cycle: Cycle::DryWet,
+    keys: &[
+        //            snow  ground tree  leaf  autumn fresh dry   bloom
+        (0.00, state([0.0, 0.0, 0.0, 0.72, 0.0, 0.0, 0.15, 0.45])), // cool season
+        (0.20, state([0.0, 0.0, 0.0, 0.88, 0.0, 0.75, 0.0, 0.85])), // brief growth
+        (0.38, state([0.0, 0.0, 0.0, 0.76, 0.0, 0.2, 0.55, 0.35])), // drying
+        (0.58, state([0.0, 0.0, 0.0, 0.62, 0.0, 0.0, 1.0, 0.05])),  // peak dry
+        (0.78, state([0.0, 0.0, 0.0, 0.68, 0.0, 0.0, 0.75, 0.1])),  // late dry
+    ],
+};
+
 /// The default season: midsummer, the approved look.
 pub const DEFAULT_YEAR: f64 = 0.5;
 

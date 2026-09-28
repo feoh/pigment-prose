@@ -81,7 +81,11 @@ Each control owns its own part of the picture, so they never fight:
 - **Recipe schema 2** adds `season.year` (required). Schema 1 files, the only format before seasons, load through one explicit migration: they are checked against the schema 1 table, then get `season.year = 0.5`, the midsummer they were painted in, so they paint exactly as before. Saving writes schema 2, and builds that read only schema 1 reject such a file with "recipe schema 2 is not supported". Tested: the 47 approved schema 1 recipes migrate, repaint byte for byte, and re-save as schema 2 with only the schema number and the season added ([seeds-and-recipes.md](seeds-and-recipes.md#recipe-schema-2)).
 - The season is an appearance setting, so it is part of the export snapshot and of every recipe, and has nothing to do with the prose seed.
 
-## Extension contract for later biomes
+## Biome registration and extension contract
+
+The owner-approved task 17 scope is one registered **Alpine** profile covering the existing mountain lakeshores and wooded valleys. Prose remains non-semantic seed material: every input continues to generate this same landscape family. The profile is registered in `crates/pigment-core/src/biome.rs`; `BiomeId::Alpine` has the stable internal ID `alpine`. The profile collects the existing structure defaults, allowed vegetation, the existing lake water form, base palette/atmosphere defaults and `season::ALPINE`. It does not duplicate or fork the scene generator, season model, paint shaders or export path.
+
+There is no biome picker while Alpine is the only fully implemented profile. Existing schema-1 and schema-2 recipes stay unchanged, and their current output/season defaults are preserved; loading them resolves to the sole registered Alpine profile. Do not add a redundant biome field to those recipes. When a second biome is approved, expose a selector and add an explicit stable biome ID in a new recipe schema with tested migrations that map old recipes to `alpine`; unknown IDs must fail clearly. Switching biome may regenerate structure. Changing season, palette, atmosphere or paint handling must not move geometry. Keep structural defaults separate from paint-only overrides, and preserve user appearance settings on a biome switch unless a documented control is biome-specific.
 
 A biome brings a `SeasonProfile`: a name, a `Cycle` and its keyframes over the same eight channels.
 
@@ -93,7 +97,19 @@ Rules for every profile:
 
 - The keyframe at the biome's default season must be `SeasonState::NEUTRAL` if that biome's approved painting predates its seasons.
 - Every channel stays in `[0, 1]`, and a profile never changes geometry or placement.
-- Which profile a scene uses is part of biome selection (task 17). Today every scene is the alpine lakeshore.
+- A profile is selectable only after its structure, vegetation/effects, season response, palette and recipe behavior are implemented and tested. Today every scene is the alpine lakeshore.
+
+### Desert implementation status
+
+A preliminary, deliberately non-selectable desert profile is being authored in `crates/pigment-core/src/biome.rs`: rocky-desert defaults use low shrub density, an arid water capability, a warm mineral palette with cool shadows, and a restrained stylized wet/dry seasonal cycle. It is **not** in `biome::PROFILES`; the existing lakeshore generator, versioned recipe identity and UI still produce/select Alpine only. The profile must not be presented as a working biome or used to imply that changing palette alone creates desert structure. The seasonal values describe artistic appearance, not a climate simulation.
+
+### Add-a-biome checklist
+
+1. Add a stable `BiomeId` and complete `BiomeProfile` in `crates/pigment-core/src/biome.rs`; include structure defaults/ranges, permitted `scene::Plant` forms and density, supported water form, palette and atmosphere defaults, and a `SeasonProfile`. Keep values within `settings::CONTROLS` and season channels within `[0, 1]`.
+2. Extend the shared scene-generation inputs in `crates/pigment-core/src/scene/` and existing shared GPU painting paths only where a new structural/effect capability needs it. Do not copy `LakeshoreGenerator`, `paint.wgsl`, the season system, or export services.
+3. Add profile validation and tests in `crates/pigment-core/src/biome.rs`; add deterministic generator/geometry, season and painting tests in the existing module test suites. Demonstrate that paint/season edits preserve geometry and that biome changes reproduce from their recipe and seed domains.
+4. Add reviewed visual fixtures under `docs/visual-review/` and verify recipe round trips, migrations, tiled/export parity and supported GPU backends. Obtain explicit owner approval of the visual quality before advertising the biome.
+5. Only after all of the above passes, add it to `biome::PROFILES` and show the accessible picker in `crates/pigment-studio/src/`. For the second biome, version recipe identity in `crates/pigment-core/src/recipe.rs`, update `docs/seeds-and-recipes.md` and examples, and test that legacy recipes resolve to `alpine` while unknown IDs are rejected.
 
 ## Cost
 
