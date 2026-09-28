@@ -32,10 +32,11 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 | --- | --- | --- |
 | Structure (recomposes) | Form | Relief, Woodland density |
 | Paint handling (landscape stays put) | Edge Looseness, Wash / Gouache | Mark scale, Granulation, Paper grain |
-| Appearance (landscape stays put) | Atmosphere, Color intensity, Palette | — |
+| Appearance (landscape stays put) | Season, Atmosphere, Color intensity, Palette | — |
 
 - Each slider row shows its label, the value to two decimals, a notch under the track at the default, and the two ends' meanings. While the value is off its default, a **Reset** button appears. The tooltip names the value, the ends and the recipe key.
 - The accessible value text names the value and the nearer end, for example "0.54 (nearer angular, faceted planes)" or "0.55 (default)".
+- **Season** (task 16, [seasons-and-biomes.md](seasons-and-biomes.md)) is a cycle: both ends are midwinter, the row shows the season's name ("late summer") next to the figure, its value text is "0.62 (late summer)", and Page Up/Down and the arrow keys carry on past the ends into the next year. It never changes the palette or the Atmosphere slider.
 - Form, Edge Looseness and Wash / Gouache are separate controls on separate fields (tested per control, `settings::tests::each_control_edits_only_its_own_field_in_its_channel`). There is no coupled style slider, and no season, biome, history or camera controls.
 
 ## Compositions

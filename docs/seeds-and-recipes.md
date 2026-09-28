@@ -67,13 +67,13 @@ The PRNG is part of `pigment-seed/1`. Changing the digest, the stream derivation
 - **No similarity.** A one-character edit (`shore-a` vs `shore-b`) gives an unrelated digest and unrelated streams. No smooth interpolation between texts is implied. The tests compare fixed fixture pairs and do not assume collisions are impossible. Two texts could in principle share a digest; SHA-256 makes that astronomically unlikely, not impossible.
 - **Not a privacy mechanism.** Anyone who can guess the prose can confirm the guess against a digest. The digest is not encryption.
 
-## Recipe schema 1
+## Recipe schema 2
 
 `Recipe::to_canonical_json` writes, and `Recipe::from_json` reads, one JSON object. [`docs/examples/recipe.example.json`](examples/recipe.example.json) is a canonical example (fixture `shore-a`, variation 2). A test requires it to load and to re-serialize byte-identically. The authoritative key table is `recipe::SCHEMA`, and a test checks it against the serde structs.
 
 | Key | JSON type | Constraint |
 | --- | --- | --- |
-| `schema` | integer | must be `1` |
+| `schema` | integer | `2`, or `1` (migrated, below) |
 | `versions.normalization` | string | must be `nfc-lf-utf8/1` |
 | `versions.seed_algorithm` | string | must be `pigment-seed/1` |
 | `versions.generator`, `versions.renderer` | integer 0…2³²−1 | any; a difference from this build is a notice, not an error |
@@ -84,9 +84,12 @@ The PRNG is part of `pigment-seed/1`. Changing the digest, the stream derivation
 | `painting.{edge_looseness, wash_gouache, mark_scale, granulation, paper_grain}` | number | range from `settings::CONTROLS` |
 | `palette.id` | string | `lakeshore` or `golden-evening` |
 | `palette.intensity`, `atmosphere.haze` | number | range from `settings::CONTROLS` |
+| `season.year` | number | 0…1, the normalized year (0 and 1 midwinter, 0.5 midsummer; [seasons](seasons-and-biomes.md)) |
 | `source_text` | string | **optional**. Present only if the user chose to keep the prose (task 10). It must pass the input gate and reproduce `seed.digest`. |
 
 Every key except `source_text` is required. There are no defaults, so a missing value never turns into a different painting.
+
+**Schema 1** (before seasons, task 16) is schema 2 without `season` (`recipe::SCHEMA_V1`). A schema 1 file is checked against that table, so its own mistakes are reported as such (a `season` key in a schema 1 file is an unknown field). Then it gets `season.year = 0.5`, midsummer, the look every schema 1 painting was made with, and loads as schema 2. It paints exactly as before: the 47 approved schema 1 recipes repaint byte for byte. Saving writes schema 2 (`Recipe::from_json_with_schema` reports which schema a file was in).
 
 ## Load policy
 
@@ -101,8 +104,9 @@ Every key except `source_text` is required. There are no defaults, so a missing 
 | 2 | nesting deeper than 128 | `Malformed` (serde_json's recursion limit, no stack overflow) |
 | 3 | top level not an object | `WrongType { path: "", expected: "a JSON object" }` |
 | 3 | `schema` missing / not a non-negative integer | `MissingField` / `WrongType` |
-| 3 | `schema` ≠ 1 (future or 0) | `UnsupportedSchema { found, supported: 1 }`, checked **before** the shape, so a future file is never reported as a pile of unknown fields |
-| 4 | a key not in the schema (typo, newer setting, season) | `UnknownField { path }`. It is never ignored, because ignoring `painting.edge_loosness` would silently repaint. |
+| 3 | `schema` not 1 or 2 (future or 0) | `UnsupportedSchema { found, supported: 2 }`, checked **before** the shape, so a future file is never reported as a pile of unknown fields |
+| 3 | `schema` 1 | checked against the schema 1 table, then migrated (above) |
+| 4 | a key not in the schema (typo, newer setting) | `UnknownField { path }`. It is never ignored, because ignoring `painting.edge_loosness` would silently repaint. |
 | 4 | a required key missing | `MissingField { path }` |
 | 4 | wrong JSON type (string for number, fraction or negative for an integer, `null`) | `WrongType { path, expected }` |
 | 4 | malformed digest, unknown palette id | `InvalidValue { path, reason }` |
@@ -129,7 +133,7 @@ Every key except `source_text` is required. There are no defaults, so a missing 
 
 ## Versions and migration limits
 
-- **Schema.** Only schema 1 exists, so there are no migrations. A later schema must come with an explicit, tested migration from each schema it claims to read. A migration may only rename or restructure keys, or add keys whose value reproduces the old painting exactly. If it cannot guarantee that, it must reject the old file with a clear message. It must never guess a default.
+- **Schema.** Schema 2 reads schema 1 through one explicit, tested migration (it adds `season.year = 0.5`, which reproduces every schema 1 painting exactly). A later schema must come with an explicit, tested migration from each schema it claims to read. A migration may only rename or restructure keys, or add keys whose value reproduces the old painting exactly. If it cannot guarantee that, it must reject the old file with a clear message. It must never guess a default.
 - **Normalization and seed algorithm.** These cannot be migrated from the digest alone, because a digest cannot be re-hashed under a new normalization. A build that introduces `pigment-seed/2` must either keep implementing `/1` for old recipes or reject them as `UnsupportedAlgorithm`. Re-deriving from `source_text` is only possible when the user kept it, and it changes the painting.
 - **Generator and renderer.** The app ships one of each (architecture.md, "Versioning"). An old recipe opens with a notice and may compose or paint differently. Its recorded versions update only when the user saves.
 - **Settings ranges.** Narrowing a range, or removing a palette id, makes old files fail validation. Either avoid that, or bump the schema and migrate.

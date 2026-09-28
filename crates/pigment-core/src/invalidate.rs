@@ -103,6 +103,7 @@ mod tests {
         assert_eq!(inv(|r| r.painting.mark_scale = 2.0), PAINT);
         assert_eq!(inv(|r| r.palette.intensity = 0.1), PAINT);
         assert_eq!(inv(|r| r.atmosphere.haze = 1.0), PAINT);
+        assert_eq!(inv(|r| r.season.year = 0.0), PAINT);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Recipe files and the source-text choice (task 10)
 
-This covers saving and reopening editable paintings, and where the privacy boundary between a recipe and an exported image sits. The recipe **format** (schema 1, canonical JSON, the strict loader) is specified in [seeds-and-recipes.md](seeds-and-recipes.md). This document covers files on disk and the document model:
+This covers saving and reopening editable paintings, and where the privacy boundary between a recipe and an exported image sits. The recipe **format** (schema 2, canonical JSON, the strict loader, the schema 1 migration) is specified in [seeds-and-recipes.md](seeds-and-recipes.md). This document covers files on disk and the document model:
 
 - `crates/pigment-io/src/recipe_file.rs`: `read_recipe`, `write_recipe`, `RecipeFileError`
 - `crates/pigment-io/src/document.rs`: `Document`, `SaveError`
@@ -58,8 +58,8 @@ cannot open the recipe: it does not exist
 cannot open the recipe: permission denied
 cannot write the recipe: the disk is full
 the recipe is not UTF-8 text (invalid bytes after byte 14)
-invalid recipe: the recipe ends unexpectedly (truncated?) at line 18, column 8
-invalid recipe: recipe schema 2 is not supported; this version reads schema 1
+invalid recipe: the recipe ends unexpectedly (truncated?) at line 19, column 4
+invalid recipe: recipe schema 3 is not supported; this version reads schemas 1 to 2
 invalid recipe: form.faceting = 1.7 is outside 0..=1
 invalid recipe: `painting.edge_loosness` is not a recipe field
 invalid recipe: `form.<unrecognized>` is not a recipe field

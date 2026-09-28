@@ -14,8 +14,10 @@
 //!   recipe says exactly how its digest was produced. Both are frozen by
 //!   `fixtures/seed-vectors.json`; see docs/seeds-and-recipes.md.
 
-/// Recipe file format version understood by this build.
-pub const RECIPE_SCHEMA_VERSION: u32 = 1;
+/// Recipe file format version written by this build. `2` (task 16) adds
+/// `season`; schema 1 files still load, through one explicit migration
+/// (`recipe::SCHEMA_V1`, season midsummer).
+pub const RECIPE_SCHEMA_VERSION: u32 = 2;
 
 /// Scene generator version. `1` = the scene family approved at the task 08
 /// visual gate (2026-09-27); `2` = task 25: a seeded wind on every scene and

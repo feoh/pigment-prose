@@ -49,7 +49,7 @@ pigment-prose <command> [options]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
             [--palette lakeshore|golden-evening] [--looseness L] [--wash W]
             [--haze H] [--intensity I] [--marks M] [--grain G] [--granulation G]
-            [--vary KEY=V1,V2,...] [--cells DIR]
+            [--season Y] [--vary KEY=V1,V2,...] [--cells DIR]
       Render lakeshore scenes (painted, or the structure debug views) into a
       grid PNG, plus SHEET.txt listing each cell's passage id,
       variation, template, geometry checksum and visible coverage by role.
@@ -471,6 +471,7 @@ fn set_paint(a: &mut Appearance, key: &str, v: &str) -> Result<(), String> {
         "granulation" => a.painting.granulation = num()?,
         "haze" => a.atmosphere.haze = num()?,
         "intensity" => a.palette.intensity = num()?,
+        "season" => a.season.year = num()?,
         "palette" => {
             a.palette.id = serde_json::from_value(serde_json::Value::String(v.to_string()))
                 .map_err(|_| format!("--palette {v:?}: expected lakeshore or golden-evening"))?;
@@ -480,7 +481,7 @@ fn set_paint(a: &mut Appearance, key: &str, v: &str) -> Result<(), String> {
     Ok(())
 }
 
-const PAINT_KEYS: [&str; 8] = [
+const PAINT_KEYS: [&str; 9] = [
     "looseness",
     "wash",
     "marks",
@@ -488,6 +489,7 @@ const PAINT_KEYS: [&str; 8] = [
     "granulation",
     "haze",
     "intensity",
+    "season",
     "palette",
 ];
 
@@ -1242,6 +1244,7 @@ fn write_cell(
     r.painting = c.appearance.painting;
     r.palette = c.appearance.palette;
     r.atmosphere = c.appearance.atmosphere;
+    r.season = c.appearance.season;
     let json = r.to_canonical_json().map_err(|e| e.to_string())?;
     let path = dir.join(format!("{n:02}.recipe.json"));
     std::fs::write(&path, json).map_err(|e| format!("writing {}: {e}", path.display()))

@@ -4,8 +4,9 @@
 //! - **Structure** ([`FormSettings`]): may move geometry. Rebuilds the scene.
 //! - **Paint handling** ([`PaintingSettings`]): edge behaviour, opacity,
 //!   mark scale, texture. Repaints only; geometry must not change.
-//! - **Appearance** ([`PaletteSettings`], [`AtmosphereSettings`]): colour,
-//!   haze and depth appearance. Repaints only; geometry must not change.
+//! - **Appearance** ([`PaletteSettings`], [`AtmosphereSettings`],
+//!   [`SeasonSettings`]): colour, haze and depth appearance, and the time of
+//!   year. Repaints only; geometry must not change.
 //!
 //! [`CONTROLS`] is the single source of ranges, defaults and labels for the
 //! UI (task 12), recipe validation and the renderer (tasks 05–07). Values
@@ -47,6 +48,9 @@ pub struct ControlSpec {
     pub high: &'static str,
     /// Owning task that implements the visual effect.
     pub implemented_by: &'static str,
+    /// `min` and `max` are the same moment (the year): keyboard steps wrap
+    /// around instead of stopping at the ends.
+    pub cyclic: bool,
 }
 
 /// Everything a slider edits: the structural settings and the appearance.
@@ -71,6 +75,7 @@ impl ControlSpec {
             "painting.paper_grain" => &mut a.painting.paper_grain,
             "palette.intensity" => &mut a.palette.intensity,
             "atmosphere.haze" => &mut a.atmosphere.haze,
+            "season.year" => &mut a.season.year,
             other => unreachable!("control {other} has no field"),
         }
     }
@@ -120,6 +125,7 @@ macro_rules! control {
             low: $low,
             high: $high,
             implemented_by: $task,
+            cyclic: false,
         }
     };
 }
@@ -147,11 +153,19 @@ pub const PALETTE_INTENSITY: ControlSpec = control!("palette.intensity", "Color 
 pub const HAZE: ControlSpec = control!("atmosphere.haze", "Atmosphere", Appearance, Main,
     0.0..=1.0, default 0.4, "clear, crisp distance" => "hazy, dissolving distance", "06");
 
+/// The time of year (task 16): a cycle, so both ends are midwinter.
+pub const SEASON: ControlSpec = ControlSpec {
+    cyclic: true,
+    ..control!("season.year", "Season", Appearance, Main,
+        0.0..=1.0, default 0.5, "midwinter" => "midwinter, a year on", "16")
+};
+
 /// Every slider, in display order.
-pub const CONTROLS: [ControlSpec; 10] = [
+pub const CONTROLS: [ControlSpec; 11] = [
     FACETING,
     EDGE_LOOSENESS,
     WASH_GOUACHE,
+    SEASON,
     HAZE,
     PALETTE_INTENSITY,
     RELIEF,
@@ -209,12 +223,21 @@ pub struct AtmosphereSettings {
     pub haze: f64,
 }
 
+/// The time of year (task 16): `year` is the normalized year of
+/// [`crate::season`], 0 and 1 both midwinter, 0.5 midsummer.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SeasonSettings {
+    pub year: f64,
+}
+
 /// Everything the painter can change without rebuilding the scene.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct Appearance {
     pub painting: PaintingSettings,
     pub palette: PaletteSettings,
     pub atmosphere: AtmosphereSettings,
+    pub season: SeasonSettings,
 }
 
 impl Default for FormSettings {
@@ -254,6 +277,14 @@ impl Default for AtmosphereSettings {
     }
 }
 
+impl Default for SeasonSettings {
+    fn default() -> Self {
+        SeasonSettings {
+            year: SEASON.default,
+        }
+    }
+}
+
 impl FormSettings {
     pub fn validate(&self) -> Result<(), ValidationError> {
         FACETING.check(self.faceting)?;
@@ -281,7 +312,8 @@ impl Appearance {
     pub fn validate(&self) -> Result<(), ValidationError> {
         self.painting.validate()?;
         PALETTE_INTENSITY.check(self.palette.intensity)?;
-        HAZE.check(self.atmosphere.haze)
+        HAZE.check(self.atmosphere.haze)?;
+        SEASON.check(self.season.year)
     }
 }
 

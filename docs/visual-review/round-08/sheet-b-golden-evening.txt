@@ -1,0 +1,12 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v2, renderer v2, view paint, aspect 16:9, cell 400x225, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: GoldenEvening, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)	image fnv
+41	sample passage 15 season=0.0	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	35b2189bfb48c194
+42	sample passage 15 season=0.25	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	1e638f2923379314
+43	sample passage 15 season=0.5	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	8d49999b4622582a
+44	sample passage 15 season=0.75	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4	d028d2d3c10c2bf9
+45	sample passage 16 season=0.0	peak-over-water	false	84	11932	56b3525d366300f5	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 8.9 1.6 2.2 11.9 4.3	27e1c0271a52de8f
+46	sample passage 16 season=0.25	peak-over-water	false	84	11932	56b3525d366300f5	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 8.9 1.6 2.2 11.9 4.3	554606de1864ec17
+47	sample passage 16 season=0.5	peak-over-water	false	84	11932	56b3525d366300f5	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 8.9 1.6 2.2 11.9 4.3	608d45f5bdf844cc
+48	sample passage 16 season=0.75	peak-over-water	false	84	11932	56b3525d366300f5	0.30	5	3	0.31	0.03	0.04	0.54	0.28	38.0 1.0 1.9 0.0 30.2 8.9 1.6 2.2 11.9 4.3	7843e04890c6485c

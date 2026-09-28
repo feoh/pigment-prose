@@ -81,13 +81,20 @@ pub struct Palette {
     pub wood: Srgb,
     /// Blossom colors of flowering trees.
     pub blossom: [Srgb; 2],
+    /// Autumn leaves (task 16): gold, orange, red. Each deciduous crown
+    /// turns toward one of them, by its own stable attribute.
+    pub autumn: [Srgb; 3],
+    /// Bare winter branches, lit and shadowed.
+    pub twigs: Material,
+    /// Grass cured to straw in late summer and autumn.
+    pub dry_grass: Srgb,
 }
 
 /// Verdant high summer: sap and viridian greens with yellow-green light,
 /// turquoise water, warm ochre rock against violet shadows.
 pub const LAKESHORE: Palette = Palette {
     id: PaletteId::Lakeshore,
-    name: "Lakeshore (summer)",
+    name: "Lakeshore",
     paper: Srgb(0xf4eedf),
     sky_zenith: Srgb(0x4a82c4),
     sky_horizon: Srgb(0xd3e6ea),
@@ -118,6 +125,9 @@ pub const LAKESHORE: Palette = Palette {
     bark: Srgb(0xe8e2d2),
     wood: Srgb(0x6e4a2c),
     blossom: [Srgb(0xf08cbc), Srgb(0xfff4f0)],
+    autumn: [Srgb(0xe8c03a), Srgb(0xe07a2a), Srgb(0xb8362c)],
+    twigs: mat(0x7a6660, 0x3a2c34),
+    dry_grass: Srgb(0xc9a85a),
 };
 
 /// Evening: low gold light, rose clouds, deep blue-green shadows.
@@ -154,6 +164,9 @@ pub const GOLDEN_EVENING: Palette = Palette {
     bark: Srgb(0xf4e2c8),
     wood: Srgb(0x7a4a2a),
     blossom: [Srgb(0xf7a0b0), Srgb(0xfff0dc)],
+    autumn: [Srgb(0xf0b848), Srgb(0xe8702e), Srgb(0xc0382e)],
+    twigs: mat(0x8c6e5c, 0x3e2e36),
+    dry_grass: Srgb(0xd8a860),
 };
 
 pub const PALETTES: [&Palette; 2] = [&LAKESHORE, &GOLDEN_EVENING];
@@ -205,6 +218,9 @@ impl Palette {
         out.push(e(self.bark));
         out.push(e(self.wood));
         out.extend(self.blossom.map(e));
+        out.extend(self.autumn.map(e));
+        out.extend(m(self.twigs));
+        out.push(e(self.dry_grass));
         // Padding entries keep the count fixed for future materials.
         while out.len() < GPU_ENTRIES {
             out.push([0.0; 4]);
@@ -261,6 +277,7 @@ mod tests {
                 ("shrub", p.plants[3]),
                 ("flowering", p.plants[4]),
                 ("copper", p.plants[5]),
+                ("twigs", p.twigs),
             ] {
                 assert!(lum(m.light) > lum(m.shadow), "{} {name}", p.name);
             }

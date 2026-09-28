@@ -121,8 +121,8 @@ pub enum RecipeError {
         column: usize,
         kind: MalformedKind,
     },
-    /// The `schema` number is not one this build reads. Newer files are
-    /// never guessed at; there are no older schemas to migrate yet.
+    /// The `schema` number is not one this build reads: `supported` is the
+    /// newest (schema 1 is migrated). Newer files are never guessed at.
     UnsupportedSchema {
         found: u64,
         supported: u32,
@@ -206,7 +206,7 @@ impl fmt::Display for RecipeError {
             }
             RecipeError::UnsupportedSchema { found, supported } => write!(
                 f,
-                "recipe schema {found} is not supported; this version reads schema {supported}"
+                "recipe schema {found} is not supported; this version reads schemas 1 to {supported}"
             ),
             RecipeError::UnsupportedAlgorithm { field, found } => write!(
                 f,

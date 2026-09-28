@@ -16,6 +16,10 @@
 //!   the prose was not kept.
 //! - Generator and renderer version differences are *not* errors; they are
 //!   reported by [`Recipe::version_notices`] for the UI to show.
+//! - **Schema 1** (before task 16's seasons) is read through one explicit
+//!   migration: it is checked against its own table, then gains
+//!   `season.year = 0.5`, midsummer, the look every schema 1 painting was
+//!   made with, so it paints exactly as before. Saving writes schema 2.
 
 use std::fmt;
 
@@ -28,6 +32,7 @@ use crate::frame::Frame;
 use crate::seed::{SeedBundle, TextDigest, Variation};
 use crate::settings::{
     Appearance, AtmosphereSettings, FormSettings, PaintingSettings, PaletteId, PaletteSettings,
+    SeasonSettings,
 };
 use crate::version;
 
@@ -52,6 +57,8 @@ pub struct Recipe {
     pub painting: PaintingSettings,
     pub palette: PaletteSettings,
     pub atmosphere: AtmosphereSettings,
+    /// The time of year (schema 2, task 16).
+    pub season: SeasonSettings,
     /// Original prose, present **only** if the user explicitly chose to keep
     /// it (task 10). Never required to reproduce the seed and never copied
     /// into exported images. Omitted from the file entirely when `None`.
@@ -74,6 +81,7 @@ impl fmt::Debug for Recipe {
             .field("painting", &self.painting)
             .field("palette", &self.palette)
             .field("atmosphere", &self.atmosphere)
+            .field("season", &self.season)
             .field("source_text", &source)
             .finish()
     }
@@ -152,6 +160,7 @@ impl Recipe {
             painting: PaintingSettings::default(),
             palette: PaletteSettings::default(),
             atmosphere: AtmosphereSettings::default(),
+            season: SeasonSettings::default(),
             source_text: None,
         }
     }
@@ -159,14 +168,25 @@ impl Recipe {
     /// Parses and fully validates a recipe document. See the module docs
     /// for the order of checks. Errors never contain values from the file.
     pub fn from_json(json: &str) -> Result<Recipe, RecipeError> {
+        Self::from_json_with_schema(json).map(|(r, _)| r)
+    }
+
+    /// As [`from_json`](Recipe::from_json), and the schema the file was
+    /// written in (1 if it was migrated), so the UI can say that saving will
+    /// update the format.
+    pub fn from_json_with_schema(json: &str) -> Result<(Recipe, u32), RecipeError> {
         if json.len() > MAX_RECIPE_BYTES {
             return Err(RecipeError::TooLarge {
                 bytes: json.len(),
                 max: MAX_RECIPE_BYTES,
             });
         }
-        let Strict(value) = serde_json::from_str(json).map_err(malformed)?;
-        check_schema_number(&value)?;
+        let Strict(mut value) = serde_json::from_str(json).map_err(malformed)?;
+        let found = check_schema_number(&value)?;
+        if found == 1 {
+            check_object(&value, SCHEMA_V1, "")?;
+            migrate_v1(&mut value);
+        }
         check_object(&value, SCHEMA, "")?;
         // The walk above has checked every key and type, so typing cannot
         // fail unless SCHEMA and the structs disagree (a test prevents it).
@@ -175,7 +195,7 @@ impl Recipe {
             expected: "a Pigment Prose recipe",
         })?;
         recipe.validate()?;
-        Ok(recipe)
+        Ok((recipe, found))
     }
 
     /// The canonical serialization, after the same checks as
@@ -268,6 +288,7 @@ impl Recipe {
             painting: self.painting,
             palette: self.palette,
             atmosphere: self.atmosphere,
+            season: self.season,
         }
     }
 }
@@ -305,56 +326,97 @@ const fn req(key: &'static str, kind: Kind) -> Field {
     }
 }
 
-/// Schema 1, in canonical order. `pub` so documentation and tests can walk
-/// it; a test checks it against the serde structs.
+const F_SCHEMA: Field = req("schema", Kind::Uint32);
+const F_VERSIONS: Field = req(
+    "versions",
+    Kind::Object(&[
+        req("normalization", Kind::Text),
+        req("seed_algorithm", Kind::Text),
+        req("generator", Kind::Uint32),
+        req("renderer", Kind::Uint32),
+    ]),
+);
+const F_SEED: Field = req(
+    "seed",
+    Kind::Object(&[req("digest", Kind::Digest), req("variation", Kind::Uint32)]),
+);
+const F_FRAME: Field = req(
+    "frame",
+    Kind::Object(&[req("width", Kind::Uint32), req("height", Kind::Uint32)]),
+);
+const F_FORM: Field = req(
+    "form",
+    Kind::Object(&[
+        req("faceting", Kind::Number),
+        req("relief", Kind::Number),
+        req("woodland_density", Kind::Number),
+    ]),
+);
+const F_PAINTING: Field = req(
+    "painting",
+    Kind::Object(&[
+        req("edge_looseness", Kind::Number),
+        req("wash_gouache", Kind::Number),
+        req("mark_scale", Kind::Number),
+        req("granulation", Kind::Number),
+        req("paper_grain", Kind::Number),
+    ]),
+);
+const F_PALETTE: Field = req(
+    "palette",
+    Kind::Object(&[req("id", Kind::Palette), req("intensity", Kind::Number)]),
+);
+const F_ATMOSPHERE: Field = req("atmosphere", Kind::Object(&[req("haze", Kind::Number)]));
+const F_SEASON: Field = req("season", Kind::Object(&[req("year", Kind::Number)]));
+const F_SOURCE_TEXT: Field = Field {
+    key: "source_text",
+    kind: Kind::Text,
+    required: false,
+};
+
+/// Schema 2 (the current format), in canonical order. `pub` so
+/// documentation and tests can walk it; a test checks it against the serde
+/// structs.
 pub const SCHEMA: &[Field] = &[
-    req("schema", Kind::Uint32),
-    req(
-        "versions",
-        Kind::Object(&[
-            req("normalization", Kind::Text),
-            req("seed_algorithm", Kind::Text),
-            req("generator", Kind::Uint32),
-            req("renderer", Kind::Uint32),
-        ]),
-    ),
-    req(
-        "seed",
-        Kind::Object(&[req("digest", Kind::Digest), req("variation", Kind::Uint32)]),
-    ),
-    req(
-        "frame",
-        Kind::Object(&[req("width", Kind::Uint32), req("height", Kind::Uint32)]),
-    ),
-    req(
-        "form",
-        Kind::Object(&[
-            req("faceting", Kind::Number),
-            req("relief", Kind::Number),
-            req("woodland_density", Kind::Number),
-        ]),
-    ),
-    req(
-        "painting",
-        Kind::Object(&[
-            req("edge_looseness", Kind::Number),
-            req("wash_gouache", Kind::Number),
-            req("mark_scale", Kind::Number),
-            req("granulation", Kind::Number),
-            req("paper_grain", Kind::Number),
-        ]),
-    ),
-    req(
-        "palette",
-        Kind::Object(&[req("id", Kind::Palette), req("intensity", Kind::Number)]),
-    ),
-    req("atmosphere", Kind::Object(&[req("haze", Kind::Number)])),
-    Field {
-        key: "source_text",
-        kind: Kind::Text,
-        required: false,
-    },
+    F_SCHEMA,
+    F_VERSIONS,
+    F_SEED,
+    F_FRAME,
+    F_FORM,
+    F_PAINTING,
+    F_PALETTE,
+    F_ATMOSPHERE,
+    F_SEASON,
+    F_SOURCE_TEXT,
 ];
+
+/// Schema 1: schema 2 without `season`.
+pub const SCHEMA_V1: &[Field] = &[
+    F_SCHEMA,
+    F_VERSIONS,
+    F_SEED,
+    F_FRAME,
+    F_FORM,
+    F_PAINTING,
+    F_PALETTE,
+    F_ATMOSPHERE,
+    F_SOURCE_TEXT,
+];
+
+/// Schema 1 → 2: every schema 1 painting was made at midsummer, the look
+/// before seasons existed, so that is its season.
+fn migrate_v1(root: &mut Value) {
+    let obj = root.as_object_mut().expect("checked against SCHEMA_V1");
+    obj.insert("schema".into(), version::RECIPE_SCHEMA_VERSION.into());
+    let mut season = Map::new();
+    season.insert(
+        "year".into(),
+        Number::from_f64(crate::season::DEFAULT_YEAR)
+            .expect("finite")
+            .into(),
+    );
+    obj.insert("season".into(), Value::Object(season));
+}
 
 fn join(parent: &str, key: &str) -> String {
     if parent.is_empty() {
@@ -366,7 +428,8 @@ fn join(parent: &str, key: &str) -> String {
 
 /// Read `schema` before anything else, so a future format gets a clear
 /// "unsupported schema" rather than a confusing missing-field error.
-fn check_schema_number(root: &Value) -> Result<(), RecipeError> {
+/// Returns it: 1 (migrated) or the current schema.
+fn check_schema_number(root: &Value) -> Result<u32, RecipeError> {
     let Some(obj) = root.as_object() else {
         return Err(RecipeError::WrongType {
             path: String::new(),
@@ -384,13 +447,13 @@ fn check_schema_number(root: &Value) -> Result<(), RecipeError> {
             expected: "a whole number",
         });
     };
-    if found != u64::from(version::RECIPE_SCHEMA_VERSION) {
+    if found != 1 && found != u64::from(version::RECIPE_SCHEMA_VERSION) {
         return Err(RecipeError::UnsupportedSchema {
             found,
             supported: version::RECIPE_SCHEMA_VERSION,
         });
     }
-    Ok(())
+    Ok(found as u32)
 }
 
 fn check_object(value: &Value, fields: &[Field], path: &str) -> Result<(), RecipeError> {
@@ -691,12 +754,12 @@ mod tests {
     #[test]
     fn future_and_unknown_schemas_are_rejected_first() {
         // A future schema is reported as such even if its shape is unknown.
-        let future = r#"{"schema": 2, "layers": []}"#;
+        let future = r#"{"schema": 3, "layers": []}"#;
         assert_eq!(
             Recipe::from_json(future),
             Err(RecipeError::UnsupportedSchema {
-                found: 2,
-                supported: 1
+                found: 3,
+                supported: 2
             })
         );
         for (schema, want) in [
@@ -704,14 +767,14 @@ mod tests {
                 "0",
                 RecipeError::UnsupportedSchema {
                     found: 0,
-                    supported: 1,
+                    supported: 2,
                 },
             ),
             (
                 "99999999999",
                 RecipeError::UnsupportedSchema {
                     found: 99999999999,
-                    supported: 1,
+                    supported: 2,
                 },
             ),
             (
@@ -751,11 +814,88 @@ mod tests {
             })
         );
         let mut r = sample();
-        r.schema = 2;
+        r.schema = 1;
         assert!(matches!(
             r.to_canonical_json(),
             Err(RecipeError::UnsupportedSchema { .. })
         ));
+    }
+
+    /// `sample()` as schema 1 wrote it: no `season`.
+    fn schema_1_json() -> Value {
+        let mut v = json_of(&sample());
+        v["schema"] = 1.into();
+        v.as_object_mut().unwrap().remove("season");
+        v
+    }
+
+    #[test]
+    fn schema_1_recipes_migrate_to_midsummer() {
+        let v1 = schema_1_json();
+        let (r, found) = Recipe::from_json_with_schema(&v1.to_string()).unwrap();
+        assert_eq!(found, 1);
+        assert_eq!(r.schema, version::RECIPE_SCHEMA_VERSION);
+        assert_eq!(r.season.year, crate::season::DEFAULT_YEAR);
+        // Everything else is as written, so it paints exactly as before.
+        assert_eq!(r, sample());
+        // Saving writes the current schema, which loads as itself.
+        let json = r.to_canonical_json().unwrap();
+        assert!(json.contains("\"schema\": 2") && json.contains("\"season\""));
+        assert_eq!(Recipe::from_json_with_schema(&json).unwrap(), (r, 2));
+    }
+
+    #[test]
+    fn each_schema_is_checked_against_its_own_table() {
+        // A schema 1 file with a season is not schema 1.
+        let mut v = schema_1_json();
+        v["season"] = serde_json::json!({"year": 0.1});
+        assert_eq!(
+            Recipe::from_json(&v.to_string()),
+            Err(RecipeError::UnknownField {
+                path: "season".into()
+            })
+        );
+        // A schema 2 file must say its season.
+        let e = load_edited(|v| {
+            v.as_object_mut().unwrap().remove("season");
+        });
+        assert_eq!(
+            e,
+            Err(RecipeError::MissingField {
+                path: "season".into()
+            })
+        );
+        // Schema 1 problems are still reported as such.
+        let mut v = schema_1_json();
+        v["atmosphere"]["mist"] = 1.into();
+        assert_eq!(
+            Recipe::from_json(&v.to_string()),
+            Err(RecipeError::UnknownField {
+                path: "atmosphere.mist".into()
+            })
+        );
+    }
+
+    #[test]
+    fn the_season_is_range_checked_and_leaves_the_seeds_alone() {
+        for bad in [-0.01, 1.01] {
+            let e = load_edited(|v| v["season"]["year"] = bad.into()).unwrap_err();
+            assert!(
+                matches!(
+                    e,
+                    RecipeError::Validation(ValidationError {
+                        field: "season.year",
+                        ..
+                    })
+                ),
+                "{e:?}"
+            );
+        }
+        let mut r = sample();
+        r.season.year = 0.0;
+        assert_eq!(r.seeds(), sample().seeds());
+        let back = Recipe::from_json(&r.to_canonical_json().unwrap()).unwrap();
+        assert_eq!(back.season.year, 0.0);
     }
 
     #[test]
@@ -807,11 +947,11 @@ mod tests {
                 path: "painting.edge_loosness".into()
             })
         );
-        let e = load_edited(|v| v["season"] = "autumn".into());
+        let e = load_edited(|v| v["weather"] = "autumn".into());
         assert_eq!(
             e,
             Err(RecipeError::UnknownField {
-                path: "season".into()
+                path: "weather".into()
             })
         );
         let e = load_edited(|v| {
@@ -1050,7 +1190,7 @@ mod tests {
         let text = sample().to_canonical_json().unwrap();
         for (from, to) in [
             ("\"haze\": 0.4", "\"haze\": 0.4, \"haze\": 0.9"),
-            ("\"schema\": 1,", "\"schema\": 1, \"schema\": 1,"),
+            ("\"schema\": 2,", "\"schema\": 2, \"schema\": 2,"),
         ] {
             let dup = text.replace(from, to);
             let e = Recipe::from_json(&dup).unwrap_err();
@@ -1093,7 +1233,7 @@ mod tests {
             load_edited(|v| v["versions"]["normalization"] = MARKER.into()),
             load_edited(|v| v[MARKER] = 1.into()),
             load_edited(|v| v["source_text"] = MARKER.into()),
-            Recipe::from_json(&text.replace("\"schema\": 1", &format!("\"schema\": \"{MARKER}\""))),
+            Recipe::from_json(&text.replace("\"schema\": 2", &format!("\"schema\": \"{MARKER}\""))),
             Recipe::from_json(&text.replace("\"id\": \"lakeshore\"", "\"id\": zebra lantern")),
             Recipe::from_json(&text[..text.len() - 20]),
         ];

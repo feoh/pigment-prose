@@ -103,6 +103,10 @@ Round 6 asked for the final rendering to show "the effects of wind and current a
 
 Measured with `pigment-prose paint-bench` (12 sample seeds at 16:9, warm, render + readback, median / worst scene): RTX 4070 Ti 0.93 / 1.26 ms at 960 px, 3.4 / 4.3 ms at 1920 px, 10.4 / 12.0 ms at 3840 px; Intel iGPU 21.6 / 22.8 ms, 83 / 87 ms and 317 / 328 ms. Both GPUs stay within the 960 px and 1920 px preview budgets. The Intel iGPU is over the 3840 px settled target, as before task 25; the studio's adaptive settled cap ([qualification](qualification.md)) handles it. Logs: [paint-25](evidence/paint-25/), and the hardware suite: [gpu-tests-linux-2026-09-28-task25.txt](evidence/gpu-tests-linux-2026-09-28-task25.txt).
 
+## Seasons (task 16)
+
+The season's channels reach the shader as two `vec4`s (`Params.season_a`, `season_b`), from `pigment_core::season::ALPINE.at(year)`. Every seasonal change sits behind one uniform test, `seasonal()`. The mountain and meadow materials keep their approved code as a separate path, because adding seasonal work to them changed how the driver compiled the approved arithmetic: one channel of one pixel by 1/255 in a few images. With the separate paths, midsummer paints the 47 approved images byte for byte. What each channel does, the precedence rules and the tests are in [seasons-and-biomes.md](seasons-and-biomes.md).
+
 ## Edges and texture (pass 2)
 
 - **Loose edges:** each pixel's lookup is displaced by a coherent noise warp, and an 8-tap disc is averaged where layers differ. The radius is `0.02 × edge_looseness × (0.15 + 0.85 × depth)` canvas units, so distant edges wander and soften while near ones stay crisp (selective edges). Offsets are rounded independently of the tile origin.

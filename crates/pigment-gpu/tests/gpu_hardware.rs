@@ -493,3 +493,181 @@ fn painting_is_valid_at_setting_extremes() {
     }
     eprintln!("{n} setting combinations valid");
 }
+
+// ---------------------------------------------------------------- seasons (task 16)
+
+fn in_season(req: &RenderRequest, year: f64) -> RenderRequest {
+    let mut r = req.clone();
+    r.id = IDS.next();
+    r.appearance.season.year = year;
+    r
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn every_season_is_identical_tiled_and_single_at_high_resolution() {
+    // Snow, leaves and ground cover are evaluated from the scene at the
+    // pixel (or at offset points), never from neighbouring pixels, so every
+    // season tiles exactly, including the snow's edges at 2K.
+    let frame = Frame::new(2002, 1126).unwrap();
+    for text in ["sample passage 8", "sample passage 15"] {
+        let base = lakeshore_request(text, frame, TilePolicy::Single);
+        for year in [0.0, 0.25, 0.75, 0.86] {
+            let single = in_season(&base, year);
+            let reference = render_paint(&single);
+            for edge in [333, 512] {
+                let mut tiled = in_season(&single, year);
+                tiled.target.policy = TilePolicy::Fixed { edge };
+                assert!(
+                    render_paint(&tiled).rgba8 == reference.rgba8,
+                    "{text:?} season {year} tile {edge}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn midsummer_is_the_default_and_the_year_wraps() {
+    let base = lakeshore_request(
+        "sample passage 16",
+        Frame::new(640, 360).unwrap(),
+        TilePolicy::Single,
+    );
+    let default = render_paint(&base);
+    assert!(render_paint(&in_season(&base, 0.5)).rgba8 == default.rgba8);
+    // Both ends of the year are the same moment.
+    assert!(
+        render_paint(&in_season(&base, 0.0)).rgba8 == render_paint(&in_season(&base, 1.0)).rgba8
+    );
+    // Every season paints the same scene differently.
+    for year in [0.0, 0.25, 0.62, 0.75, 0.86] {
+        assert!(
+            render_paint(&in_season(&base, year)).rgba8 != default.rgba8,
+            "{year}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn the_sky_and_clouds_stay_the_palettes_in_every_season() {
+    // Precedence (docs/seasons-and-biomes.md): the palette owns the sky,
+    // clouds and light, the season only what is on the land. Checked on sky
+    // and cloud pixels whose whole neighbourhood (the loose edges' reach) is
+    // sky or cloud.
+    for palette in [PaletteId::Lakeshore, PaletteId::GoldenEvening] {
+        for text in ["sample passage 16", "Blue dusk."] {
+            let frame = Frame::new(640, 360).unwrap();
+            let mut base = lakeshore_request(text, frame, TilePolicy::Single);
+            base.appearance.palette.id = palette;
+            let ids = render_debug(DebugView::LayerIds, &base);
+            let layers = base.scene.layers();
+            let (w, h) = (frame.width as i64, frame.height as i64);
+            let airy = |x: i64, y: i64| {
+                let id = ids.rgba8[((y * w + x) * 4) as usize] as usize;
+                id > 0
+                    && matches!(
+                        layers[id - 1].role,
+                        pigment_core::scene::LayerRole::Sky | pigment_core::scene::LayerRole::Cloud
+                    )
+            };
+            let reach = 8;
+            let keep: Vec<usize> = (reach..h - reach)
+                .flat_map(|y| (reach..w - reach).map(move |x| (x, y)))
+                .filter(|&(x, y)| {
+                    (-reach..=reach).all(|dy| (-reach..=reach).all(|dx| airy(x + dx, y + dy)))
+                })
+                .map(|(x, y)| (y * w + x) as usize)
+                .collect();
+            assert!(keep.len() > 10_000, "{text:?}: {} sky pixels", keep.len());
+            let summer = render_paint(&base);
+            for year in [0.0, 0.25, 0.75, 0.86] {
+                let other = render_paint(&in_season(&base, year));
+                let changed = keep
+                    .iter()
+                    .filter(|&&i| summer.rgba8[i * 4..i * 4 + 4] != other.rgba8[i * 4..i * 4 + 4])
+                    .count();
+                assert_eq!(
+                    changed, 0,
+                    "{palette:?} {text:?} season {year}: {changed} sky pixels changed"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn snow_only_grows_as_winter_deepens() {
+    // From late summer to midwinter the snow channels only rise, and each
+    // snow cover is a fixed noise field against a falling threshold, so the
+    // snowfall mask only grows. Checked where snow is the only seasonal
+    // change: the distant ranges and the massif's rock above the treeline
+    // (away from other layers' edges). There a pixel is its midsummer colour
+    // blended toward snow by the cover, so its distance from midsummer never
+    // shrinks as the snow deepens, lit or in blue shadow.
+    use pigment_core::scene::{LayerRole, metrics};
+    let frame = Frame::new(640, 360).unwrap();
+    let years = [0.62, 0.75, 0.86, 0.14, 0.0];
+    for text in ["sample passage 16", "sample passage 8", "Blue dusk."] {
+        let base = lakeshore_request(text, frame, TilePolicy::Single);
+        let (horizon, summit) = metrics::horizon_and_summit(&base.scene);
+        let ids = render_debug(DebugView::LayerIds, &base);
+        let layers = base.scene.layers();
+        let (w, h) = (frame.width as i64, frame.height as i64);
+        let role = |x: i64, y: i64| {
+            let id = ids.rgba8[((y * w + x) * 4) as usize] as usize;
+            (id > 0).then(|| (id, layers[id - 1].role))
+        };
+        let reach = 6;
+        let keep: Vec<usize> = (reach..h - reach)
+            .flat_map(|y| (reach..w - reach).map(move |x| (x, y)))
+            .filter(|&(x, y)| {
+                let Some((_, r)) = role(x, y) else {
+                    return false;
+                };
+                let high = (y as f64 + 0.5) / h as f64 <= summit + 0.4 * (horizon - summit);
+                (r == LayerRole::FarRidge || (r == LayerRole::Mountain && high))
+                    && (-reach..=reach).all(|dy| {
+                        (-reach..=reach).all(|dx| role(x + dx, y + dy).map(|(_, q)| q) == Some(r))
+                    })
+            })
+            .map(|(x, y)| (y * w + x) as usize)
+            .collect();
+        assert!(keep.len() > 2_000, "{text:?}: {} pixels", keep.len());
+        let summer = render_paint(&base).rgba8;
+        let away: Vec<Vec<i32>> = years
+            .iter()
+            .map(|&y| {
+                let img = render_paint(&in_season(&base, y)).rgba8;
+                keep.iter()
+                    .map(|&i| {
+                        (0..3)
+                            .map(|c| (img[i * 4 + c] as i32 - summer[i * 4 + c] as i32).abs())
+                            .sum()
+                    })
+                    .collect()
+            })
+            .collect();
+        for (k, pair) in away.windows(2).enumerate() {
+            let receded = pair[0]
+                .iter()
+                .zip(&pair[1])
+                .filter(|&(a, b)| b + 3 < *a)
+                .count();
+            let snowier = pair[0].iter().zip(&pair[1]).filter(|&(a, b)| b > a).count();
+            eprintln!(
+                "{text:?} {} -> {}: of {} pixels {snowier} snowier, {receded} less snowy",
+                years[k],
+                years[k + 1],
+                keep.len()
+            );
+            assert!(
+                receded as f64 <= 0.002 * keep.len() as f64,
+                "{text:?}: snow receded"
+            );
+        }
+    }
+}

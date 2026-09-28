@@ -168,6 +168,7 @@ Source of truth: `settings::CONTROLS`. Ranges are inclusive. The UI clamps by co
 | `form.faceting` | Form | Structure | Main | 0–1 | 0.55 | rounded, eroded masses → angular, faceted planes | 05 |
 | `painting.edge_looseness` | Edge Looseness | Paint handling | Main | 0–1 | 0.4 | controlled, crisp edges → soft, bleeding edges | 06 |
 | `painting.wash_gouache` | Wash / Gouache | Paint handling | Main | 0–1 | 0.25 | translucent washes → opaque gouache body color | 06 |
+| `season.year` | Season | Appearance | Main | 0–1, cyclic | 0.5 | midwinter → midwinter a year on ([seasons](seasons-and-biomes.md)) | 16 |
 | `atmosphere.haze` | Atmosphere | Appearance | Main | 0–1 | 0.4 | clear distance → hazy, dissolving distance | 06 |
 | `palette.intensity` | Color intensity | Appearance | Main | 0–1 | 0.6 | muted → vivid | 06 |
 | `form.relief` | Relief | Structure | Advanced | 0–1 | 0.5 | low rolling hills → high, steep ridge | 05 |
@@ -210,7 +211,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 
 ## Versioning and compatibility
 
-- `RECIPE_SCHEMA_VERSION` = 1. A recipe with a **newer** schema is rejected with a clear message. An older schema loads only through an explicit, tested migration. No invented migrations ([migration limits](seeds-and-recipes.md#versions-and-migration-limits)).
+- `RECIPE_SCHEMA_VERSION` = 2 (task 16 added `season`; schema 1 files are migrated to midsummer, which paints them exactly as before). A recipe with a **newer** schema is rejected with a clear message. An older schema loads only through an explicit, tested migration. No invented migrations ([migration limits](seeds-and-recipes.md#versions-and-migration-limits)).
 - `GENERATOR_VERSION` and `RENDERER_VERSION` started at **0 = pre-approval**: fixtures and images could change without a bump until the task 08 visual gate. **Both became 1 at the gate (2026-09-27)**, with the approved baseline in [visual-review/baseline-08](visual-review/baseline-08/README.md), and **2 at the task 25 review (2026-09-28)**: wind and current on water, more complex rocks, approved baseline in [visual-review/baseline-25](visual-review/baseline-25/README.md). Since the gate, **any** change to scene checksums for the same key bumps `GENERATOR_VERSION`, and any intentional pixel change on the same device bumps `RENDERER_VERSION`.
 - The app ships exactly **one** generator and one renderer. It does not keep old versions alive. A recipe whose recorded versions differ opens with a visible notice ("made with generator vN; this version may compose/paint differently"). The recorded versions update only when the user saves.
 - `NORMALIZATION_ID` (`nfc-lf-utf8/1`) and `SEED_ALGORITHM_ID` (`pigment-seed/1`) name the algorithms. Changing either one creates a new identifier, never a silent change.

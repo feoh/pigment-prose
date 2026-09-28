@@ -37,6 +37,11 @@ struct Params {
     // water channel rows (channel_rows in paint.rs): first row y, row step,
     // row count, 1 if the scene has water
     channel: vec4<f32>,
+    // The season (task 16, pigment_core::season::SeasonState): snow, ground
+    // snow, tree snow, leaf; autumn, fresh, dry, bloom. Midsummer is
+    // (0, 0, 0, 1), (0, 0, 0, 1): no seasonal change, the approved look.
+    season_a: vec4<f32>,
+    season_b: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> P: Params;
@@ -84,6 +89,9 @@ const PLANTS = 26u;     // light, shadow per plant (1-based plant ids below)
 const BARK = 38u;
 const WOOD = 39u;
 const BLOSSOM = 40u;    // two colors
+const AUTUMN = 42u;     // gold, orange, red
+const TWIGS = 45u;      // light, shadow
+const DRY_GRASS = 47u;
 
 // Plants (pigment_core::scene::Plant).
 const P_BROADLEAF = 1u;
@@ -107,6 +115,15 @@ const R_CLOUD = 9u;
 
 fn col(i: u32) -> vec3<f32> {
     return pal[i].xyz;
+}
+
+// ---------------------------------------------------------------- season
+
+// Anything other than midsummer. Every seasonal change is behind this
+// uniform test, so midsummer paints exactly the approved look.
+fn seasonal() -> bool {
+    return any(P.season_a != vec4<f32>(0.0, 0.0, 0.0, 1.0))
+        || any(P.season_b != vec4<f32>(0.0, 0.0, 0.0, 1.0));
 }
 
 // Light/shadow pair by structural shade.
@@ -348,6 +365,37 @@ fn crown_field_wide(c: vec2<f32>, size: f32, wide: f32, s: u32) -> vec2<f32> {
     return vec2<f32>(crown, lit);
 }
 
+// As `crown_field_wide`, plus a stable attribute of the crown in z (0–1, a
+// hash of its cell): each tree's own timing and colour in the seasons
+// (task 16).
+fn crown_field_id(c: vec2<f32>, size: f32, wide: f32, s: u32) -> vec3<f32> {
+    let p = vec2<f32>(c.x / (size * wide), c.y / size);
+    let i = floor(p);
+    var best = 1e9;
+    var rel = vec2<f32>(0.0);
+    var bc = vec2<i32>(0);
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
+            let pt = vec2<f32>(cell) + vec2<f32>(
+                0.15 + 0.7 * hash3(cell.x, cell.y, s),
+                0.15 + 0.7 * hash3(cell.x, cell.y, s + 1u)
+            );
+            let radius = 0.6 + 0.4 * hash3(cell.x, cell.y, s + 2u);
+            let q = (p - pt) / radius;
+            let d = length(q);
+            if (d < best) {
+                best = d;
+                rel = q;
+                bc = cell;
+            }
+        }
+    }
+    let crown = clamp(1.0 - best, 0.0, 1.0);
+    let lit = clamp(0.55 - 0.75 * rel.y + 0.2 * light_x() * rel.x, 0.0, 1.0);
+    return vec3<f32>(crown, lit, hash3(bc.x, bc.y, s + 5u));
+}
+
 // Conifer spires: tall pointed crowns, cells 1.4× as tall as wide. The
 // front-most (lowest) spire wins where they overlap. Lit on the light's
 // side and toward the tip.
@@ -379,6 +427,117 @@ fn spire_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
         }
     }
     return vec2<f32>(crown, lit);
+}
+
+// ---------------------------------------------------------------- seasonal paint
+
+// An autumn colour for a crown with attribute `id`: birches turn gold,
+// copper beeches deep red, the rest gold, orange or red by `id`.
+fn autumn_color(plant: u32, id: f32) -> vec3<f32> {
+    if (plant == P_BIRCH) {
+        return mix(col(AUTUMN), col(AUTUMN + 1u), 0.25 * id);
+    }
+    if (plant == P_COPPER) {
+        return mix(col(AUTUMN + 2u), col(AUTUMN + 1u), 0.3 * id);
+    }
+    if (id < 0.4) {
+        return mix(col(AUTUMN), col(AUTUMN + 1u), id / 0.4);
+    }
+    return mix(col(AUTUMN + 1u), col(AUTUMN + 2u), (id - 0.4) / 0.6);
+}
+
+// When a deciduous crown with attribute `id` drops its leaves: the season's
+// `leaf` value below which it is bare.
+fn leaf_hold(id: f32) -> f32 {
+    return 0.15 + 0.7 * fract(id * 7.13);
+}
+
+// How much of a crown is still in leaf (1 for conifers).
+fn in_leaf(plant: u32, id: f32) -> f32 {
+    if (plant == P_CONIFER) {
+        return 1.0;
+    }
+    let hold = leaf_hold(id);
+    return smoothstep(hold - 0.15, hold + 0.15, P.season_a.w);
+}
+
+// `rgb` recoloured toward `hue` at its own lightness, so crowns keep their
+// lit and shaded sides and grass its strokes.
+fn recolor(rgb: vec3<f32>, hue: vec3<f32>, gain: f32) -> vec3<f32> {
+    return hue * (gain * luminance(rgb) / max(luminance(hue), 1e-4));
+}
+
+// A crown's colour through the year (task 16). `lit` is how much the point
+// faces the light within its crown and `id` the crown's own attribute, so
+// each tree turns and drops its leaves at its own time and to its own
+// colour: fresh pale green in spring, gold, orange or red in autumn, bare
+// branches in winter, and snow on the lit tops (conifers hold the most).
+fn seasonal_crown(rgb: vec3<f32>, plant: u32, id: f32, lit: f32, shade: f32) -> vec3<f32> {
+    var out = rgb;
+    let light = smoothstep(0.1, 0.9, 0.5 * shade + 0.5 * lit);
+    if (plant != P_CONIFER) {
+        out = mix(out, recolor(out, col(FOLIAGE_WARM), 1.12), 0.55 * P.season_b.y);
+        let when = 0.12 + 0.76 * id;
+        let turned = smoothstep(when - 0.12, when + 0.12, P.season_b.x);
+        out = mix(out, recolor(out, autumn_color(plant, id), mix(1.0, 1.25, light)), turned);
+        var twig = mix(col(TWIGS + 1u), col(TWIGS), light);
+        if (plant == P_BIRCH) {
+            twig = mix(twig, col(BARK), 0.35);
+        }
+        out = mix(twig, out, in_leaf(plant, id));
+    }
+    // Conifers hold snow on their tiers; bare branches hardly any, so a
+    // winter wood stays dark against the snow.
+    var holds = 0.65;
+    if (plant != P_CONIFER) {
+        holds = mix(0.15, 0.5, in_leaf(plant, id));
+    }
+    return mix(out, shaded(SNOW, shade), P.season_a.z * holds * smoothstep(0.5, 0.9, lit));
+}
+
+// Snow lying on the ground at `c`, 0–1: patchy as it comes and goes, from
+// one fixed noise field, so a patch once covered stays covered as the snow
+// deepens.
+fn ground_snow_cover(c: vec2<f32>) -> f32 {
+    let g = P.season_a.y;
+    if (g <= 0.0) {
+        return 0.0;
+    }
+    let at = 0.15 + 0.7 * fbm(c, 0.05, 3u, 331u);
+    return smoothstep(at - 0.08, at + 0.08, g);
+}
+
+fn snow_on_ground(rgb: vec3<f32>, c: vec2<f32>, shade: f32) -> vec3<f32> {
+    let cover = ground_snow_cover(c);
+    if (cover <= 0.0) {
+        return rgb;
+    }
+    // Soft blue shadows in the drifts.
+    let drift = fbm(vec2<f32>(c.x * 0.3, c.y), 0.02, 3u, 333u);
+    return mix(rgb, shaded(SNOW, shade) * (0.9 + 0.12 * drift), cover);
+}
+
+// Seasonal snow on a slope, 0–1. `h` is the height on the landform, 0 at
+// its foot and 1 at its top: the snow line comes down from the top as
+// `snow` rises, lower on faces turned from the light and ragged with the
+// terrain's own noise. Fixed noise, so the cover only grows as the line
+// falls.
+fn slope_snow(h: f32, c: vec2<f32>, shade: f32) -> f32 {
+    let s = P.season_a.x;
+    if (s <= 0.0) {
+        return 0.0;
+    }
+    let n = fbm(vec2<f32>(c.x, c.y * 0.6), 0.05, 4u, 335u);
+    let line = 1.0 - 1.15 * s + 0.22 * (n - 0.5) + 0.16 * (shade - 0.5);
+    return smoothstep(line - 0.025, line + 0.025, h);
+}
+
+// Snow on a distant forested slope, where the crowns are too small to
+// carry their own: a light share of white, never a sheet. Nearer forests
+// get their snow crown by crown and in the gaps (`seasonal_crown`,
+// `snow_on_ground`).
+fn snowy_forest(rgb: vec3<f32>, cover: f32, shade: f32) -> vec3<f32> {
+    return mix(rgb, shaded(SNOW, shade), cover * (0.15 + 0.2 * P.season_a.z));
 }
 
 // Plant ids by natural weights (matches pigment_core::scene::Plant::pick).
@@ -542,10 +701,33 @@ fn plant_color_at(plant: u32, c: vec2<f32>, size: f32, depth: f32, shade: f32, b
         let f = crown_field(c + vec2<f32>(1.3, 0.7), fsize, 27u);
         let cell = floor(c / fsize);
         let kind = hash3(i32(cell.x), i32(cell.y), 28u);
-        let bloom = smoothstep(0.4, 0.7, f.x) * smoothstep(0.45, 0.8, cr.y) * step(0.35, kind);
+        var bloom = smoothstep(0.4, 0.7, f.x) * smoothstep(0.45, 0.8, cr.y) * step(0.35, kind);
+        if (seasonal()) {
+            bloom *= P.season_b.w;
+        }
         out = mix(out, select(col(BLOSSOM + 1u), col(BLOSSOM), kind > 0.62), 0.85 * bloom);
     }
-    out = mix(gap, out, smoothstep(0.02, 0.35, cr.x));
+    // The seasons: the crown's colour, bare branches letting the ground
+    // show through, and snow on that ground.
+    var cover = cr.x;
+    var mean_crown = base;
+    if (seasonal()) {
+        // The crown's own attribute, for its seasons (the same cells as
+        // above).
+        var id = 0.5;
+        switch plant {
+            case P_BIRCH: { id = crown_field_id(c, s, 1.0, 19u).z; }
+            case P_SHRUB: { id = crown_field_id(c, s, 1.8, 23u).z; }
+            case P_CONIFER: {}
+            default: { id = crown_field_id(c, s, 1.0, 11u).z; }
+        }
+        out = seasonal_crown(out, plant, id, cr.y, shade);
+        cover *= mix(0.28, 1.0, in_leaf(plant, id));
+        // The ground under the trees: less snow, in shadow.
+        gap = mix(gap, snow_on_ground(gap, c, 0.2), 0.6);
+        mean_crown = seasonal_crown(base, plant, 0.5, 0.5, shade);
+    }
+    out = mix(gap, out, smoothstep(0.02, 0.35, cover));
     // Trunks show under near tall canopies.
     if (depth <= 0.25 && plant != P_SHRUB && bb.w > bb.y) {
         let rel = (bb.w - c.y) / (bb.w - bb.y);
@@ -565,26 +747,42 @@ fn plant_color_at(plant: u32, c: vec2<f32>, size: f32, depth: f32, shade: f32, b
             out = mix(out, trunk, smoothstep(reach, reach - 0.12, rel));
         }
     }
-    let mean = mix(base, gap, 0.25);
+    let mean = mix(mean_crown, gap, 0.25);
     return mix(mean, out, smoothstep(2.0, 5.0, s / P.look.w));
 }
 
 // Painted forest: clumps of crowns at two scales, warm light on their tops,
 // cool dark in the gaps. Crowns shrink with distance and fade to their mean
 // color when smaller than a few pixels (band-limiting).
-fn foliage(base: vec3<f32>, c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
+fn foliage(base: vec3<f32>, c: vec2<f32>, depth: f32, shade: f32, decid: f32) -> vec3<f32> {
     let near = 1.0 - depth;
     let size = (0.003 + 0.03 * near * near) * P.handling.z;
     let big = crown_field(c, size, 11u);
     let small = crown_field(c + vec2<f32>(0.37, 0.11), size * 0.45, 13u);
     let crown = max(big.x, 0.8 * small.x);
     let lit = mix(small.y, big.y, 0.6);
-    let dark = mix(col(FOLIAGE_COOL), col(FOREST + 1u), 0.6) * 0.8;
+    var dark = mix(col(FOLIAGE_COOL), col(FOREST + 1u), 0.6) * 0.8;
     let sun = mix(base, col(FOLIAGE_WARM), 0.2 + 0.3 * shade);
     var out = mix(base, sun, smoothstep(0.35, 0.9, lit) * (0.4 + 0.6 * shade));
-    out = mix(dark, out, smoothstep(0.02, 0.35, crown));
+    // The seasons (`decid` is the deciduous share here): bare crowns let the
+    // ground show, snow on the lit crowns and on that ground.
+    var cover = crown;
+    var mean_base = base;
+    var bare = 0.0;
+    if (seasonal()) {
+        // The deciduous share turns crown by crown (each crown's own cell).
+        let id = crown_field_id(c, size, 1.0, 11u).z;
+        out = mix(out, seasonal_crown(out, P_BROADLEAF, id, lit, shade), decid);
+        mean_base = mix(base, seasonal_crown(base, P_BROADLEAF, 0.5, 0.5, shade), decid);
+        bare = decid * (1.0 - P.season_a.w);
+        cover = crown * (1.0 - 0.72 * bare);
+        out = mix(out, shaded(SNOW, shade), 0.7 * P.season_a.z * smoothstep(0.5, 0.9, lit));
+        dark = mix(dark, snow_on_ground(dark, c, 0.2), 0.6);
+        mean_base = mix(mean_base, shaded(SNOW, shade), 0.2 * P.season_a.z);
+    }
+    out = mix(dark, out, smoothstep(0.02, 0.35, cover));
     // Mean look for sub-pixel crowns.
-    let mean = mix(base, dark, 0.25);
+    let mean = mix(mean_base, dark, 0.25 + 0.3 * bare);
     let resolve = smoothstep(2.0, 5.0, size / P.look.w);
     return mix(mean, out, resolve);
 }
@@ -603,7 +801,13 @@ fn forest_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
     base = mix(base, conifer, 0.7 * amount * smoothstep(0.5, 0.4, stand));
     base = mix(base, col(FOLIAGE_WARM), 0.25 * amount * smoothstep(0.56, 0.66, stand));
     base *= 0.72 + 0.3 * depth;
-    return foliage(base, c, depth, shade);
+    // The deciduous share (the warm patches, away from the conifer stands)
+    // turns with the seasons, patch by patch.
+    var decid = 0.0;
+    if (seasonal()) {
+        decid = smoothstep(0.42, 0.54, stand);
+    }
+    return foliage(base, c, depth, shade, decid);
 }
 
 // Emergent trees: sparse big crowns standing above the canopy. Returns
@@ -704,12 +908,20 @@ fn emergents(under: vec3<f32>, plant: u32, c: vec2<f32>, size: f32, shade: f32) 
     let light = col(PLANTS + 2u * (plant - 1u));
     let dark = col(PLANTS + 2u * (plant - 1u) + 1u);
     let lit = smoothstep(0.2, 0.85, e.y) * (0.45 + 0.55 * shade);
-    let tree = mix(mix(dark, under, 0.3), mix(light, col(FOLIAGE_WARM), 0.25), lit);
-    return mix(rgb, tree, smoothstep(0.04, 0.22, e.x) * resolve);
+    var tree = mix(mix(dark, under, 0.3), mix(light, col(FOLIAGE_WARM), 0.25), lit);
+    var reach = smoothstep(0.04, 0.22, e.x);
+    if (seasonal()) {
+        tree = seasonal_crown(tree, plant, 0.6, e.y, shade);
+        reach *= mix(0.28, 1.0, in_leaf(plant, 0.6));
+    }
+    return mix(rgb, tree, reach * resolve);
 }
 
 // Grass: horizontal strokes of warm and cool green.
 fn meadow_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
+    if (seasonal()) {
+        return seasonal_meadow(c, depth, shade);
+    }
     let base = shaded(MEADOW, shade);
     let size = (0.004 + 0.02 * (1.0 - depth)) * P.handling.z;
     let strokes = fbm(vec2<f32>(c.x * 0.25, c.y), size, 3u, 21u);
@@ -733,6 +945,48 @@ fn meadow_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
             flower = mix(col(FAR + 1u), col(STORM), 0.3) * 1.2;
         }
         out = mix(out, flower, bloom);
+    }
+    return out;
+}
+
+// `meadow_color` in a season other than midsummer: fresh spring green,
+// grass cured to straw, fewer flowers, lying snow. (A separate path, so
+// midsummer compiles exactly as approved.)
+fn seasonal_meadow(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
+    let base = shaded(MEADOW, shade);
+    let size = (0.004 + 0.02 * (1.0 - depth)) * P.handling.z;
+    let strokes = fbm(vec2<f32>(c.x * 0.25, c.y), size, 3u, 21u);
+    var out = mix(base, col(FOLIAGE_WARM), 0.35 * smoothstep(0.55, 0.75, strokes) * shade);
+    out = mix(out, col(MEADOW + 1u), 0.3 * smoothstep(0.55, 0.3, strokes));
+    // The seasons: fresh spring green, then grass cured to straw.
+    if (seasonal()) {
+        out = mix(out, recolor(out, col(FOLIAGE_WARM), 1.1), 0.5 * P.season_b.y);
+        out = mix(out, recolor(out, col(DRY_GRASS), 1.15), 0.8 * P.season_b.z);
+    }
+    // Wildflowers in the near meadows: sparse dabs of gold, white and
+    // violet, only where they are big enough to read.
+    if (depth < 0.35) {
+        let fsize = 0.006 * P.handling.z;
+        let f = crown_field(c, fsize, 301u);
+        let cell = floor(c / fsize);
+        let pick = hash3(i32(cell.x), i32(cell.y), 303u);
+        var bloom = smoothstep(0.55, 0.75, f.x) * step(0.82, pick)
+            * smoothstep(0.55, 0.62, fbm(c, 0.12, 2u, 305u))
+            * smoothstep(2.0, 4.0, fsize / P.look.w);
+        if (seasonal()) {
+            bloom *= P.season_b.w;
+        }
+        let kind = hash3(i32(cell.x), i32(cell.y), 304u);
+        var flower = col(SUN);
+        if (kind > 0.66) {
+            flower = col(CLOUD);
+        } else if (kind > 0.33) {
+            flower = mix(col(FAR + 1u), col(STORM), 0.3) * 1.2;
+        }
+        out = mix(out, flower, bloom);
+    }
+    if (seasonal()) {
+        out = snow_on_ground(out, c, shade);
     }
     return out;
 }
@@ -793,18 +1047,29 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
         }
         case R_FAR_RIDGE: {
             rgb = shaded(FAR, shade);
+            if (seasonal()) {
+                // Snow on the distant range, from its own crest down; blued
+                // by the distance.
+                let top = layers[4u * l + 1u].y;
+                let h = clamp((horizon - c.y) / max(horizon - top, 1e-4), 0.0, 1.0);
+                rgb = mix(rgb, mix(shaded(SNOW, shade), rgb, 0.25), slope_snow(h, c, shade));
+            }
         }
         case R_MOUNTAIN: {
-            // Forest below a ragged treeline, rock above, snow on high peaks.
-            let tree_y = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u));
-            let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u));
-            let rock = shaded(ROCK, shade);
-            rgb = rock;
-            let tree = smoothstep(tree_y - 0.012, tree_y + 0.012, c.y);
-            rgb = mix(rgb, forest_color(c, depth, shade), tree);
-            if (rise > 0.3 * P.frame.w) {
-                let snow = 1.0 - smoothstep(snow_y - 0.01, snow_y + 0.01, c.y);
-                rgb = mix(rgb, shaded(SNOW, shade), snow);
+            if (seasonal()) {
+                rgb = seasonal_mountain(c, depth, shade, horizon, summit, rise);
+            } else {
+                // Forest below a ragged treeline, rock above, snow on high peaks.
+                let tree_y = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u));
+                let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u));
+                let rock = shaded(ROCK, shade);
+                rgb = rock;
+                let tree = smoothstep(tree_y - 0.012, tree_y + 0.012, c.y);
+                rgb = mix(rgb, forest_color(c, depth, shade), tree);
+                if (rise > 0.3 * P.frame.w) {
+                    let snow = 1.0 - smoothstep(snow_y - 0.01, snow_y + 0.01, c.y);
+                    rgb = mix(rgb, shaded(SNOW, shade), snow);
+                }
             }
         }
         case R_MID_RIDGE: {
@@ -830,11 +1095,15 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
             rgb = col(WATER_FAR); // painted by `water`
         }
         case R_SHORE: {
+            var sandy = shaded(SAND, shade);
+            if (seasonal()) {
+                sandy = snow_on_ground(sandy, c, shade);
+            }
             if (depth > 0.45) {
-                rgb = shaded(SAND, shade);
+                rgb = sandy;
             } else {
                 let sand = smoothstep(0.7, 0.76, fbm(c, 0.05, 3u, 81u));
-                rgb = mix(meadow_color(c, depth, shade), shaded(SAND, shade), sand);
+                rgb = mix(meadow_color(c, depth, shade), sandy, sand);
                 rgb *= 1.0 - 0.4 * rock_contact(c);
             }
         }
@@ -844,6 +1113,16 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
             rgb = rock_surface(rgb, c, shade);
             rgb = mossy(rgb, c, shade);
             rgb = rock_edges(rgb, c);
+            if (seasonal() && P.season_a.y > 0.25) {
+                // A snow cap on the rock's top once the snow lies deep
+                // enough, ragged, and deeper as the snow deepens.
+                let deep = (P.season_a.y - 0.25) / 0.75;
+                let n = fbm(vec2<f32>(c.x, 0.0), 0.012, 3u, 337u);
+                let cap = 0.011 * deep * smoothstep(0.25, 0.75, n);
+                if (role_of(front_layer(c - vec2<f32>(0.0, cap))) != R_ROCK) {
+                    rgb = mix(rgb, shaded(SNOW, max(shade, 0.55)), 0.94);
+                }
+            }
         }
         default: {
             rgb = shaded(ROCK, shade);
@@ -851,6 +1130,26 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
     }
 
     return Surface(aerial(rgb, role, depth), depth);
+}
+
+// The massif in a season other than midsummer: the midsummer mountain
+// (kept as its own path in `land`, so midsummer compiles exactly as
+// approved), then seasonal snow coming down it: a sheet on the rock above
+// the treeline, among the trees below it.
+fn seasonal_mountain(c: vec2<f32>, depth: f32, shade: f32, horizon: f32, summit: f32, rise: f32) -> vec3<f32> {
+    let tree_y = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u));
+    let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u));
+    var rgb = shaded(ROCK, shade);
+    let tree = smoothstep(tree_y - 0.012, tree_y + 0.012, c.y);
+    rgb = mix(rgb, forest_color(c, depth, shade), tree);
+    if (rise > 0.3 * P.frame.w) {
+        let snow = 1.0 - smoothstep(snow_y - 0.01, snow_y + 0.01, c.y);
+        rgb = mix(rgb, shaded(SNOW, shade), snow);
+    }
+    let cover = slope_snow(clamp((horizon - c.y) / rise, 0.0, 1.0), c, shade);
+    let wooded = mix(rgb, shaded(SNOW, shade), cover * (0.35 + 0.35 * P.season_a.z));
+    rgb = mix(rgb, wooded, tree);
+    return mix(rgb, shaded(SNOW, shade), cover * (1.0 - tree));
 }
 
 // Aerial perspective: distance dissolves toward the haze color.

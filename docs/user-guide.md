@@ -20,7 +20,15 @@ The controls are in three groups. Each slider shows its value, a notch at its de
 | --- | --- | --- |
 | **Structure** | Form; under Advanced: Relief, Woodland density | Change the landscape itself: rounded or angular forms, how high and rugged it is, how much woodland. The composition morphs rather than jumping to a new one |
 | **Paint handling** | Edge looseness, Wash / Gouache; under Advanced: Mark scale, Granulation, Paper grain | Change how it is painted. The landscape stays where it is |
-| **Appearance** | Atmosphere, Color intensity, Palette | Haze with distance, how saturated the colors are, and the palette (Lakeshore or Golden evening) |
+| **Appearance** | Season, Atmosphere, Color intensity, Palette | The time of year, haze with distance, how saturated the colors are, and the palette (Lakeshore or Golden evening) |
+
+### Season
+
+**Season** moves the painting around the year: snow coming down the mountains and lying on the ground in winter, fresh green and blossom in spring, straw-coloured grass in late summer, and the woods turning gold, orange and red in autumn, each tree at its own time. The landscape itself (the mountains, the water, where every tree stands) stays exactly where it is.
+
+- The slider is a circle: both ends are midwinter, the middle is midsummer (the default), and the arrow and Page keys carry on past the ends into the next year. Its value is shown by name ("late summer").
+- It changes only what is on the land. The palette still decides the sky, the light and the colours (so Golden evening in winter is a golden winter evening), and the Atmosphere slider still decides the haze.
+- Recipes remember the season. Recipes saved before seasons existed open at midsummer, exactly as they were painted.
 
 **Painting only** (Ctrl+\\) hides the controls so the painting fills the window.
 

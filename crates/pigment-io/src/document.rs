@@ -206,13 +206,14 @@ impl Document {
         Ok(())
     }
 
-    /// Painting, palette and atmosphere together. Invalid values change
-    /// nothing.
+    /// Painting, palette, atmosphere and season together. Invalid values
+    /// change nothing.
     pub fn set_appearance(&mut self, a: Appearance) -> Result<(), ValidationError> {
         a.validate()?;
         Self::update(&mut self.dirty, &mut self.recipe.painting, a.painting);
         Self::update(&mut self.dirty, &mut self.recipe.palette, a.palette);
         Self::update(&mut self.dirty, &mut self.recipe.atmosphere, a.atmosphere);
+        Self::update(&mut self.dirty, &mut self.recipe.season, a.season);
         Ok(())
     }
 
@@ -356,6 +357,7 @@ mod tests {
                 "painting",
                 "palette",
                 "schema",
+                "season",
                 "seed",
                 "versions"
             ]
@@ -419,7 +421,7 @@ mod tests {
         let bad = dir.path().join("bad.recipe.json");
         for contents in [
             json[..json.len() / 2].to_string(),
-            json.replace("\"schema\": 1", "\"schema\": 3"),
+            json.replace("\"schema\": 2", "\"schema\": 3"),
             json.replace("0.55", "5.5"),
             "not json".to_string(),
         ] {

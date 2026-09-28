@@ -1451,3 +1451,73 @@ fn the_window_opens_and_explains_while_the_painter_is_prepared() {
     assert!(h.query_by_label("Preview: Current").is_some());
     assert_eq!(prep.readiness(), Readiness::Ready);
 }
+
+#[test]
+fn the_season_wraps_from_the_keyboard_and_leaves_palette_and_air_alone() {
+    // Task 16: the year is a cycle, so its slider carries on past its ends,
+    // and it never changes the palette or the Atmosphere slider (they own
+    // the sky and the air; docs/seasons-and-biomes.md).
+    let mut h = harness(Shared::default());
+    {
+        let a = h.state_mut();
+        let mut v = a.values();
+        v.appearance.palette.id = PaletteId::GoldenEvening;
+        v.appearance.atmosphere.haze = 0.8;
+        a.doc.set_appearance(v.appearance).unwrap();
+    }
+    settle(&mut h);
+    let mut found = false;
+    for _ in 0..120 {
+        h.key_press(Key::Tab);
+        h.step();
+        if h.query_by(|n| {
+            n.is_focused() && n.role() == Role::Slider && n.label().as_deref() == Some("Season")
+        })
+        .is_some()
+        {
+            found = true;
+            break;
+        }
+    }
+    assert!(found, "Season slider reachable with Tab");
+    let year = |h: &Harness<'static, StudioApp>| h.state().values().appearance.season.year;
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    assert!(near(year(&h), 0.5));
+    let slider = h.get_by(|n| n.role() == Role::Slider && n.label().as_deref() == Some("Season"));
+    assert_eq!(slider.value().as_deref(), Some("0.50 (midsummer, default)"));
+    // Page Up five times: 0.5 on to midwinter, which is 0 (and 1).
+    for _ in 0..5 {
+        h.key_press(Key::PageUp);
+        h.step();
+    }
+    assert!(near(year(&h), 0.0), "{}", year(&h));
+    // End is the year's end, and the arrow carries on into the new year.
+    h.key_press(Key::End);
+    h.step();
+    assert!(near(year(&h), 1.0), "{}", year(&h));
+    h.key_press(Key::ArrowRight);
+    h.step();
+    assert!(near(year(&h), 0.01), "wraps forward: {}", year(&h));
+    h.key_press(Key::ArrowLeft);
+    h.step();
+    h.key_press(Key::ArrowLeft);
+    h.step();
+    assert!(near(year(&h), 0.99), "wraps back: {}", year(&h));
+    h.key_press(Key::PageUp);
+    h.step();
+    assert!(near(year(&h), 0.09), "page wraps: {}", year(&h));
+    let slider = h.get_by(|n| n.role() == Role::Slider && n.label().as_deref() == Some("Season"));
+    assert_eq!(slider.value().as_deref(), Some("0.09 (late winter)"));
+    // Nothing else moved: the palette, its intensity and the air are the
+    // user's.
+    let a = h.state().values().appearance;
+    assert_eq!(a.palette.id, PaletteId::GoldenEvening);
+    assert!(near(a.atmosphere.haze, 0.8));
+    assert!(near(
+        a.palette.intensity,
+        pigment_core::settings::PALETTE_INTENSITY.default
+    ));
+    h.key_press(Key::Delete);
+    h.step();
+    assert!(near(year(&h), 0.5), "Delete resets to midsummer");
+}

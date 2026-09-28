@@ -2813,6 +2813,11 @@ mod tests {
         r.painting.granulation = 1.0;
         r.painting.paper_grain = 1.0;
         assert_eq!(build(&r), reference);
+        // Every season (task 16): the same geography and plant placement.
+        for year in [0.0, 0.25, 0.75, 0.86, 1.0] {
+            r.season.year = year;
+            assert_eq!(build(&r), reference, "season {year}");
+        }
         // A different paint-detail stream with the same structural streams.
         let s = base.seeds();
         let other = SeedBundle::from_streams(

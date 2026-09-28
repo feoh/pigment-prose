@@ -51,6 +51,15 @@ pub fn format_value(v: f64) -> String {
 /// Text shown to people and assistive technology for a value, including
 /// which described end it is nearer.
 pub fn value_text(spec: &ControlSpec, v: f64) -> String {
+    if spec.cyclic {
+        // The year: name the season rather than an end.
+        let name = pigment_core::season::label(v);
+        return if (v - spec.default).abs() < STEP / 2.0 {
+            format!("{} ({name}, default)", format_value(v))
+        } else {
+            format!("{} ({name})", format_value(v))
+        };
+    }
     let t = (v - spec.min) / (spec.max - spec.min);
     let lean = if (v - spec.default).abs() < STEP / 2.0 {
         "default".to_string()
@@ -70,7 +79,10 @@ pub fn channel_heading(c: Channel) -> (&'static str, &'static str) {
             "Paint handling",
             "How the paint is laid down. The landscape stays put.",
         ),
-        Channel::Appearance => ("Appearance", "Color and air. The landscape stays put."),
+        Channel::Appearance => (
+            "Appearance",
+            "Color, air and the time of year. The landscape stays put.",
+        ),
     }
 }
 
@@ -116,6 +128,12 @@ fn slider_row(ui: &mut egui::Ui, spec: &ControlSpec, value: &mut f64) -> Edit {
                         theme::INK_2
                     },
                 ));
+                if spec.cyclic {
+                    ui.label(
+                        egui::RichText::new(pigment_core::season::label(*value))
+                            .color(theme::INK_2),
+                    );
+                }
                 if off_default {
                     let reset = ui
                         .add(
@@ -200,11 +218,34 @@ fn slider_row(ui: &mut egui::Ui, spec: &ControlSpec, value: &mut f64) -> Edit {
             .map(|k| i.consume_key(egui::Modifiers::NONE, k))
         });
         let [up, down, home, end, del, back] = keys;
+        // A cyclic control (the year) wraps around its ends.
+        let wrap = |v: f64| {
+            if spec.cyclic {
+                spec.min + (v - spec.min).rem_euclid(spec.max - spec.min)
+            } else {
+                v
+            }
+        };
         if up {
-            *value = snap(spec, *value + PAGE_STEP);
+            *value = snap(spec, wrap(*value + PAGE_STEP));
         }
         if down {
-            *value = snap(spec, *value - PAGE_STEP);
+            *value = snap(spec, wrap(*value - PAGE_STEP));
+        }
+        if spec.cyclic {
+            // The slider stops at its ends; the year carries on.
+            let (fwd, back) = ui.input(|i| {
+                (
+                    i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::ArrowUp),
+                    i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::ArrowDown),
+                )
+            });
+            if fwd && before >= spec.max - STEP / 2.0 {
+                *value = spec.min + STEP;
+            }
+            if back && before <= spec.min + STEP / 2.0 {
+                *value = spec.max - STEP;
+            }
         }
         if home {
             *value = spec.min;
@@ -294,6 +335,14 @@ mod tests {
         let main = grouped(Group::Main);
         assert_eq!(main[0].0, Channel::Structure);
         assert_eq!(main[0].1[0].key, "form.faceting");
+    }
+
+    #[test]
+    fn the_season_is_named_not_placed_between_ends() {
+        let s = pigment_core::settings::SEASON;
+        assert_eq!(value_text(&s, 0.5), "0.50 (midsummer, default)");
+        assert_eq!(value_text(&s, 0.62), "0.62 (late summer)");
+        assert_eq!(value_text(&s, 1.0), "1.00 (midwinter)");
     }
 
     #[test]

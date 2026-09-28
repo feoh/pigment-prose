@@ -17,6 +17,7 @@ use pigment_core::job::{CancelToken, Phase, Progress, ProgressSink};
 use pigment_core::palette::palette;
 use pigment_core::request::{RenderReport, RenderRequest, Renderer, TileSink};
 use pigment_core::scene::{CanvasPoint, LayerRole, LightSide, Scene, metrics};
+use pigment_core::season;
 use pigment_core::seed::Domain;
 use pigment_core::settings::Appearance;
 use pigment_core::tiles::{Support, Tile, TileCostModel, TilePlan, apron_pixels};
@@ -26,7 +27,7 @@ use crate::context::GpuContext;
 use crate::coverage::CoverageIndex;
 use crate::tiled::{TilePasses, drive, storage_buffer, storage_buffer_u32, texture};
 
-const PARAMS_BYTES: u64 = 144;
+const PARAMS_BYTES: u64 = 176;
 
 // paint.wgsl measures wash/gouache character and texture strength from the
 // defaults (DEFAULT_WASH_GOUACHE, DEFAULT_TEXTURE).
@@ -598,6 +599,11 @@ impl Renderer for PaintRenderer {
             fixed.extend(v.to_le_bytes());
         }
         for v in channel_desc {
+            fixed.extend(v.to_le_bytes());
+        }
+        // The season's channels (task 16). The lakeshore scenes are the
+        // alpine biome; midsummer is all neutral, the approved look.
+        for v in season::ALPINE.at(a.season.year).gpu().as_flattened() {
             fixed.extend(v.to_le_bytes());
         }
         let tiles = PaintTiles {

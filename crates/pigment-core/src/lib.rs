@@ -23,6 +23,7 @@ pub mod palette;
 pub mod recipe;
 pub mod request;
 pub mod scene;
+pub mod season;
 pub mod seed;
 pub mod settings;
 pub mod text;

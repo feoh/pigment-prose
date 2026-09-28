@@ -88,11 +88,23 @@ fn approved_recipes_round_trip_and_reproduce_their_scenes() {
         let copy = dir.0.join(format!("{i}.recipe.json"));
         let mut doc2 = doc.clone();
         doc2.save_as(&copy).unwrap();
-        assert_eq!(
-            std::fs::read(&copy).unwrap(),
-            original,
-            "{path:?}: save is byte-identical"
-        );
+        // The approved files are schema 1. Saving writes schema 2 with
+        // exactly two changes: the schema number, and the midsummer season
+        // every schema 1 painting was made in (task 16).
+        let original = String::from_utf8(original).unwrap();
+        let body = original
+            .replacen("\"schema\": 1,", "\"schema\": 2,", 1)
+            .strip_suffix("  }\n}\n")
+            .expect("atmosphere is the last section")
+            .to_string();
+        let migrated = format!("{body}  }},\n  \"season\": {{\n    \"year\": 0.5\n  }}\n}}\n");
+        let saved = std::fs::read_to_string(&copy).unwrap();
+        assert_eq!(saved, migrated, "{path:?}: schema 1 migrates to schema 2");
+        // And the schema 2 file saves again byte for byte.
+        let (again, _) = Document::open(&copy).unwrap();
+        let copy2 = dir.0.join(format!("{i}-again.recipe.json"));
+        again.clone().save_as(&copy2).unwrap();
+        assert_eq!(std::fs::read_to_string(&copy2).unwrap(), saved);
         let back = read_recipe(&copy).unwrap();
         assert_eq!(&back, doc.recipe());
         let scene = LakeshoreGenerator
