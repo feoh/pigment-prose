@@ -41,7 +41,8 @@ jobs:
       - name: Build
         run: cargo build --release --locked -p pigment-cli
       - name: Run the study
-        shell: bash
+        # Not -e: each measurement records its own exit status.
+        shell: bash --noprofile --norc -o pipefail {0}
         run: |
           set -x
           mkdir -p study
@@ -51,7 +52,7 @@ jobs:
             echo "# ${{ matrix.name }}: $(date -u +%Y-%m-%dT%H:%M:%SZ), $(uname -srm)"
             $B gpu-info --allow-software --gl || true
             echo "## gpu-smoke (must not pass on a software adapter)"
-            $B gpu-smoke --allow-software; echo "gpu-smoke exit status: $?"
+            $B gpu-smoke --allow-software && echo "gpu-smoke exit status: 0" || echo "gpu-smoke exit status: $? (expected: non-zero)"
             echo "## paint-bench"
             $B paint-bench --allow-software --sizes 960,1920,3840 --sample 3 --runs 3 || echo "paint-bench failed: $?"
             echo "## 4K export"
