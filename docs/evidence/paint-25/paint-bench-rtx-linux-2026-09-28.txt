@@ -1,0 +1,6 @@
+pigment-prose 0.1.0 paint-bench: renderer v2, generator v2, aspect 16:9, 12 sample seeds, 7 runs (2 warm-up)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+scene generation (CPU): median 0.50 ms, max 0.56 ms
+960x540 render + readback: median 0.93 ms, worst scene 1.26 ms; whole render call (setup, render, sink): worst scene 1.81 ms
+1920x1080 render + readback: median 3.35 ms, worst scene 4.31 ms; whole render call (setup, render, sink): worst scene 6.61 ms
+3840x2160 render + readback: median 10.42 ms, worst scene 12.01 ms; whole render call (setup, render, sink): worst scene 15.25 ms

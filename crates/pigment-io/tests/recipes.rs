@@ -1,4 +1,4 @@
-//! Recipe persistence against the approved task 08 baseline, and across a
+//! Recipe persistence against the approved task 25 baseline, and across a
 //! real process restart (task 10). Portable: no GPU.
 
 use std::path::{Path, PathBuf};
@@ -11,7 +11,7 @@ use pigment_core::seed::Variation;
 use pigment_io::{Document, read_recipe};
 
 fn baseline() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-08")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-25")
 }
 
 struct Scratch(PathBuf);
@@ -70,7 +70,7 @@ fn approved() -> Vec<(PathBuf, String, String)> {
             out.push((path, sum, fnv));
         }
     }
-    assert_eq!(out.len(), 47, "the task 08 baseline has 47 recipes");
+    assert_eq!(out.len(), 47, "the approved baseline has 47 recipes");
     out
 }
 

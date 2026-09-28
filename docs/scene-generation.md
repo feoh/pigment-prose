@@ -4,7 +4,7 @@ This document specifies the structural scene for the first painting, a rocky woo
 
 **Task 05b (vistas for awe)** added two templates (`tower-peak`, `high-vantage`), cloud masses, a structural light pool, distance-scaled trees and awe metrics. It followed the user's review that the task 05 scenes read as "some hills and some scrub". Sections marked 05b below describe the additions, and [art-direction.md](art-direction.md#awe-metrics) describes the metrics. Round-by-round ratings are in [visual-review/](visual-review/).
 
-The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **1**, approved at the task 08 visual gate (2026-09-27). From now on, any checksum change requires a version bump.
+The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **2**: version 1 was approved at the task 08 visual gate (2026-09-27), and version 2 (task 25: wind, and the rock builder described below) at review round 7 (2026-09-28). Any checksum change requires a version bump.
 
 ## Output: the layer model
 
@@ -16,6 +16,8 @@ The scene is **geometry only**: depth-ordered polygons with a semantic role and 
 - **shade** (new in task 05): structural illumination from 0 to 1, meaning how directly the plane faces the scene's light, computed from its geometry. 0.5 means neutral or not a facet. Painting maps it to value and temperature (Cézanne's color planes). It is not a color, and appearance settings never change it.
 
 `Scene::light()` (task 07) says which side of the sky the light comes from (`LightSide::Left` or `Right`, the composition's light side). Painting uses it to light crowns and cast stand shadows consistently with `shade`. The geometry checksum covers it.
+
+`Scene::wind()` (generator v2, task 25) is the breeze over the water: a unit direction `(x, z)` on the water plane (`x` across the image, `z` into the distance) and a strength from 0 (glassy calm) to 1 (a fresh breeze). It comes from its own salted draw of the composition stream (`WIND_SALT`), so no other composition decision moved when it was added, paint settings never change it, and a new composition may bring a different breeze. About one scene in six is nearly calm (0.03–0.13); the rest run from 0.25 to 1, weighted toward moderate. The geometry checksum covers it.
 
 Layers produced, back to front:
 
@@ -33,7 +35,7 @@ Layers produced, back to front:
 | Lake | `Water` | 0.45 | the far shoreline is its top edge |
 | Near shore | `Shore` | 0.25 | foreground land; the near shoreline is its top edge |
 | Near woods | `Woodland` | 0.20 | up to 5 stands along the near shore, each one plant (see [painting.md](painting.md#plants)) |
-| Rocks | `ForegroundRock` | 0.15 → 0.03 | 3–6 boulders, each a body plus three planes (two flanks and a top cap), sorted far to near |
+| Rocks | `ForegroundRock` | 0.15 → 0.03 | 3–6 rocks, some with a smaller companion, each a body plus at least three planes (see Rocks below), sorted far to near |
 | Valley spurs (05b, `high-vantage`) | `NearRidge` | 0.44 → 0.14 | 4–7 ridges from alternating sides, far to near, each with a band of trees sized for its distance; the lake winds between them |
 | (removed) cliff edge | — | — | `high-vantage` once framed the view with a ledge the viewer stood on. Removed at the user's request (2026-09-27): the view now ends on the valley's nearest spur, which sits on the frame's bottom edge (nearness 1). There is no near shore, near woods or rocks in this template. |
 
@@ -45,7 +47,7 @@ The two `Woodland` kinds are **placement regions** for task 07's trees. The debu
 
 Every layer is built as a **band**: a top chain over a bottom chain sampled at the same increasing x values, strictly apart between the ends. At the ends they either meet at a point or are joined by a short vertical edge. Full-width masses (the ridges, the water and the near shore) use a flat bottom edge below the frame. Such a polygon is simple by construction. Tests confirm that every layer of every tested scene is simple (`raster::is_simple`, a sweep over edges).
 
-Planes laid over a mass (mountain facets and rock planes) reuse the mass's own top-chain samples, so there are never slivers or gaps between a plane and its mass. All full-width chains share one grid with spacing `PROFILE_STEP` = 1/320 canvas units, extending `MARGIN` = 0.1 past the frame. Clusters and rocks use finer local grids.
+Planes laid over a mass (mountain facets and rock planes) reuse the mass's own top-chain samples, so there are never slivers or gaps between a plane and its mass. Rock planes (generator v2) are not bands: they are cut by ridge lines in the rock's own coordinates (`RockBody`: u across its samples, v from silhouette to foot). Between two samples that map is bilinear over a convex strip, so outlines whose ridges keep their order in u, stay at least a sample apart and are split wherever they cross a sample are simple by construction; the same tests check them. All full-width chains share one grid with spacing `PROFILE_STEP` = 1/320 canvas units, extending `MARGIN` = 0.1 past the frame. Clusters and rocks use finer local grids.
 
 ## Streams and draw order
 
@@ -92,7 +94,13 @@ Template weights: `tower-peak` 20 %, `high-vantage` 40 % (raised after rounds 3�
 
 **Water and shores.** The far shoreline is the horizon ± 0.006 of low-frequency noise, plus the forward bend under the framing ridges. A corner shore enters its side at 15–45 % of the foreground depth and leaves through the bottom 55–85 % of the width along, with curvature from 0.2 to 0.7. A bay shore sits at 45–65 % of the foreground depth with a bay 35–60 % wide and 8–25 % deep, rising at the headlands. Both carry ±0.012 of fBm detail.
 
-**Rocks.** There are 3–6 rocks, clustered around a composed position along the visible near shoreline. Their width is (0.06 + 0.16 × size) × (0.5 + 0.8 × nearness). Most sit on the waterline (a base offset of −0.25 to +0.4 widths, where negative means standing in water). A few stand further forward and larger (cubed placement). The profile blends a dome with a seven-knot polygon that has a broad top (`faceting`). The planes are two flanks with creases falling from the apex, and a top cap facing the sky (shade from facing, slightly lifted). Plane contrast is `0.85 + 0.15 × faceting` (task 07; it was `0.6 + 0.4 × faceting`), so even rounded rocks keep a lit and a shadowed flank (`rocks_have_lit_and_shadowed_planes`).
+**Rocks** (generator v2, task 25). There are 3–6 rocks, clustered around a composed position along the visible near shoreline. Their width is (0.06 + 0.16 × size) × (0.5 + 0.8 × nearness). Most sit on the waterline (a base offset of −0.25 to +0.4 widths, where negative means standing in water). A few stand further forward and larger (cubed placement). The terrain stream still draws generator v1's flank, crease and cap values, unused, so the stream after the rocks is unchanged; everything new comes from per-rock noise constants (`noise::unit`), not RNG draws.
+
+- **Kinds:** a lobed boulder (two or three rounded lobes run together, 32 %), a jointed block (steep sides, a stepped tilted top, 24 %), a tilted slab (a long rising back and a steep broken end, 24 %) or a split boulder (two lobes and a deep cleft, 20 %), possibly mirrored. Each kind has faceted silhouette knots and a rounded version; `faceting` blends between them. The ends slope out to the foot rather than rising sheer.
+- **Relief:** fBm at two scales (±8 % and ±5 % of the height) and two to four chipped notches, each a steep drop with a gentle recovery.
+- **Companions:** a rock of at least 0.04 width has a 45 % chance of a smaller companion (0.32–0.58 of its width) leaning on one side, a little in front or behind, while the layer budget allows.
+- **Planes:** ridge lines fall from the most pronounced silhouette corners (the cleft always, on split boulders) to the foot, fanning outward from the crest and bent sideways. The body is cut into the planes between neighbouring ridges; each plane's shade comes from which way it faces (left or right of the crest, ±0.34) and the slope of its stretch of silhouette, with neighbours at least 0.07 apart. Plane contrast is `0.85 + 0.15 × faceting`, so even rounded rocks keep lit and shadowed planes (`rocks_have_lit_and_shadowed_planes`).
+- **Detail as the budget allows**, nearest rocks first: up to three more planes, a top face where the silhouette runs nearly level, a dark crevice down one ridge, and up to three lower facets (a crooked break across a plane, below it a shelf turned toward the light or an undercut turned away). A rock has 4 layers and up to 9 more; rocks stop at 88 layers in all, so the scene stays under 90.
 
 **Woodland.** The far woods are clusters stratified along the width. Each is active with probability 0.15 + 0.8 × density, has a half-width of (0.06–0.24) × (0.6 + 0.8 × density), and stands 0.012–0.047 × (0.6 + 0.8 × density) tall on the waterline. The near woods are up to 3 clusters on the near shore toward the frame edge, each active with probability 0.1 + 0.9 × density, standing up to (0.1–0.35) × sky space × (0.5 + 0.7 × density) tall. Density 0 leaves under 5 % woodland coverage, and density 1 always gives more than density 0 (tested). Shrubland (round 6) is a rounded dome, `1 − (2s − 1)²` across the stand, with clumps from 0.4 to 1.0 of its height, not a flat-topped hedge. Canopy edges (task 07): each crown has its own height, and about one crown in seven is an emergent tree 1.35× taller and one in seven a young one at 0.65×. That is decided by a second hash of the crown index, so it adds no random draws, and shrubs vary half as much. Far woods tuck their base 0.006 under the waterline. Near woods stand on the near shore, and `woodland_stands_on_land` checks both at density 0.1, 0.5 and 1.
 

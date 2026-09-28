@@ -31,6 +31,12 @@ struct Params {
     frame: vec4<f32>,
     // union bounding box of the foreground rocks (min > max if none)
     rocks: vec4<f32>,
+    // wind over the water (renderer v2): direction x (across), z (into the
+    // distance), strength 0–1, unused
+    wind: vec4<f32>,
+    // water channel rows (channel_rows in paint.rs): first row y, row step,
+    // row count, 1 if the scene has water
+    channel: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> P: Params;
@@ -50,6 +56,8 @@ struct Params {
 // Compositing reference cases (composite_reference_main only).
 @group(0) @binding(9) var<storage, read> ref_cases: array<vec4<f32>>;
 @group(0) @binding(10) var<storage, read_write> ref_out: array<vec4<f32>>;
+// The water's channel per row: left bank, right bank, width, unused.
+@group(0) @binding(11) var<storage, read> channel_rows: array<vec4<f32>>;
 
 // ---------------------------------------------------------------- palette layout
 // (pigment_core::palette::Palette::gpu)
@@ -833,6 +841,7 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
         case R_ROCK: {
             // Stronger plane contrast: rocks are the solid forms up front.
             rgb = shaded(ROCK, clamp((shade - 0.5) * 1.8 + 0.5, 0.0, 1.0));
+            rgb = rock_surface(rgb, c, shade);
             rgb = mossy(rgb, c, shade);
             rgb = rock_edges(rgb, c);
         }
@@ -875,6 +884,136 @@ fn grass_over_base(rgb: vec3<f32>, l: u32, c: vec2<f32>, depth: f32, shade: f32)
     return mix(rgb, meadow_color(c, depth, shade), 0.9 * resolve);
 }
 
+// Fractures on a rock: a few long, wandering lines, not a net. The ridge of
+// an fbm stretched along the stone's grain (`along`), kept only near its
+// crest and only where a patchy mask allows, so cracks come in groups.
+// Returns 0–1 crack strength before band-limiting.
+fn fractures(c: vec2<f32>, along: vec2<f32>, size: f32, s: u32) -> f32 {
+    let q = vec2<f32>(dot(c, along), dot(c, vec2<f32>(-along.y, along.x)));
+    let n = fbm(vec2<f32>(q.x * 0.35, q.y), size, 3u, s);
+    let ridge = 1.0 - abs(2.0 * n - 1.0);
+    let group = smoothstep(0.5, 0.68, fbm(c, 6.0 * size, 2u, s + 3u));
+    return smoothstep(0.93, 0.985, ridge) * group;
+}
+
+// Small stone facets: a cellular field of flat chips, stretched along the
+// grain. Returns (tilt, crevice, lip): each chip's tilt toward (+) or away
+// from (-) the light, -1 to 1; a dark crevice along the chip edges turned
+// away from the light, and a lit lip along those turned toward it, 0 to 1
+// each. `size` in canvas units.
+fn rock_facets(c: vec2<f32>, size: f32, grain: vec2<f32>, s: u32) -> vec3<f32> {
+    let q = vec2<f32>(dot(c, grain) / 1.7, dot(c, vec2<f32>(-grain.y, grain.x))) / size;
+    let i = floor(q);
+    var d1 = 1e9;
+    var d2 = 1e9;
+    var p1 = vec2<f32>(0.0);
+    var p2 = vec2<f32>(0.0);
+    var h1 = 0.0;
+    var c1 = vec2<i32>(0);
+    var c2 = vec2<i32>(0);
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
+            let pt = vec2<f32>(cell) + vec2<f32>(hash3(cell.x, cell.y, s), hash3(cell.x, cell.y, s + 1u));
+            let d = distance(q, pt);
+            if (d < d1) {
+                d2 = d1;
+                p2 = p1;
+                c2 = c1;
+                d1 = d;
+                p1 = pt;
+                c1 = cell;
+                h1 = hash3(cell.x, cell.y, s + 2u);
+            } else if (d < d2) {
+                d2 = d;
+                p2 = pt;
+                c2 = cell;
+            }
+        }
+    }
+    // Distance to the edge between the two nearest chips, in cells.
+    let edge = 0.5 * (d2 - d1);
+    let px = P.look.w / size;
+    // About half the edges between chips are open joints; the rest are
+    // only a change of plane.
+    let pair = c1 + c2;
+    let open = step(hash3(pair.x, pair.y, s + 3u), 0.5);
+    let line = open * (1.0 - smoothstep(0.5 * px, 1.6 * px, edge));
+    // The edge's outward normal, back in canvas directions.
+    let nq = normalize(p2 - p1 + vec2<f32>(1e-6, 0.0));
+    let n = normalize(grain * nq.x / 1.7 + vec2<f32>(-grain.y, grain.x) * nq.y);
+    let toward = dot(n, to_light());
+    return vec3<f32>(2.0 * h1 - 1.0, line * smoothstep(-0.1, -0.5, toward), line * smoothstep(0.1, 0.5, toward));
+}
+
+// A rock's surface (renderer v2, task 25: "their surfaces will need to be
+// less chonky geometric and more complex"; round 7: "you didn't ... add
+// more complex surfaces"). Over the generator's planes: warm and cool
+// staining, two scales of flat chips, each tilted to or from the light,
+// with dark crevices and lit lips along their edges; tilted strata; rain
+// streaks down the shaded faces; grouped cracks; dark and pale flecks in
+// the grain; and pale lichen rosettes on the lit, dry faces. Everything
+// finer than a couple of pixels fades out.
+fn rock_surface(rgb: vec3<f32>, c: vec2<f32>, shade: f32) -> vec3<f32> {
+    let s = P.handling.z;
+    var out = rgb;
+    // Staining: cooler grey in places, warmer iron in others.
+    let grey = vec3<f32>(luminance(out));
+    let cool = mix(out, grey * vec3<f32>(0.9, 0.97, 1.08), 0.7);
+    let warm = out * vec3<f32>(1.08, 0.98, 0.84);
+    let stain = fbm(c + vec2<f32>(5.3, 1.9), 0.06 * s, 3u, 129u);
+    out = mix(out, cool, 0.6 * smoothstep(0.45, 0.7, stain));
+    out = mix(out, warm, 0.5 * smoothstep(0.55, 0.3, stain));
+    out *= 0.92 + 0.16 * fbm(c, 0.003 * s, 2u, 121u);
+    let tilt = normalize(vec2<f32>(0.35 * light_x(), 1.0));
+    let grain = tilt.yx * vec2<f32>(1.0, -1.0);
+    // Facets at three scales: broad planes within the generator's planes
+    // (mostly a change of plane, few open joints), then chips, then small
+    // chips within them.
+    let lit = 1.0 - smoothstep(0.1, 0.9, shade) * 0.5;
+    let sizes = array<f32, 3>(0.03, 0.012, 0.0055);
+    let tilts = array<f32, 3>(0.24, 0.14, 0.09);
+    let joints = array<f32, 3>(0.35, 1.0, 0.65);
+    for (var o = 0u; o < 3u; o++) {
+        let size = sizes[o] * s;
+        let resolve = smoothstep(3.0, 7.0, size / P.look.w);
+        if (resolve > 0.0) {
+            let f = rock_facets(c, size, grain, 140u + 7u * o);
+            out *= 1.0 + tilts[o] * resolve * f.x;
+            let j = joints[o] * resolve;
+            out = mix(out, out * 0.5, 0.6 * j * f.y);
+            out = mix(out, mix(out, col(SUN), 0.3) * 1.15, 0.45 * j * f.z * lit);
+        }
+    }
+    let strata = fbm(vec2<f32>(dot(c, tilt), dot(c, vec2<f32>(-tilt.y, tilt.x)) * 0.08), 0.008 * s, 3u, 122u);
+    out *= 0.88 + 0.24 * strata;
+    let streak = fbm(vec2<f32>(c.x * 6.0, c.y * 0.6), 0.03 * s, 3u, 123u);
+    out *= 1.0 - 0.2 * smoothstep(0.5, 0.78, streak) * (1.1 - shade);
+    // Cracks: thin enough to need about 2 px before they show.
+    let resolve = smoothstep(1.2, 2.6, 0.0012 * s / P.look.w);
+    if (resolve > 0.0) {
+        let crack = fractures(c, grain, 0.02 * s, 124u) * resolve;
+        // A lit lip on the crack's side toward the light: a cut, not a line.
+        let lip = fractures(c - to_light() * 0.0014 * s, grain, 0.02 * s, 124u) * resolve;
+        out = mix(out, mix(out, col(SUN), 0.25) * 1.12, 0.5 * max(lip - crack, 0.0));
+        out = mix(out, out * 0.38, 0.9 * crack);
+    }
+    // Flecks in the grain: dark and pale, about 2 px and up.
+    let fleck_res = smoothstep(1.5, 3.0, 0.0022 * s / P.look.w);
+    if (fleck_res > 0.0) {
+        let n = vnoise(c / (0.0022 * s), 131u);
+        out *= 1.0 - 0.3 * fleck_res * smoothstep(0.78, 0.9, n);
+        out = mix(out, out * 1.25 + 0.03, 0.4 * fleck_res * smoothstep(0.24, 0.12, n));
+    }
+    let rosette = crown_field(c, 0.0045 * s, 126u);
+    let lichen = smoothstep(0.55, 0.75, fbm(c, 0.02 * s, 3u, 127u)) * smoothstep(0.42, 0.75, shade)
+        * smoothstep(0.2, 0.55, rosette.x) * smoothstep(1.5, 3.0, 0.0045 * s / P.look.w);
+    let pale = mix(col(ROCK), col(MOSS), 0.3) * 1.2;
+    let ochre = mix(col(SUN), col(SAND), 0.55) * 0.95;
+    let tint = mix(pale, ochre, smoothstep(0.55, 0.7, fbm(c, 0.05, 2u, 128u)));
+    return mix(out, tint, 0.65 * lichen);
+}
+
 // Moss on a rock: soft cushions that follow the form rather than patches
 // with ruled edges. It gathers on the shadowed planes, at the rock's foot
 // and along its top, fades out through a feathered fringe of speckles,
@@ -889,7 +1028,7 @@ fn mossy(rgb: vec3<f32>, c: vec2<f32>, shade: f32) -> vec3<f32> {
     let warp = vec2<f32>(fbm(c, 0.03 * s, 2u, 92u), fbm(c + vec2<f32>(3.1, 7.7), 0.03 * s, 2u, 93u)) - 0.5;
     let broad = fbm(c + 0.02 * s * warp, 0.035 * s, 4u, 91u);
     let fringe = fbm(c, 0.004 * s, 2u, 94u) - 0.5;
-    let cover = smoothstep(0.3, 0.65, broad + 0.6 * damp - 0.15 + 0.3 * fringe);
+    let cover = smoothstep(0.3, 0.65, broad + 0.7 * damp - 0.27 + 0.3 * fringe);
     // Tufts: bright on their lit tops, deep in between.
     let tuft = crown_field(c, 0.0035 * s, 95u);
     let tuft_res = smoothstep(2.0, 4.0, 0.0035 * s / P.look.w);
@@ -937,6 +1076,73 @@ fn rock_contact(c: vec2<f32>) -> f32 {
     return rock_above(c, 0.004, 3);
 }
 
+// ---------------------------------------------------------------- water (v2)
+
+// A water point on the ground plane: perspective from the horizon, so
+// marks set in ground units shrink and flatten with distance (ripples
+// "shorten with distance"). `fp` is a pixel's footprint in ground units
+// (the vertical one, the larger), for band-limiting.
+struct Ground {
+    g: vec2<f32>,
+    fp: f32,
+}
+
+// One ground unit is one canvas unit of depth at a canvas unit below the
+// horizon. Near the viewer (0.4 below the horizon) a ground wavelength W
+// spans W × 0.16 canvas units vertically and W × 0.4 horizontally.
+const GROUND_SCALE = 1.0;
+
+fn ground(c: vec2<f32>) -> Ground {
+    let dy = max(c.y - P.frame.x, 0.004);
+    let g = vec2<f32>((c.x - 0.5 * P.frame.z) / dy, 1.0 / dy) * GROUND_SCALE;
+    return Ground(g, P.look.w * GROUND_SCALE / (dy * dy));
+}
+
+// fbm over ground coordinates, band-limited by the ground footprint `fp`.
+fn gfbm(g: vec2<f32>, wl0: f32, octaves: u32, s: u32, fp: f32) -> f32 {
+    var sum = 0.0;
+    var norm = 0.0;
+    var amp = 1.0;
+    var wl = wl0;
+    for (var o = 0u; o < octaves; o++) {
+        let keep = smoothstep(1.5, 3.0, wl / fp);
+        sum += amp * mix(0.5, vnoise(g / wl, s + o * 101u), keep);
+        norm += amp;
+        amp *= 0.55;
+        wl *= 0.5;
+    }
+    return sum / norm;
+}
+
+// The river's current at `c`: (lines, speed). The channel's banks come from
+// the scene row by row; a narrow channel runs fast (and fastest mid-stream),
+// a wide lake barely moves. Lines are thin ridges drawn along the channel,
+// so they follow its bends and crowd where it narrows past a spur.
+fn current(c: vec2<f32>, gr: Ground) -> vec2<f32> {
+    let d = P.channel;
+    if (d.w < 0.5) {
+        return vec2<f32>(0.0);
+    }
+    let fk = (c.y - d.x) / d.y;
+    if (fk < 0.0 || fk > d.z - 1.0) {
+        return vec2<f32>(0.0);
+    }
+    let k0 = u32(floor(fk));
+    let k1 = min(k0 + 1u, u32(d.z) - 1u);
+    let r = mix(channel_rows[k0], channel_rows[k1], fract(fk));
+    if (r.z <= 1e-4) {
+        return vec2<f32>(0.0);
+    }
+    let u = clamp((c.x - r.x) / r.z, 0.0, 1.0);
+    let narrow = clamp(1.3 - 1.8 * r.z / P.frame.z, 0.0, 1.0);
+    let speed = narrow * (0.35 + 0.65 * 4.0 * u * (1.0 - u));
+    // Across the channel in ground units, and along it (ground depth).
+    let across = u * r.z / max(c.y - P.frame.x, 0.004) * GROUND_SCALE;
+    let ridge = 1.0 - abs(2.0 * gfbm(vec2<f32>(across, gr.g.y * 0.06), 0.08, 3u, 181u, gr.fp) - 1.0);
+    let lines = smoothstep(0.88, 0.975, ridge);
+    return vec2<f32>(lines, speed);
+}
+
 // Water: sky-lit toward the far shore and deep near the viewer, with
 // simplified reflections of the far shore and everything beyond it (mirrored
 // about the horizon, rippled, fading with distance below it), dark
@@ -950,12 +1156,36 @@ fn water(l: u32, c: vec2<f32>) -> Surface {
     let horizon = P.frame.x;
     let t = clamp((c.y - horizon) / max(P.frame.w - horizon, 1e-3), 0.0, 1.0);
     var rgb = mix(col(WATER_FAR), col(WATER_DEEP), pow(t, 0.55));
-    // Mirror about the local shoreline above the pixel.
+
+    // Renderer v2 (task 25): the wind and the current. Marks are set on the
+    // ground plane (perspective-correct, band-limited), in the wind's frame:
+    // `q.x` across the wind, `q.y` along it.
+    let gr = ground(c);
+    let wd = normalize(P.wind.xy + vec2<f32>(1e-6, 0.0));
+    let q = vec2<f32>(dot(gr.g, vec2<f32>(-wd.y, wd.x)), dot(gr.g, wd));
+    let strength = P.wind.z;
+    // Wind lanes: long streaks along the wind, rough (matte, dark) between
+    // slick (glassy, bright) ones.
+    let lanes = gfbm(vec2<f32>(q.x, q.y * 0.15), 0.35, 3u, 171u, gr.fp);
+    let lane = smoothstep(0.4, 0.66, lanes);
+    // Cat's-paws: patches where a gust touches down and breaks the mirror.
+    let paw = smoothstep(0.6, 0.75, gfbm(vec2<f32>(q.x * 0.8, q.y * 0.55), 0.8, 3u, 172u, gr.fp));
+    let rough = clamp(strength * (0.25 + 0.75 * lane) + 1.2 * strength * paw, 0.0, 1.0);
+    // Ripples: crests across the wind at every scale from 0.4 ground units
+    // down; each distance keeps the octaves it can resolve, so ripples are
+    // finer and flatter toward the far shore by construction. Rough water
+    // ripples harder.
+    let ripple = gfbm(vec2<f32>(q.x * 0.18, q.y), 0.4, 6u, 173u, gr.fp);
+    let cur = current(c, gr);
+
+    // Mirror about the local shoreline above the pixel, broken by ripples,
+    // rough lanes and cat's-paws; calm, slick water keeps a crisp mirror.
     let below = shore_distance(l, c);
     let rise = max(horizon - P.frame.y, 0.05);
-    let fade = 1.0 - smoothstep(0.0, 1.15 * rise, below);
+    var fade = 1.0 - smoothstep(0.0, 1.15 * rise, below);
+    fade *= 1.0 - 0.85 * strength * paw - 0.3 * strength * lane;
     if (fade > 0.0) {
-        let wob = fbm(vec2<f32>(c.x * 0.15, c.y), 0.01 * (0.4 + t), 3u, 73u) - 0.5;
+        let wob = (ripple - 0.5) * (0.4 + 1.6 * rough) + (cur.x - 0.5) * 0.6 * cur.y;
         let m = vec2<f32>(c.x + wob * 0.02 * (0.2 + below / rise), c.y - 2.0 * below);
         let lr = reflected_layer(m);
         if (lr >= 0) {
@@ -963,13 +1193,34 @@ fn water(l: u32, c: vec2<f32>) -> Surface {
             rgb = mix(rgb, refl, 0.75 * fade);
         }
     }
-    // Horizontal ripples, finer toward the horizon.
-    let ripple = fbm(vec2<f32>(c.x * 0.12, c.y), 0.012 * (0.4 + t), 3u, 71u);
-    rgb = mix(rgb, col(WATER_SHEEN), 0.35 * smoothstep(0.62, 0.8, ripple));
+    // Rough water is matte and darker (it shows the deep water, not the
+    // sky); slick lanes catch the sky on their ripples.
+    rgb = mix(rgb, mix(rgb, col(WATER_DEEP), 0.35) * 0.92, 0.6 * rough);
+    // Crests broken into dashes, and a fine chop of short marks everywhere,
+    // busier where the wind roughens the water.
+    let dashes = smoothstep(0.38, 0.62, gfbm(vec2<f32>(q.x * 0.7, q.y * 1.4), 0.12, 3u, 176u, gr.fp));
+    let crest = smoothstep(0.56, 0.74, ripple) * dashes;
+    let trough = 1.0 - smoothstep(0.26, 0.44, ripple);
+    rgb = mix(rgb, col(WATER_SHEEN), (0.28 + 0.2 * (1.0 - rough)) * crest);
+    rgb *= 1.0 - (0.08 + 0.1 * rough) * trough;
+    let chop = gfbm(vec2<f32>(q.x * 0.45, q.y), 0.06, 4u, 177u, gr.fp);
+    let chop_amt = 0.35 + 0.65 * rough;
+    rgb = mix(rgb, col(WATER_SHEEN), 0.22 * chop_amt * smoothstep(0.62, 0.78, chop));
+    rgb *= 1.0 - 0.07 * chop_amt * (1.0 - smoothstep(0.22, 0.4, chop));
+    // Fine glitter where gusts roughen the surface.
+    let glint = smoothstep(0.74, 0.88, gfbm(vec2<f32>(q.x * 0.25, q.y), 0.03, 2u, 175u, gr.fp));
+    rgb = mix(rgb, col(WATER_SHEEN), 0.35 * glint * rough);
+    // The current: pale lines along the channel over slightly darker water.
+    rgb = mix(rgb * (1.0 - 0.07 * cur.y), col(WATER_SHEEN), 0.42 * cur.x * cur.y);
     rgb *= 0.8 + 0.4 * shade;
-    // Rocks standing in the water throw dark, rippled reflections.
-    let under = rock_above(c + vec2<f32>((fbm(c, 0.01, 2u, 75u) - 0.5) * 0.006, 0.0), 0.006, 5);
+    // Rocks standing in the water throw dark, rippled reflections and wear
+    // a broken ring of foam where the water meets them.
+    let jiggle = (fbm(c, 0.01, 2u, 75u) - 0.5) * 0.006 * (1.0 + rough);
+    let under = rock_above(c + vec2<f32>(jiggle, 0.0), 0.006, 5);
     rgb = mix(rgb, mix(shaded(ROCK, 0.1), col(WATER_DEEP), 0.4) * 0.6, 0.65 * under);
+    let contact = rock_above(c, 0.0025, 2);
+    let foam = contact * smoothstep(0.45, 0.72, fbm(c, 0.003, 2u, 76u)) * (0.4 + 0.6 * max(rough, cur.y));
+    rgb = mix(rgb, col(WATER_SHEEN), 0.55 * foam);
     return Surface(aerial(rgb, R_WATER, depth), depth);
 }
 

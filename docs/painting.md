@@ -1,6 +1,6 @@
-# Painting (tasks 06–07)
+# Painting (tasks 06–07, 25)
 
-`pigment_gpu::PaintRenderer` (`crates/pigment-gpu/src/paint.rs` + `paint.wgsl`) paints a `Scene` with an authored palette (`pigment_core::palette`). It runs over the shared tile loop, so tiled output equals single-tile output. **Status:** the painting direction was accepted in visual-review rounds 2–5 ([round 5 result](visual-review/round-05/RESULT.md)). This is not the task 08 gate. Task 07 then added the [woodland, rocks and water](#woodland-rocks-and-water-task-07) cues and is waiting on [round 6](visual-review/round-06/README.md). Task 06 evidence (settings side-by-sides, 4K edge crops, benchmark logs) is in [evidence/paint-06](evidence/paint-06/README.md), and task 07 evidence is in [evidence/paint-07](evidence/paint-07/README.md).
+`pigment_gpu::PaintRenderer` (`crates/pigment-gpu/src/paint.rs` + `paint.wgsl`) paints a `Scene` with an authored palette (`pigment_core::palette`). It runs over the shared tile loop, so tiled output equals single-tile output. **Status:** the painting direction was accepted in visual-review rounds 2–5 ([round 5 result](visual-review/round-05/RESULT.md)). This is not the task 08 gate. Task 07 then added the [woodland, rocks and water](#woodland-rocks-and-water-task-07) cues and is waiting on [round 6](visual-review/round-06/README.md). Task 25 added the [final rendering detail](#wind-current-and-stone-task-25) (wind and current on water, more complex rocks), approved in [round 7](visual-review/round-07/RESULT.md); `RENDERER_VERSION` is 2 and the approved baseline is [baseline-25](visual-review/baseline-25/README.md). Task 06 evidence (settings side-by-sides, 4K edge crops, benchmark logs) is in [evidence/paint-06](evidence/paint-06/README.md), and task 07 evidence is in [evidence/paint-07](evidence/paint-07/README.md).
 
 ## Palettes
 
@@ -79,6 +79,29 @@ After round 2 the user asked for "a variety of plant life … some trees tall an
 - **Rocks in water** throw short, rippled dark reflections: up to 0.03 canvas units below a rock, found by probing upward inside the rocks' bounding box (`Params.rocks`, from `rock_bounds`).
 - **No halo.** Reflections, rims and contacts evaluate the scene at offset points (coverage plus material). They never read neighbouring pixels, so tiles need no extra apron. `painting_is_identical_tiled_and_single` now also covers a river valley and two lakes with rocks.
 - Water stays in its region by construction: water color is painted only where water is the front layer.
+
+## Wind, current and stone (task 25)
+
+Round 6 asked for the final rendering to show "the effects of wind and current and have more ripples", and rock surfaces "less chonky geometric and more complex". Review: [round 7](visual-review/round-07/README.md), approved 2026-09-28 ([result](visual-review/round-07/RESULT.md)).
+
+**Water marks live on the ground plane.** `ground(c)` maps a pixel below the horizon to ground coordinates (across ÷ depth, 1 ÷ depth, where depth is the distance below the horizon), and gives the pixel's ground footprint. `gfbm` band-limits against that footprint, so each distance keeps only the octaves it can resolve: ripples shorten and flatten toward the far shore by construction, and previews and exports agree.
+
+- **Wind** (`Scene::wind()`, see [scene generation](scene-generation.md#output-the-layer-model)), in the wind's frame (across it, along it):
+  - **lanes:** long streaks along the wind, rough (matte, darker, showing deep water) between slick ones (glassy, catching the sky);
+  - **cat's-paws:** patches where a gust touches down;
+  - **ripples:** six octaves from 0.4 ground units down, crests across the wind, broken into dashes, with troughs slightly darker; rough water ripples harder;
+  - **chop and glitter:** short marks everywhere, busier where the wind roughens the water, and fine glints in the gusts.
+- **Reflections** break up with the wind: they fade by up to 85 % under cat's-paws and 30 % in rough lanes, and the mirrored point wobbles with the ripples (more where rough). Calm, slick water keeps a crisp mirror.
+- **Current.** `paint::channel_rows(scene)` records the water's visible channel on 256 rows: the widest stretch of water that no layer in front of it covers (left bank, right bank, width), bound as `channel_rows`. A narrow channel runs fast, fastest mid-stream; a wide lake barely moves. The current draws pale lines along the channel over slightly darker water, and the lines follow its bends and crowd where it narrows past a spur. The rows are a function of the scene only, so tiles agree.
+- **Rocks in water** keep their dark rippled reflections (now jiggled more on rough water) and wear a broken ring of foam at the waterline, stronger in wind or current.
+
+**Stone** (`rock_surface`), over the generator's planes ([scene generation](scene-generation.md#landforms): four rock kinds, ridge-cut planes, lower facets, crevices):
+
+- **Facets at three scales** (0.03, 0.012 and 0.0055 × mark scale): a cellular field of flat chips stretched along the grain, each tilted toward or away from the light (±24 %, ±14 %, ±9 % value). About half the edges between chips are open joints: dark on the side turned away from the light, a lit lip on the side toward it. The broad scale is mostly a change of plane, with fewer joints. Each scale fades out below 3–7 px.
+- **Staining:** cooler grey in places and warmer iron in others (a 0.06 × mark scale field); tilted strata; rain streaks down the shaded faces; grouped cracks with a lit lip; dark and pale flecks in the grain (from about 2 px); pale lichen rosettes on the lit, dry faces.
+- **Moss** keeps the task 07 form-following cushions (the user: "Moss on the rocks looks great!"). Its cover threshold moved so it gathers a little less on the lit faces and the stone shows there.
+
+Measured with `pigment-prose paint-bench` (12 sample seeds at 16:9, warm, render + readback, median / worst scene): RTX 4070 Ti 0.93 / 1.26 ms at 960 px, 3.4 / 4.3 ms at 1920 px, 10.4 / 12.0 ms at 3840 px; Intel iGPU 21.6 / 22.8 ms, 83 / 87 ms and 317 / 328 ms. Both GPUs stay within the 960 px and 1920 px preview budgets. The Intel iGPU is over the 3840 px settled target, as before task 25; the studio's adaptive settled cap ([qualification](qualification.md)) handles it. Logs: [paint-25](evidence/paint-25/), and the hardware suite: [gpu-tests-linux-2026-09-28-task25.txt](evidence/gpu-tests-linux-2026-09-28-task25.txt).
 
 ## Edges and texture (pass 2)
 

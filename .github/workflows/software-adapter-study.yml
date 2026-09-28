@@ -61,7 +61,7 @@ jobs:
             $B export --allow-software --sample 3 --size 8k --out study/export-8k.png || echo "8K export failed: $?"
             echo "## corpus contact sheet vs the approved baseline"
             $B contact-sheet --allow-software --out study/corpus-16x9.png --cells study/corpus-16x9 --cell 400 --cols 5 || echo "contact-sheet failed: $?"
-            "$PY" scripts/png-compare.py docs/visual-review/baseline-08/corpus-16x9 study/corpus-16x9 || echo "comparison status: $?"
+            "$PY" scripts/png-compare.py docs/visual-review/baseline-25/corpus-16x9 study/corpus-16x9 || echo "comparison status: $?"
           } 2>&1 | tee study/study-${{ matrix.name }}.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

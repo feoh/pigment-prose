@@ -1,0 +1,14 @@
+pigment-prose 0.1.0 contact-sheet: lakeshore generator v2, renderer v2, view paint, aspect 1:1, cell 400x400, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud)	image fnv
+1	shore-a v0	tower-peak	true	82	9420	fc0220f64d18154c	0.54	36	3	0.25	0.00	0.25	0.67	0.19	15.0 0.3 4.0 0.0 24.0 1.1 1.5 1.2 27.8 25.0	111c31a52435045a
+2	shore-b v0	tower-peak	false	80	7993	7f4527b16a7b070d	0.55	42	3	0.29	0.00	0.18	0.70	0.11	19.2 5.7 2.8 0.0 28.3 2.2 1.0 1.2 21.3 18.3	c7874c33f33c3b8e
+3	short v0	twin-summits	false	81	9621	e98f4390418c0b29	0.27	5	3	0.23	0.07	0.22	0.77	0.57	15.3 0.2 3.1 0.0 20.1 16.5 3.6 2.4 17.3 21.5	b8b8aad36c2556f2
+4	line-break v0	tower-peak	false	59	6730	3669e0f7581f5f77	0.54	30	3	0.29	0.00	0.05	0.60	0.13	33.8 3.9 3.5 0.0 28.6 2.7 1.2 0.5 21.0 4.9	cec946c7944518cf
+5	punctuation v0	high-vantage	true	25	6020	bf5ded611e52a16c	0.20	9	8	0.57	0.00	0.10	0.77	0.76	13.2 1.9 1.1 48.0 17.7 0.3 1.0 0.0 6.4 10.4	163fa29f22a658b5
+6	accent v0	peak-over-water	false	82	8820	0272ecd01ee1be74	0.28	6	3	0.33	0.04	0.12	0.76	0.35	23.6 1.2 1.7 0.0 31.8 10.9 2.8 2.7 13.1 12.2	35469687ddb9c460
+7	non-latin v0	peak-over-water	true	76	8793	22ccc100ca247242	0.32	9	2	0.27	0.07	0.15	0.65	0.46	22.0 0.0 1.5 0.0 23.2 12.1 6.5 0.9 18.4 15.3	74b6972aba73e12f
+8	emoji v0	high-vantage	false	33	6950	33208d23329f555a	0.26	16	9	0.57	0.00	0.10	0.58	0.78	8.7 0.9 1.7 50.3 15.7 0.2 0.3 0.0 12.1 10.2	dc935a1c136123cf
+9	whitespace v0	high-vantage	false	31	6674	c9aa12a62d757892	0.22	17	9	0.59	0.00	0.04	0.55	0.75	13.0 1.0 1.8 51.1 17.7 0.1 0.5 0.0 10.5 4.3	1060cf6aea837209
+10	unrelated v0	high-vantage	true	31	6634	2a3d32ef4df288c7	0.22	8	11	0.55	0.00	0.04	0.60	0.74	18.0 0.3 1.2 49.5 15.2 0.2 0.4 0.0 11.4 3.9	4bbbcb0e133ac5e2

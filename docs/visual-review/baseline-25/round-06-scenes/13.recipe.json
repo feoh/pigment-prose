@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "versions": {
+    "normalization": "nfc-lf-utf8/1",
+    "seed_algorithm": "pigment-seed/1",
+    "generator": 2,
+    "renderer": 2
+  },
+  "seed": {
+    "digest": "8d40b5290a47c5a343319ef57587963fb1135d98cbaecf1b4313816ded12de52",
+    "variation": 0
+  },
+  "frame": {
+    "width": 400,
+    "height": 225
+  },
+  "form": {
+    "faceting": 0.55,
+    "relief": 0.5,
+    "woodland_density": 0.5
+  },
+  "painting": {
+    "edge_looseness": 0.4,
+    "wash_gouache": 0.25,
+    "mark_scale": 1.0,
+    "granulation": 0.3,
+    "paper_grain": 0.3
+  },
+  "palette": {
+    "id": "lakeshore",
+    "intensity": 0.6
+  },
+  "atmosphere": {
+    "haze": 0.4
+  }
+}

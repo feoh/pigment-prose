@@ -16,7 +16,7 @@ use pigment_core::error::RenderError;
 use pigment_core::job::{CancelToken, Phase, Progress, ProgressSink};
 use pigment_core::palette::palette;
 use pigment_core::request::{RenderReport, RenderRequest, Renderer, TileSink};
-use pigment_core::scene::{LayerRole, LightSide, Scene, metrics};
+use pigment_core::scene::{CanvasPoint, LayerRole, LightSide, Scene, metrics};
 use pigment_core::seed::Domain;
 use pigment_core::settings::Appearance;
 use pigment_core::tiles::{Support, Tile, TileCostModel, TilePlan, apron_pixels};
@@ -26,7 +26,7 @@ use crate::context::GpuContext;
 use crate::coverage::CoverageIndex;
 use crate::tiled::{TilePasses, drive, storage_buffer, storage_buffer_u32, texture};
 
-const PARAMS_BYTES: u64 = 112;
+const PARAMS_BYTES: u64 = 144;
 
 // paint.wgsl measures wash/gouache character and texture strength from the
 // defaults (DEFAULT_WASH_GOUACHE, DEFAULT_TEXTURE).
@@ -56,6 +56,9 @@ struct SceneBuffers {
     verts: wgpu::Buffer,
     bins: wgpu::Buffer,
     entries: wgpu::Buffer,
+    /// The water's channel per row (renderer v2): see [`channel_rows`].
+    channel: wgpu::Buffer,
+    channel_desc: [f32; 4],
 }
 
 impl PaintRenderer {
@@ -132,11 +135,14 @@ impl PaintRenderer {
         }
         let bins: Vec<u32> = index.bins.iter().flatten().copied().collect();
         let entries: Vec<u32> = index.entries.iter().flatten().copied().collect();
+        let (rows, channel_desc) = channel_rows(scene);
         SceneBuffers {
             layers: storage_buffer(&self.ctx, "layers", &headers),
             verts: storage_buffer(&self.ctx, "verts", &verts),
             bins: storage_buffer_u32(&self.ctx, "coverage bins", &bins),
             entries: storage_buffer_u32(&self.ctx, "coverage entries", &entries),
+            channel: storage_buffer(&self.ctx, "water channel", &rows),
+            channel_desc,
         }
     }
 }
@@ -295,6 +301,78 @@ fn rock_bounds(scene: &Scene) -> [f32; 4] {
         })
 }
 
+/// Rows sampled down the water's extent.
+pub const CHANNEL_ROWS: usize = 256;
+
+/// The spans of `outline` on the row at `y`: pairs of crossings, sorted.
+fn spans(outline: &[CanvasPoint], y: f32, out: &mut Vec<(f32, f32)>) {
+    let mut xs = Vec::new();
+    for i in 0..outline.len() {
+        let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
+        if (a.y > y) != (b.y > y) {
+            xs.push(a.x + (y - a.y) * (b.x - a.x) / (b.y - a.y));
+        }
+    }
+    xs.sort_by(f32::total_cmp);
+    out.extend(xs.as_chunks::<2>().0.iter().map(|&[a, b]| (a, b)));
+}
+
+/// The water's visible channel, row by row (renderer v2, task 25). A river
+/// is the gap the banks leave in a broad water sheet, so for each of
+/// [`CHANNEL_ROWS`] rows down the water's bounding box this takes the water
+/// layer's spans minus everything drawn in front of it, and keeps the widest
+/// visible piece: left bank, right bank, width. The shader runs a river's
+/// current along it: a narrow channel is fast, a lake barely moves. A
+/// function of the scene only. Returns the rows (`left, right, width, 0`
+/// each) and the descriptor `(first row y, row step, row count, 1 if there
+/// is water)`.
+pub fn channel_rows(scene: &Scene) -> (Vec<f32>, [f32; 4]) {
+    let layers = scene.layers();
+    let Some(wi) = layers.iter().position(|l| l.role == LayerRole::Water) else {
+        return (vec![0.0; 4], [0.0, 1.0, 1.0, 0.0]);
+    };
+    let o = &layers[wi].outline;
+    let (y0, y1) = o
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.y), b.max(p.y)));
+    let step = (y1 - y0) / (CHANNEL_ROWS - 1) as f32;
+    let mut rows = Vec::with_capacity(4 * CHANNEL_ROWS);
+    let (mut water, mut cover) = (Vec::new(), Vec::new());
+    for k in 0..CHANNEL_ROWS {
+        // Just inside the extent, so the first and last rows still cross.
+        let y = (y0 + step * k as f32).clamp(y0 + 1e-5, y1 - 1e-5);
+        water.clear();
+        cover.clear();
+        spans(o, y, &mut water);
+        for l in &layers[wi + 1..] {
+            spans(&l.outline, y, &mut cover);
+        }
+        cover.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // Water minus the union of what is in front of it.
+        let mut best = (0.0f32, 0.0f32);
+        for &(wl, wr) in &water {
+            let mut x = wl;
+            for &(cl, cr) in &cover {
+                if cr <= x || cl >= wr {
+                    continue;
+                }
+                if cl > x && cl - x > best.1 - best.0 {
+                    best = (x, cl);
+                }
+                x = x.max(cr);
+                if x >= wr {
+                    break;
+                }
+            }
+            if wr > x && wr - x > best.1 - best.0 {
+                best = (x, wr);
+            }
+        }
+        rows.extend([best.0, best.1, best.1 - best.0, 0.0]);
+    }
+    (rows, [y0, step.max(1e-6), CHANNEL_ROWS as f32, 1.0])
+}
+
 struct PaintTiles<'a> {
     renderer: &'a PaintRenderer,
     out: wgpu::Texture,
@@ -421,6 +499,8 @@ impl Renderer for PaintRenderer {
             verts,
             bins,
             entries,
+            channel,
+            channel_desc,
         } = self.scene_buffers(&req.scene);
         let pal: Vec<f32> = palette(req.appearance.palette.id)
             .gpu()
@@ -448,6 +528,7 @@ impl Renderer for PaintRenderer {
                 entry(4, wgpu::BindingResource::TextureView(&field_v)),
                 entry(7, bins.as_entire_binding()),
                 entry(8, entries.as_entire_binding()),
+                entry(11, channel.as_entire_binding()),
             ],
         );
         let bg_paint = bind(
@@ -498,6 +579,13 @@ impl Renderer for PaintRenderer {
             fixed.extend((v as f32).to_le_bytes());
         }
         for v in rock_bounds(&req.scene) {
+            fixed.extend(v.to_le_bytes());
+        }
+        let wind = req.scene.wind();
+        for v in [wind.x, wind.z, wind.strength, 0.0] {
+            fixed.extend(v.to_le_bytes());
+        }
+        for v in channel_desc {
             fixed.extend(v.to_le_bytes());
         }
         let tiles = PaintTiles {

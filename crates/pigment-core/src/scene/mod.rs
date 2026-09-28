@@ -188,6 +188,30 @@ pub enum LightSide {
     Right = 1,
 }
 
+/// The wind over the water (task 25): a scene attribute drawn from the
+/// composition stream, so paint settings never change it and a new
+/// composition may bring a different breeze. `(x, z)` is the unit direction
+/// the wind blows toward on the water plane: `x` across the image (+ right),
+/// `z` into the distance (+ away from the viewer). `strength` runs from 0
+/// (glassy calm) to 1 (a fresh breeze with whitecaps' texture, not waves).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wind {
+    pub x: f32,
+    pub z: f32,
+    pub strength: f32,
+}
+
+impl Default for Wind {
+    /// Calm, blowing across the image.
+    fn default() -> Wind {
+        Wind {
+            x: 1.0,
+            z: 0.0,
+            strength: 0.0,
+        }
+    }
+}
+
 /// A point in canvas units (short side = 1, +y down).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CanvasPoint {
@@ -220,6 +244,7 @@ pub struct Scene {
     /// Back to front: depth never increases along the list.
     layers: Vec<SceneLayer>,
     light: LightSide,
+    wind: Wind,
 }
 
 impl Scene {
@@ -307,6 +332,7 @@ impl Scene {
             extents: key.aspect.extents(),
             layers,
             light: LightSide::default(),
+            wind: Wind::default(),
         })
     }
 
@@ -318,6 +344,16 @@ impl Scene {
 
     pub fn light(&self) -> LightSide {
         self.light
+    }
+
+    /// The same scene with `wind` over its water (the default is calm).
+    pub fn with_wind(mut self, wind: Wind) -> Scene {
+        self.wind = wind;
+        self
+    }
+
+    pub fn wind(&self) -> Wind {
+        self.wind
     }
 
     pub fn key(&self) -> &SceneKey {
@@ -333,14 +369,17 @@ impl Scene {
     }
 
     /// FNV-1a 64 over the canonical little-endian encoding of everything the
-    /// GPU receives (aspect, light side, then per layer: role, plant, depth
-    /// bits, shade bits, vertex count, vertex bits). A regression checksum,
-    /// not a security hash.
+    /// GPU receives (aspect, light side, wind bits, then per layer: role,
+    /// plant, depth bits, shade bits, vertex count, vertex bits). A
+    /// regression checksum, not a security hash.
     pub fn geometry_checksum(&self) -> u64 {
         let mut h = Fnv1a::new();
         h.u32(self.key.aspect.width);
         h.u32(self.key.aspect.height);
         h.bytes(&[self.light as u8]);
+        h.u32(self.wind.x.to_bits());
+        h.u32(self.wind.z.to_bits());
+        h.u32(self.wind.strength.to_bits());
         h.u32(self.layers.len() as u32);
         for l in &self.layers {
             h.bytes(&[l.role as u8, l.plant as u8]);
@@ -398,8 +437,8 @@ pub struct TestCard;
 impl TestCard {
     /// 1: layers gained `shade` (always 0.5 here); 2: and `plant` (always
     /// `None`); 3: the checksum covers the scene's light side (always
-    /// left here).
-    pub const VERSION: u32 = 3;
+    /// left here); 4: and its wind (always calm here).
+    pub const VERSION: u32 = 4;
 }
 
 impl SceneGenerator for TestCard {
@@ -574,7 +613,7 @@ mod tests {
     // no `shade`, v1 0x2257_2651_a5cc_f378 no `plant`, v2
     // 0x52b0_6c7e_571a_a4b4 no light side); portable CI re-checks it on
     // Windows and macOS.
-    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0xcc06_8b7a_51ae_091c;
+    const TEST_CARD_SEED7_4K_CHECKSUM: u64 = 0x11a3_019b_5cdd_f4a1;
 
     #[test]
     fn invalid_scenes_are_rejected() {

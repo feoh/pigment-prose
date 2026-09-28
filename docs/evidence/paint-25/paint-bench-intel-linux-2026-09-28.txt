@@ -1,0 +1,6 @@
+pigment-prose 0.1.0 paint-bench: renderer v2, generator v2, aspect 16:9, 12 sample seeds, 7 runs (2 warm-up)
+device: Intel(R) Graphics (RPL-S) (Vulkan)
+scene generation (CPU): median 0.54 ms, max 0.68 ms
+960x540 render + readback: median 21.59 ms, worst scene 22.76 ms; whole render call (setup, render, sink): worst scene 23.60 ms
+1920x1080 render + readback: median 82.97 ms, worst scene 86.96 ms; whole render call (setup, render, sink): worst scene 90.88 ms
+3840x2160 render + readback: median 317.05 ms, worst scene 327.84 ms; whole render call (setup, render, sink): worst scene 335.63 ms

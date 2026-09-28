@@ -211,7 +211,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 ## Versioning and compatibility
 
 - `RECIPE_SCHEMA_VERSION` = 1. A recipe with a **newer** schema is rejected with a clear message. An older schema loads only through an explicit, tested migration. No invented migrations ([migration limits](seeds-and-recipes.md#versions-and-migration-limits)).
-- `GENERATOR_VERSION` and `RENDERER_VERSION` started at **0 = pre-approval**: fixtures and images could change without a bump until the task 08 visual gate. **Both became 1 at the gate (2026-09-27)**, with the approved baseline in [visual-review/baseline-08](visual-review/baseline-08/README.md). From then on, **any** change to scene checksums for the same key bumps `GENERATOR_VERSION`, and any intentional pixel change on the same device bumps `RENDERER_VERSION`.
+- `GENERATOR_VERSION` and `RENDERER_VERSION` started at **0 = pre-approval**: fixtures and images could change without a bump until the task 08 visual gate. **Both became 1 at the gate (2026-09-27)**, with the approved baseline in [visual-review/baseline-08](visual-review/baseline-08/README.md), and **2 at the task 25 review (2026-09-28)**: wind and current on water, more complex rocks, approved baseline in [visual-review/baseline-25](visual-review/baseline-25/README.md). Since the gate, **any** change to scene checksums for the same key bumps `GENERATOR_VERSION`, and any intentional pixel change on the same device bumps `RENDERER_VERSION`.
 - The app ships exactly **one** generator and one renderer. It does not keep old versions alive. A recipe whose recorded versions differ opens with a visible notice ("made with generator vN; this version may compose/paint differently"). The recorded versions update only when the user saves.
 - `NORMALIZATION_ID` (`nfc-lf-utf8/1`) and `SEED_ALGORITHM_ID` (`pigment-seed/1`) name the algorithms. Changing either one creates a new identifier, never a silent change.
 
@@ -220,7 +220,7 @@ All errors are structured enums with `Display` text that is safe to log. **No er
 | Tier | What | Guarantee | How it is checked |
 | --- | --- | --- | --- |
 | 0 | Text → normalized bytes → digest → stream seeds | exact on every platform and build | frozen vectors in `fixtures/seed-vectors.json`, reproduced by an independent Python reference; portable CI on Linux, Windows and macOS ([spec](seeds-and-recipes.md)) |
-| 1 | Seeds + form + aspect → scene geometry (`geometry_checksum`) for one `GENERATOR_VERSION` | exact on every platform | exact arithmetic only in generators: `+ − × ÷`, `sqrt`, comparisons, or a pure-Rust `libm`; never platform `sin`/`exp`. Checksum fixtures in CI. Frozen: the `TestCard` v1 checksum `22572651a5ccf378` and three lakeshore checksums |
+| 1 | Seeds + form + aspect → scene geometry (`geometry_checksum`) for one `GENERATOR_VERSION` | exact on every platform | exact arithmetic only in generators: `+ − × ÷`, `sqrt`, comparisons, or a pure-Rust `libm`; never platform `sin`/`exp`. Checksum fixtures in CI. Frozen: the `TestCard` checksum (`TEST_CARD_SEED7_4K_CHECKSUM`) and three lakeshore checksums |
 | 2 | Pixels on one device, driver, backend and build, including tiled vs single tile | byte-identical | hardware suite and `gpu-smoke`: verified on NVIDIA and Intel Vulkan (tasks 02, 03) |
 | 3 | Pixels across devices, backends or drivers | **within a measured tolerance, never identical** | per-backend baselines (tasks 14, 21, 22) |
 

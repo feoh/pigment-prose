@@ -373,11 +373,11 @@ fn document_request(doc: &pigment_io::Document, policy: TilePolicy) -> RenderReq
 #[test]
 #[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
 fn approved_recipes_repaint_identically_after_save_and_load() {
-    // Every task 08 baseline recipe, saved and reopened, paints the same
+    // Every approved baseline recipe (task 25), saved and reopened, paints the same
     // pixels as the original file. On the baseline device (RTX 4070 Ti,
     // Vulkan) they must also match the approved image hashes.
     let dir = Scratch::new("baseline-paint");
-    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-08");
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-25");
     let label = renderer_label();
     let baseline_device = label == "NVIDIA GeForce RTX 4070 Ti (Vulkan)";
     let mut checked = 0;

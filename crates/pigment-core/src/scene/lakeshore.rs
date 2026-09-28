@@ -18,11 +18,11 @@
 
 use super::noise::{Fbm, unit};
 use super::{
-    CanvasPoint, LayerRole, LightSide, Plant, Scene, SceneGenerator, SceneKey, SceneLayer,
+    CanvasPoint, LayerRole, LightSide, Plant, Scene, SceneGenerator, SceneKey, SceneLayer, Wind,
 };
 use crate::error::ValidationError;
 use crate::frame::AspectRatio;
-use crate::seed::{Domain, Rng, SeedBundle};
+use crate::seed::{Domain, Rng, SeedBundle, StreamSeed};
 use crate::settings::FormSettings;
 use crate::version;
 
@@ -42,6 +42,14 @@ pub const MAX_SUMMIT: f64 = 0.75;
 pub const MAX_TOWER: f64 = 1.3;
 
 pub const MAX_ROCKS: usize = 6;
+/// Layers every rock has: body and three planes.
+const ROCK_BASE_LAYERS: usize = 4;
+/// Detail layers a rock may add (generator v2): up to three more planes, a
+/// top face, a crevice and three lower facets.
+const ROCK_DETAIL_LAYERS: usize = 9;
+/// Detail stops when a scene would pass this many layers (under
+/// `MAX_LAYERS`, with the margin `counts_stay_within_bounds` checks).
+const ROCK_LAYER_CEILING: usize = 88;
 pub const MAX_CUMULUS: usize = 3;
 pub const MAX_SPURS: usize = 7;
 pub const MAX_FAR_WOODS: usize = 6;
@@ -221,6 +229,39 @@ pub struct Composition {
     pub river: [f64; 4],
     /// `HighVantage` only (empty otherwise).
     pub spurs: Vec<Spur>,
+    /// The breeze over the water (generator v2). Drawn from its own salted
+    /// composition stream, so none of the draws above moved.
+    pub wind: Wind,
+}
+
+/// Salt for the wind's stream (so adding it moved no composition draw).
+const WIND_SALT: u64 = 0x5749_4e44_0000_0002;
+
+/// A seeded breeze: a unit direction on the water plane without
+/// trigonometry (rejection-sampled, then scaled by `sqrt`, exact on every
+/// platform), and a strength that is calm about one scene in six.
+fn draw_wind(seeds: &SeedBundle) -> Wind {
+    let mut r = StreamSeed(seeds.stream(Domain::Composition).0 ^ WIND_SALT).rng();
+    let (x, z) = loop {
+        let x = r.range_f64(-1.0, 1.0);
+        let z = r.range_f64(-1.0, 1.0);
+        let d2 = x * x + z * z;
+        if (0.04..=1.0).contains(&d2) {
+            let d = d2.sqrt();
+            break (x / d, z / d);
+        }
+    };
+    let u = r.next_f64();
+    let strength = if u < 0.16 {
+        0.03 + 0.1 * r.next_f64()
+    } else {
+        0.25 + 0.75 * r.next_f64() * r.next_f64().sqrt()
+    };
+    Wind {
+        x: x as f32,
+        z: z as f32,
+        strength: strength as f32,
+    }
 }
 
 impl Composition {
@@ -438,6 +479,7 @@ impl Composition {
             }
         }
         Composition {
+            wind: draw_wind(seeds),
             river,
             template,
             mirrored,
@@ -484,7 +526,8 @@ impl SceneGenerator for LakeshoreGenerator {
         };
         Ok(
             Scene::new(SceneKey::new(self.version(), seeds, *form, aspect), layers)?
-                .with_light(light),
+                .with_light(light)
+                .with_wind(comp.wind),
         )
     }
 }
@@ -1624,28 +1667,30 @@ impl<'a> Builder<'a> {
                 size: t.next_f64(),
                 height: t.range_f64(0.25, 0.5),
                 apex: t.range_f64(0.3, 0.7),
-                left: [
-                    t.range_f64(0.1, 0.4),
-                    t.range_f64(0.45, 0.8),
-                    t.range_f64(0.5, 0.8),
-                    t.range_f64(0.8, 1.0),
-                ],
-                right: [
-                    t.range_f64(0.2, 0.5),
-                    t.range_f64(0.75, 1.0),
-                    t.range_f64(0.6, 0.9),
-                    t.range_f64(0.35, 0.75),
-                ],
-                offset: t.range_f64(-0.25, 0.4),
-                row: t.next_f64(),
-                crease: [t.range_f64(0.15, 0.45), t.range_f64(0.15, 0.45)],
-                cap: t.range_f64(0.12, 0.25),
+                offset: {
+                    // Generator v1's flank knots: no longer used (v2 shapes
+                    // come from noise constants), still drawn so the stream
+                    // stays as it was.
+                    for _ in 0..8 {
+                        t.next_f64();
+                    }
+                    t.range_f64(-0.25, 0.4)
+                },
+                row: {
+                    let row = t.next_f64();
+                    // Generator v1's crease and cap draws, as above.
+                    for _ in 0..3 {
+                        t.next_f64();
+                    }
+                    row
+                },
             });
         }
         let Some((ra, rb)) = run else { return };
         let fg = self.h - self.sky;
-        let mut rocks: Vec<(f64, f64, f64, RockParams)> = Vec::new(); // (x, y_base, width, params)
-        for p in params.iter().take(count) {
+        // (x, y_base, width, params, id): the id keys a rock's own noise.
+        let mut rocks: Vec<(f64, f64, f64, RockParams, u64)> = Vec::new();
+        for (id, p) in params.iter().take(count).enumerate() {
             let s = (self.comp.rock_cluster + (p.pos - 0.5) * 0.6).clamp(0.03, 0.97);
             let x = ra + (rb - ra) * s;
             let shore = self.shore_y(ts, x);
@@ -1659,61 +1704,115 @@ impl<'a> Builder<'a> {
             // Most rocks sit on the waterline; a few stand further forward.
             let forward = (self.h - shore).max(0.0) * p.row * p.row * p.row;
             let y_base = shore + width * p.offset + forward;
-            rocks.push((x, y_base, width * (1.0 + 0.8 * p.row * p.row * p.row), *p));
+            let width = width * (1.0 + 0.8 * p.row * p.row * p.row);
+            rocks.push((x, y_base, width, *p, id as u64));
         }
+        // Some rocks have a smaller companion leaning on one side, a little
+        // in front or behind, so rocks also come in groups (generator v2).
+        // Placed by seeded constants, as the layer budget allows.
+        let room = ROCK_LAYER_CEILING.saturating_sub(self.layers.len() + ROCK_DETAIL_LAYERS);
+        let mut companions = Vec::new();
+        for &(x, y_base, width, p, id) in &rocks {
+            let k = |i: i64| unit(ts.rocks ^ 0xc0a7, 8 * id as i64 + i);
+            let total = ROCK_BASE_LAYERS * (rocks.len() + companions.len() + 1);
+            if k(0) >= 0.45 || width < 0.04 || total > room {
+                continue;
+            }
+            let w = width * (0.32 + 0.26 * k(1));
+            let side = if k(2) < 0.5 { -1.0 } else { 1.0 };
+            let cx = x + side * (0.5 * width + w * (0.05 - 0.3 * k(3)));
+            let cy = y_base + width * (0.16 * k(4) - 0.04);
+            companions.push((cx, cy, w, p, id + MAX_ROCKS as u64));
+        }
+        rocks.extend(companions);
         rocks.sort_by(|a, b| a.1.total_cmp(&b.1));
-        for (ri, (x, y_base, width, p)) in rocks.into_iter().enumerate() {
+        // Rocks are the last layers. The detail planes share what is left of
+        // the layer budget, nearest rocks first, where the detail shows.
+        let base = self.layers.len() + ROCK_BASE_LAYERS * rocks.len();
+        let mut spare = ROCK_LAYER_CEILING.saturating_sub(base);
+        let mut extras = vec![0; rocks.len()];
+        for e in extras.iter_mut().rev() {
+            *e = spare.min(ROCK_DETAIL_LAYERS);
+            spare -= *e;
+        }
+        for ((x, y_base, width, p, id), extra) in rocks.into_iter().zip(extras) {
             let near = ((y_base - self.sky) / (self.h + MARGIN - self.sky)).clamp(0.0, 1.0);
             // Sorted far to near, so depth never increases.
             let d =
                 depth::ROCK_FARTHEST - (depth::ROCK_FARTHEST - depth::ROCK_NEAREST) * near as f32;
-            self.rock(ts, ri, x, y_base, width, &p, d, f.faceting);
+            self.rock(ts, id, x, y_base, width, &p, d, f.faceting, extra);
         }
     }
 
-    /// One boulder: a body and three planes (two flanks and a top cap).
+    /// One rock (generator v2, task 25: "less chonky geometric and more
+    /// complex"; round 7: "you didn't change the rock form at all"). Each
+    /// rock has a kind (a lobed boulder, a jointed block, a tilted slab or a
+    /// split boulder) that sets its silhouette, which then carries finer
+    /// relief and chipped notches. Its body is cut into a mosaic of planes
+    /// by ridge lines falling from the silhouette's corners to its foot,
+    /// each plane lit by the way it faces; as the layer budget allows, the
+    /// near rocks add planes, a top face, a dark crevice and lower facets
+    /// (shelves and undercuts). Every placement comes from seeded noise
+    /// constants (`noise::unit`), not RNG draws, so no other part of the
+    /// scene moved.
     #[allow(clippy::too_many_arguments)]
     fn rock(
         &mut self,
         ts: &TerrainSeeds,
-        index: usize,
+        id: u64,
         x: f64,
         y_base: f64,
         width: f64,
         p: &RockParams,
         d: f32,
         angular: f64,
+        extra: usize,
     ) {
-        let tall = width * p.height;
-        let n = ((width / (PROFILE_STEP * 0.5)).ceil() as usize).clamp(12, 128);
+        let seed = ts.rocks ^ id.wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let k = |i: i64| unit(seed, i);
+        let kind = RockKind::pick(k(0));
+        let tall = width * p.height * kind.stature();
+        let n = ((width / (PROFILE_STEP * 0.5)).ceil() as usize).clamp(16, 128);
         let xs = samples(x - 0.5 * width, x + 0.5 * width, width / n as f64);
         let last = xs.len() - 1;
-        let apex = p.apex;
-        let knots = [
-            (0.0, 0.0),
-            (apex * p.left[0], p.left[1]),
-            (apex * p.left[2], p.left[3]),
-            (apex, 1.0),
-            (apex + (1.0 - apex) * p.right[0], p.right[1]),
-            (apex + (1.0 - apex) * p.right[2], p.right[3]),
-            (1.0, 0.0),
-        ];
-        let detail = self.fbm(ts.rocks ^ index as u64, 0.03, 1.0 / 200.0, 0.5, angular);
+        let shape = RockShape::new(kind, p, &k, k(1) < 0.5);
+        let detail = self.fbm(seed ^ 0x51de, 0.03, 1.0 / 200.0, 0.5, angular);
+        // Finer, kinked relief: weathered and fractured, not smooth.
+        let fine = self.fbm(seed ^ 0x0f1e, 0.011, 1.0 / 420.0, 0.62, 1.0);
+        // Two to four chipped notches along the silhouette: a short drop
+        // with a steep broken face on one side.
+        let notches: Vec<(f64, f64, f64)> = (0..2 + (k(2) * 3.0) as i64)
+            .map(|j| {
+                let at = 0.1 + 0.8 * k(10 + j);
+                let span = 0.04 + 0.07 * k(20 + j);
+                let depth = (0.04 + 0.07 * k(30 + j)) * (0.4 + 0.6 * angular);
+                (at, span, depth)
+            })
+            .collect();
+        let notch = |s: f64| -> f64 {
+            notches
+                .iter()
+                .map(|&(at, span, depth)| {
+                    let u = (s - at) / span;
+                    if (0.0..1.0).contains(&u) {
+                        // Steep entry, gentle recovery.
+                        depth * (1.0 - u) * (1.0 - u) * (u * 12.0).min(1.0)
+                    } else {
+                        0.0
+                    }
+                })
+                .sum()
+        };
         let top: Vec<f64> = xs
             .iter()
             .enumerate()
             .map(|(i, &xx)| {
                 let s = i as f64 / last as f64;
-                let facet = piecewise(s, &knots);
-                let dd = if s < apex {
-                    (apex - s) / apex
-                } else {
-                    (s - apex) / (1.0 - apex)
-                };
-                let dome = 1.0 - dd * dd;
-                let prof = lerp(dome, facet, angular);
-                let bump = 0.05 * 4.0 * s * (1.0 - s) * detail.eval(xx);
-                y_base - tall * (prof + bump)
+                let prof = lerp(shape.smooth(s), shape.faceted(s), angular);
+                let hump = (4.0 * s * (1.0 - s)).min(1.0);
+                let bump = 0.08 * hump * detail.eval(xx) + 0.05 * hump * fine.eval(xx);
+                let h = (prof + bump - notch(s) * hump).max(0.04 * hump);
+                y_base - tall * h
             })
             .collect();
         let bottom: Vec<f64> = (0..=last)
@@ -1729,73 +1828,194 @@ impl<'a> Builder<'a> {
             band(&xs, &top, Bottom::Pinched(&bottom)),
         );
 
-        // Flanks: creases fall from the apex to the base.
-        let ia = ((apex * last as f64).round() as usize).clamp(3, last - 3);
-        for left in [true, false] {
-            let (i0, i1) = if left { (0, ia) } else { (ia, last) };
-            let m = i1 - i0;
-            let crease = p.crease[usize::from(!left)];
-            let kc = ((crease * m as f64).round() as usize).clamp(1, m);
-            let at = if left { i1 - kc } else { i0 + kc };
-            let seg_top = &top[i0..=i1];
-            let seg_bot = &bottom[i0..=i1];
-            let b: Vec<f64> = (0..=m)
-                .map(|k| {
-                    // Distance from the apex end, 0–1.
-                    let u = if left {
-                        (m - k) as f64 / m as f64
-                    } else {
-                        k as f64 / m as f64
-                    };
-                    let raw = if u < crease {
-                        lerp(top[ia], bottom[at], ease(u / crease, angular))
-                    } else {
-                        seg_bot[k]
-                    };
-                    let gap = seg_bot[k] - seg_top[k];
-                    raw.max(seg_top[k] + 0.02 * gap).min(seg_bot[k])
-                })
-                .collect();
-            let (x0, y0, x1, y1) = if left {
-                (xs[0], top[0], xs[ia], top[ia])
+        // The detail budget, in the order it pays off.
+        let mut spare = extra;
+        let mut take = |want: usize| {
+            let t = want.min(spare);
+            spare -= t;
+            t
+        };
+        let more_planes = take(2);
+        let cap = take(1) == 1;
+        let crevice = take(1) == 1 && (kind == RockKind::Split || k(3) < 0.7);
+        let more_planes = more_planes + take(1);
+        let lower = take(3);
+
+        // Ridge lines: from the most pronounced silhouette corners down to
+        // the foot, fanning outward from the crest. They live in the rock's
+        // own coordinates (`RockBody`): u across its samples, v from the
+        // silhouette (0) to the foot (1). Neighbouring ridges stay at least
+        // three samples apart where they start and end, so every plane's
+        // outline is simple.
+        let body = RockBody {
+            xs: &xs,
+            top: &top,
+            bottom: &bottom,
+        };
+        let lastf = last as f64;
+        let ic = (0..=last)
+            .min_by(|&a, &b| top[a].total_cmp(&top[b]))
+            .unwrap_or(0);
+        let crest = ic as f64;
+        let mut picks = shape.corners(tall / width);
+        picks.truncate(2 + more_planes);
+        picks.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let mut ridges: Vec<Ridge> = vec![Ridge::end(0.0)];
+        let mut cleft = None;
+        for (j, &(s, _, is_cleft)) in picks.iter().enumerate() {
+            let i = ((s * lastf).round() as usize).clamp(2, last.saturating_sub(2)) as f64;
+            let prev = &ridges[ridges.len() - 1];
+            let (lo, hi) = (prev.u[RIDGE_STEPS] + 3.0, lastf - 2.0);
+            if i < prev.u[0] + 3.0 || i > hi || lo > hi {
+                continue;
+            }
+            let spread = 0.12 + 0.4 * k(40 + j as i64);
+            let ub = (i + (i - crest) * spread).max(lo).min(hi);
+            let mut u = [i; RIDGE_STEPS + 1];
+            for (m, um) in u.iter_mut().enumerate().skip(1) {
+                let v = m as f64 / RIDGE_STEPS as f64;
+                // Bowed: the ridge turns outward near the top.
+                *um = lerp(i, ub, v + 0.25 * v * (1.0 - v));
+            }
+            if is_cleft {
+                cleft = Some(ridges.len());
+            }
+            ridges.push(Ridge { u, end: false });
+        }
+        ridges.push(Ridge::end(lastf));
+        // Crooked, not ruled: each ridge's inner points shift sideways, by
+        // less than half the room to its neighbours (which stay at least a
+        // sample away).
+        for j in 1..ridges.len() - 1 {
+            for m in 1..RIDGE_STEPS {
+                let v = m as f64 / RIDGE_STEPS as f64;
+                let here = ridges[j].u[m];
+                let room = (here - ridges[j - 1].u[m]).min(ridges[j + 1].u[m] - here);
+                let bound = (0.45 * (room - 1.0)).max(0.0);
+                let jig = (k(50 + 8 * j as i64 + m as i64) - 0.5)
+                    * 0.08
+                    * lastf
+                    * angular
+                    * 4.0
+                    * v
+                    * (1.0 - v);
+                ridges[j].u[m] = here + jig.max(-bound).min(bound);
+            }
+        }
+
+        // The planes between neighbouring ridges (the rock's two ends count
+        // as ridges), each lit by the way it faces: left or right of the
+        // crest, and the slope of its stretch of silhouette.
+        let light = if self.comp.light_from_left { -1.0 } else { 1.0 };
+        let mut shades = Vec::with_capacity(ridges.len() - 1);
+        let mut prev: Option<f64> = None;
+        for (j, pair) in ridges.windows(2).enumerate() {
+            let (a, b) = (&pair[0], &pair[1]);
+            let (ia, ib) = (a.u[0] as usize, b.u[0] as usize);
+            let mid = 0.25 * (a.u[0] + b.u[0] + a.u[RIDGE_STEPS] + b.u[RIDGE_STEPS]);
+            let facing = ((mid - crest) / (0.5 * lastf)).clamp(-1.0, 1.0);
+            let chord = face_shade(
+                xs[ib] - xs[ia],
+                top[ib] - top[ia],
+                self.comp.light_from_left,
+            );
+            let mut shade = 0.5
+                + 0.34 * facing * light
+                + 0.45 * (chord - 0.5)
+                + 0.14 * (k(70 + j as i64) - 0.5);
+            // Neighbouring planes always read as separate planes.
+            if let Some(q) = prev
+                && (shade - q).abs() < 0.07
+            {
+                shade = if shade >= q { q + 0.08 } else { q - 0.08 };
+            }
+            let shade = (0.5 + (shade - 0.5) * (0.85 + 0.15 * angular)).clamp(0.05, 0.95);
+            prev = Some(shade);
+            shades.push(shade);
+            self.push(LayerRole::ForegroundRock, d, shade, body.plane(a, b, None));
+        }
+
+        // The top face: where the silhouette runs nearly level around the
+        // crest, a band facing the sky.
+        if cap {
+            let level = |i: usize| (top[i + 1] - top[i]).abs() / (xs[1] - xs[0]) < 0.7;
+            let (mut c0, mut c1) = (ic, ic);
+            while c0 > 1 && level(c0 - 1) {
+                c0 -= 1;
+            }
+            while c1 + 1 < last && level(c1) {
+                c1 += 1;
+            }
+            if c1 >= c0 + 4 && xs[c1] - xs[c0] >= 0.15 * width {
+                let seg = &top[c0..=c1];
+                let q = seg.len() - 1;
+                let deep = tall * (0.07 + 0.08 * k(80));
+                let b: Vec<f64> = (0..=q)
+                    .map(|i| {
+                        let u = i as f64 / q as f64;
+                        let gap = bottom[c0 + i] - seg[i];
+                        let v = (2.0 * u - 1.0) * (2.0 * u - 1.0);
+                        let dip = deep * (1.0 - v * v) * (0.8 + 0.2 * k(81));
+                        (seg[i] + dip.max(0.03 * gap)).min(seg[i] + 0.6 * gap)
+                    })
+                    .collect();
+                let up = face_shade(1.0, 0.0, self.comp.light_from_left);
+                self.push(
+                    LayerRole::ForegroundRock,
+                    d,
+                    (0.5 + (up - 0.5) * (0.85 + 0.15 * angular) + 0.05).min(0.95),
+                    band(&xs[c0..=c1], seg, Bottom::Pinched(&b)),
+                );
+            }
+        }
+
+        // A dark crevice down one ridge: the split boulder's cleft, or the
+        // ridge nearest the crest.
+        if crevice && ridges.len() > 2 {
+            let j = cleft.unwrap_or_else(|| {
+                (1..ridges.len() - 1)
+                    .min_by(|&a, &b| {
+                        (ridges[a].u[0] - crest)
+                            .abs()
+                            .total_cmp(&(ridges[b].u[0] - crest).abs())
+                    })
+                    .unwrap_or(1)
+            });
+            let (wide, reach) = if cleft.is_some() {
+                (0.035, 0.85)
             } else {
-                (xs[ia], top[ia], xs[last], top[last])
+                (0.014 + 0.01 * k(82), 0.45 + 0.3 * k(83))
             };
-            let shade = face_shade(x1 - x0, y1 - y0, self.comp.light_from_left);
-            // Rocks are the solid forms up front: even rounded ones keep
-            // clearly lit and shadowed flanks.
-            let shade = 0.5 + (shade - 0.5) * (0.85 + 0.15 * angular);
             self.push(
                 LayerRole::ForegroundRock,
                 d,
-                shade,
-                band(&xs[i0..=i1], seg_top, Bottom::Pinched(&b)),
+                0.04,
+                body.crevice(&ridges, j, wide * lastf, reach),
             );
         }
 
-        // Cap: the upper plane around the apex, facing the sky.
-        let half = ((p.cap * last as f64).round() as usize).max(2);
-        let (c0, c1) = (ia.saturating_sub(half).max(1), (ia + half).min(last - 1));
-        if c1 >= c0 + 4 {
-            let seg = &top[c0..=c1];
-            let (a, z) = (seg[0], seg[seg.len() - 1]);
-            let k = seg.len() - 1;
-            let b: Vec<f64> = (0..=k)
-                .map(|i| {
-                    let u = i as f64 / k as f64;
-                    // A shallow V below the chord between the cap's ends.
-                    let chord = lerp(a, z, u) + tall * 0.12 * (1.0 - (2.0 * u - 1.0).abs());
-                    let gap = bottom[c0 + i] - seg[i];
-                    chord.max(seg[i] + 0.05 * gap).min(bottom[c0 + i])
-                })
-                .collect();
-            let shade = face_shade(xs[c1] - xs[c0], z - a, self.comp.light_from_left);
-            let shade = (shade + 0.1).min(0.95);
+        // Lower facets on the widest planes: a crooked break across the
+        // plane, below it a shelf turned up to the light or an undercut
+        // turned away.
+        let mut order: Vec<usize> = (0..ridges.len() - 1).collect();
+        order.sort_by(|&a, &b| {
+            let w = |j: usize| ridges[j + 1].u[0] - ridges[j].u[0];
+            w(b).total_cmp(&w(a))
+        });
+        for (m, &j) in order.iter().take(lower).enumerate() {
+            let (a, b) = (&ridges[j], &ridges[j + 1]);
+            if b.u[0] < a.u[0] + 4.0 {
+                continue;
+            }
+            let key = 90 + 6 * m as i64;
+            let split = (0.35 + 0.3 * k(key), 0.35 + 0.3 * k(key + 1));
+            let bow = (k(key + 2) - 0.5) * 0.2 * angular;
+            let turn = if k(key + 3) < 0.55 { -0.16 } else { 0.12 };
             self.push(
                 LayerRole::ForegroundRock,
                 d,
-                0.5 + (shade - 0.5) * (0.85 + 0.15 * angular),
-                band(&xs[c0..=c1], seg, Bottom::Pinched(&b)),
+                (shades[j] + turn).clamp(0.04, 0.96),
+                body.plane(a, b, Some((split, bow))),
             );
         }
     }
@@ -1807,16 +2027,393 @@ struct RockParams {
     size: f64,
     height: f64,
     apex: f64,
-    /// Left flank knots: (x fraction of apex, height) twice.
-    left: [f64; 4],
-    /// Right flank knots: (x fraction of the rest, height) twice.
-    right: [f64; 4],
     /// Base offset in widths; negative stands in the water.
     offset: f64,
     /// How far forward of the waterline (cubed, so most stay on it).
     row: f64,
-    crease: [f64; 2],
-    cap: f64,
+}
+
+/// What a rock is (generator v2), picked per rock from a seeded constant.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum RockKind {
+    /// Two or three rounded lobes run together: a weathered boulder.
+    Boulder,
+    /// Steep sides and a stepped, tilted top: a jointed block.
+    Block,
+    /// A tilted plate: a long rising back and a steep broken end.
+    Slab,
+    /// A boulder split by a deep cleft.
+    Split,
+}
+
+impl RockKind {
+    fn pick(u: f64) -> RockKind {
+        match u {
+            u if u < 0.32 => RockKind::Boulder,
+            u if u < 0.56 => RockKind::Block,
+            u if u < 0.8 => RockKind::Slab,
+            _ => RockKind::Split,
+        }
+    }
+
+    /// Height, relative to the drawn height.
+    fn stature(self) -> f64 {
+        match self {
+            RockKind::Boulder => 0.95,
+            RockKind::Block => 1.05,
+            RockKind::Slab => 0.85,
+            RockKind::Split => 1.0,
+        }
+    }
+}
+
+/// A rock's silhouette as a height profile over `s` in `[0, 1]` (height 1
+/// is its stature, 0 at both ends): faceted knots, and a rounded version
+/// the faceting setting blends toward.
+struct RockShape {
+    kind: RockKind,
+    flip: bool,
+    /// Faceted silhouette knots `(s, h)`, unflipped, from `(0, 0)` to `(1, 0)`.
+    knots: Vec<(f64, f64)>,
+    /// Rounded lobes `(centre, half width, height)` (boulders).
+    lobes: Vec<(f64, f64, f64)>,
+    /// The split boulder's cleft: `(s, height)`.
+    cleft: Option<(f64, f64)>,
+}
+
+impl RockShape {
+    fn new(kind: RockKind, p: &RockParams, k: &dyn Fn(i64) -> f64, flip: bool) -> RockShape {
+        let mut lobes = Vec::new();
+        let mut cleft = None;
+        let knots = match kind {
+            RockKind::Boulder | RockKind::Split => {
+                if kind == RockKind::Boulder {
+                    let c = 0.3 + 0.4 * p.apex.clamp(0.0, 1.0);
+                    let w = 0.4 + 0.12 * k(100);
+                    lobes.push((c, w, 1.0));
+                    let toward = if c > 0.5 { -1.0 } else { 1.0 };
+                    lobes.push((
+                        c + toward * w * (0.7 + 0.2 * k(101)),
+                        0.2 + 0.15 * k(102),
+                        0.45 + 0.35 * k(103),
+                    ));
+                    if k(104) < 0.6 {
+                        lobes.push((
+                            c - toward * w * (0.55 + 0.2 * k(105)),
+                            0.14 + 0.1 * k(106),
+                            0.35 + 0.35 * k(107),
+                        ));
+                    }
+                } else {
+                    let at = 0.38 + 0.24 * k(100);
+                    let (hl, hr) = if k(101) < 0.5 {
+                        (1.0, 0.7 + 0.25 * k(102))
+                    } else {
+                        (0.7 + 0.25 * k(102), 1.0)
+                    };
+                    lobes.push((0.5 * at, 0.5 * at + 0.04, hl));
+                    lobes.push((0.5 * (1.0 + at), 0.5 * (1.0 - at) + 0.04, hr));
+                    cleft = Some((at, 0.22 + 0.18 * k(103)));
+                }
+                // Facet knots on the lobes, jittered, with the cleft's floor.
+                let n = 7 + (k(108) * 4.0) as usize;
+                let mut knots = vec![(0.0, 0.0)];
+                for i in 0..n {
+                    let s = (i as f64 + 0.5 + 0.7 * (k(110 + i as i64) - 0.5)) / n as f64;
+                    let h = Self::lobed(&lobes, cleft, s) * (0.88 + 0.24 * k(130 + i as i64));
+                    knots.push((s, h));
+                }
+                if let Some((at, h)) = cleft {
+                    knots.retain(|&(s, _)| (s - at).abs() > 0.035);
+                    let i = knots.partition_point(|&(s, _)| s < at);
+                    knots.insert(i, (at, h));
+                }
+                knots.push((1.0, 0.0));
+                knots
+            }
+            RockKind::Block => {
+                let a = 0.1 + 0.1 * k(100);
+                let b = 0.12 + 0.1 * k(101);
+                let tilt = 0.2 * (k(102) - 0.5);
+                let step_at = 0.3 + 0.35 * k(103);
+                let step = 0.05 + 0.12 * k(104);
+                let lvl = |s: f64| 0.95 + tilt * (s - 0.5);
+                vec![
+                    (0.0, 0.0),
+                    (0.4 * a, 0.3 + 0.15 * k(105)),
+                    (a, 0.84 + 0.08 * k(106)),
+                    (a + 0.05, lvl(a + 0.05)),
+                    (step_at, lvl(step_at) + 0.03 * k(107)),
+                    (step_at + 0.025, lvl(step_at) - step),
+                    (1.0 - b - 0.06, lvl(1.0 - b) - step - 0.03 * k(108)),
+                    (1.0 - b, 0.8 - step),
+                    (1.0 - 0.4 * b, 0.3 + 0.15 * k(109)),
+                    (1.0, 0.0),
+                ]
+            }
+            RockKind::Slab => {
+                let hi = 0.72 + 0.14 * k(100);
+                vec![
+                    (0.0, 0.0),
+                    (0.05, 0.16 + 0.1 * k(101)),
+                    (0.3, 0.36 + 0.12 * k(102)),
+                    (0.3 + 0.5 * (hi - 0.3), 0.62 + 0.1 * k(103)),
+                    (hi - 0.07, 0.86 + 0.06 * k(104)),
+                    (hi, 1.0),
+                    (hi + 0.05, 0.9),
+                    (hi + 0.5 * (1.0 - hi), 0.5 + 0.2 * k(105)),
+                    (1.0, 0.0),
+                ]
+            }
+        };
+        RockShape {
+            kind,
+            flip,
+            knots,
+            lobes,
+            cleft,
+        }
+    }
+
+    /// Unflipped rounded lobes, cut by the cleft. The rock's ends slope
+    /// out to its foot rather than rising sheer.
+    fn lobed(lobes: &[(f64, f64, f64)], cleft: Option<(f64, f64)>, s: f64) -> f64 {
+        let h = lobes
+            .iter()
+            .map(|&(c, w, h)| {
+                let u = (s - c) / w;
+                if u.abs() < 1.0 {
+                    let v = 1.0 - u * u;
+                    h * 0.5 * (v.sqrt() + v)
+                } else {
+                    0.0
+                }
+            })
+            .fold(0.0, f64::max);
+        let foot = (s / 0.22).min((1.0 - s) / 0.22).clamp(0.0, 1.0);
+        let h = h * foot.sqrt();
+        match cleft {
+            Some((at, floor)) => h.min(floor + 9.0 * (s - at).abs()),
+            None => h,
+        }
+    }
+
+    fn orient(&self, s: f64) -> f64 {
+        if self.flip { 1.0 - s } else { s }
+    }
+
+    fn faceted(&self, s: f64) -> f64 {
+        piecewise(self.orient(s), &self.knots)
+    }
+
+    /// The rounded silhouette, tapered to 0 at both ends.
+    fn smooth(&self, s: f64) -> f64 {
+        let u = self.orient(s);
+        let taper = (u / 0.05).min((1.0 - u) / 0.05).clamp(0.0, 1.0);
+        let h = match self.kind {
+            RockKind::Boulder | RockKind::Split => Self::lobed(&self.lobes, self.cleft, u),
+            // Blocks and slabs round off their knots.
+            _ => {
+                [-0.06, -0.03, 0.0, 0.03, 0.06]
+                    .iter()
+                    .map(|o| piecewise((u + o).clamp(0.0, 1.0), &self.knots))
+                    .sum::<f64>()
+                    / 5.0
+            }
+        };
+        h * taper
+    }
+
+    /// The silhouette's corners `(s, turn, is the cleft)` (in drawn
+    /// orientation), most pronounced first, at least 0.07 apart and clear
+    /// of the ends. `aspect` is height over width.
+    fn corners(&self, aspect: f64) -> Vec<(f64, f64, bool)> {
+        let kn = &self.knots;
+        let mut all: Vec<(f64, f64, bool)> = (1..kn.len() - 1)
+            .map(|i| {
+                let (a, b, c) = (kn[i - 1], kn[i], kn[i + 1]);
+                let (ux, uy) = (b.0 - a.0, (b.1 - a.1) * aspect);
+                let (vx, vy) = (c.0 - b.0, (c.1 - b.1) * aspect);
+                // 1 − cos of the turn: 0 straight on, 2 doubling back.
+                let len = ((ux * ux + uy * uy) * (vx * vx + vy * vy)).sqrt();
+                let turn = if len > 0.0 {
+                    1.0 - (ux * vx + uy * vy) / len
+                } else {
+                    0.0
+                };
+                let is_cleft = self.cleft.is_some_and(|(at, _)| at == b.0);
+                let turn = if is_cleft { f64::INFINITY } else { turn };
+                (self.orient(b.0), turn, is_cleft)
+            })
+            .filter(|&(s, _, _)| (0.06..=0.94).contains(&s))
+            .collect();
+        all.sort_by(|a, b| b.1.total_cmp(&a.1));
+        let mut out: Vec<(f64, f64, bool)> = Vec::new();
+        for c in all {
+            if out.iter().all(|o| (o.0 - c.0).abs() >= 0.07) {
+                out.push(c);
+            }
+        }
+        out
+    }
+}
+
+/// Samples down a ridge, from the silhouette to the foot.
+const RIDGE_STEPS: usize = 6;
+
+/// A ridge line down a rock, in its [`RockBody`] coordinates: u (sample
+/// index across the rock) at each of `RIDGE_STEPS + 1` evenly spaced v,
+/// starting at a silhouette sample. A rock's ends are ridges too, of a
+/// single point.
+#[derive(Debug, Clone)]
+struct Ridge {
+    u: [f64; RIDGE_STEPS + 1],
+    end: bool,
+}
+
+impl Ridge {
+    fn end(u: f64) -> Ridge {
+        Ridge {
+            u: [u; RIDGE_STEPS + 1],
+            end: true,
+        }
+    }
+
+    fn at(&self, v: f64) -> f64 {
+        let f = (v.clamp(0.0, 1.0) * RIDGE_STEPS as f64).min(RIDGE_STEPS as f64 - 1e-9);
+        let i = f as usize;
+        lerp(self.u[i], self.u[i + 1], f - i as f64)
+    }
+}
+
+/// A rock's body in its own coordinates: u runs over the samples `xs`
+/// (fractional between them), v from its silhouette `top` (0) to its foot
+/// `bottom` (1). Between two samples the map is bilinear over a convex
+/// strip, so paths that keep their order in u, and are split wherever they
+/// cross a sample, give simple outlines.
+struct RockBody<'a> {
+    xs: &'a [f64],
+    top: &'a [f64],
+    bottom: &'a [f64],
+}
+
+impl RockBody<'_> {
+    fn map(&self, u: f64, v: f64) -> CanvasPoint {
+        let last = self.xs.len() - 1;
+        let u = u.clamp(0.0, last as f64);
+        let i = (u.floor() as usize).min(last - 1);
+        let f = u - i as f64;
+        let x = lerp(self.xs[i], self.xs[i + 1], f);
+        let t = lerp(self.top[i], self.top[i + 1], f);
+        let b = lerp(self.bottom[i], self.bottom[i + 1], f);
+        pt(x, lerp(t, b, v))
+    }
+
+    /// Appends the path from `p` to `q` (both `(u, v)`), without `p`, with a
+    /// point wherever it crosses a sample.
+    fn path(&self, out: &mut Vec<CanvasPoint>, p: (f64, f64), q: (f64, f64)) {
+        let ((u0, v0), (u1, v1)) = (p, q);
+        let cross = |k: f64, out: &mut Vec<CanvasPoint>| {
+            let t = (k - u0) / (u1 - u0);
+            out.push(self.map(k, lerp(v0, v1, t)));
+        };
+        if u1 > u0 {
+            let mut k = u0.floor() + 1.0;
+            while k < u1 {
+                cross(k, out);
+                k += 1.0;
+            }
+        } else if u1 < u0 {
+            let mut k = u0.ceil() - 1.0;
+            while k > u1 {
+                cross(k, out);
+                k -= 1.0;
+            }
+        }
+        out.push(self.map(u1, v1));
+    }
+
+    /// Closes a ring of `(u, v)` points into an outline.
+    fn ring(&self, ring: &[(f64, f64)]) -> Vec<CanvasPoint> {
+        let mut out = vec![self.map(ring[0].0, ring[0].1)];
+        for w in ring.windows(2) {
+            self.path(&mut out, w[0], w[1]);
+        }
+        self.path(&mut out, ring[ring.len() - 1], ring[0]);
+        out.pop();
+        out.dedup();
+        if out.len() > 1 && out.first() == out.last() {
+            out.pop();
+        }
+        out
+    }
+
+    /// The plane between ridges `a` and `b` (left to right): its stretch of
+    /// silhouette, down `b`, back along the foot, up `a`. With
+    /// `split = ((ta, tb), bow)` only the part below a crooked break from
+    /// `a` at `ta` to `b` at `tb`, bowed by `bow` (in v).
+    fn plane(&self, a: &Ridge, b: &Ridge, split: Option<((f64, f64), f64)>) -> Vec<CanvasPoint> {
+        let n = RIDGE_STEPS;
+        let v = |m: usize| m as f64 / n as f64;
+        let mut ring: Vec<(f64, f64)> = Vec::new();
+        let (ta, tb) = match split {
+            None => {
+                let (ia, ib) = (a.u[0] as usize, b.u[0] as usize);
+                ring.extend((ia..=ib).map(|i| (i as f64, 0.0)));
+                (0.0, 0.0)
+            }
+            Some(((ta, tb), bow)) => {
+                // Across the plane in its own coordinate w, 0 at `a`.
+                for q in 0..=8 {
+                    let w = q as f64 / 8.0;
+                    let vv = lerp(ta, tb, w) + bow * 4.0 * w * (1.0 - w);
+                    ring.push((lerp(a.at(vv), b.at(vv), w), vv));
+                }
+                (ta, tb)
+            }
+        };
+        if !b.end {
+            ring.extend((1..=n).filter(|&m| v(m) > tb).map(|m| (b.u[m], v(m))));
+        }
+        ring.push((b.u[n], 1.0));
+        ring.push((a.u[n], 1.0));
+        if !a.end {
+            ring.extend((1..n).rev().filter(|&m| v(m) > ta).map(|m| (a.u[m], v(m))));
+        }
+        self.ring(&ring)
+    }
+
+    /// A tapering crevice down ridge `j`, at most `wide` samples across and
+    /// reaching `reach` of the way to the foot, clear of its neighbours.
+    fn crevice(&self, ridges: &[Ridge], j: usize, wide: f64, reach: f64) -> Vec<CanvasPoint> {
+        let steps = 8;
+        let pts: Vec<(f64, f64, f64)> = (0..=steps)
+            .map(|m| {
+                let t = m as f64 / steps as f64;
+                let vv = 0.02 + reach * t;
+                let u = ridges[j].at(vv);
+                let room = (u - ridges[j - 1].at(vv)).min(ridges[j + 1].at(vv) - u);
+                let w = (wide * (1.0 - t).sqrt() * (t * 4.0).min(1.0)).min(0.4 * room);
+                (u, vv, w)
+            })
+            .collect();
+        let mut ring: Vec<(f64, f64)> = pts.iter().map(|&(u, vv, w)| (u - w, vv)).collect();
+        ring.extend(
+            pts.iter()
+                .rev()
+                .skip(1)
+                .take(steps - 1)
+                .map(|&(u, vv, w)| (u + w, vv)),
+        );
+        self.ring(&ring)
+    }
+}
+
+fn pt(x: f64, y: f64) -> CanvasPoint {
+    CanvasPoint {
+        x: x as f32,
+        y: y as f32,
+    }
 }
 
 /// A smooth periodic wave in `[-1, 1]` with period 1: two parabolic
@@ -2160,8 +2757,8 @@ mod tests {
     fn checksums_are_frozen() {
         // Exact arithmetic only, so these hold on every OS; portable CI
         // checks them on Linux, Windows and macOS. They freeze
-        // GENERATOR_VERSION 1, approved at the task 08 visual gate: any
-        // change needs a version bump.
+        // GENERATOR_VERSION 2 (task 25; version 1 was approved at the task 08
+        // visual gate): any change needs a version bump.
         let c = corpus();
         let get = |id: &str| &c.iter().find(|(i, _)| i == id).unwrap().1;
         let got = [
@@ -2189,10 +2786,11 @@ mod tests {
         assert_eq!(got, FROZEN, "{got:x?}");
     }
 
+    // GENERATOR_VERSION 2 (task 25: wind, complex rocks).
     const FROZEN: [u64; 3] = [
-        0xebcb_4eee_d400_1f03,
-        0xb4ed_d2da_c120_3e96,
-        0x18b6_7727_ba4c_9b0d,
+        0x78b0_cef2_6f9e_02bc,
+        0xb8ae_3ed2_ebc8_c7a1,
+        0x2f8a_d4f0_12b6_1c8a,
     ];
 
     #[test]

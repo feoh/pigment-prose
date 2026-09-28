@@ -790,7 +790,10 @@ mod tests {
         assert_eq!(notices.len(), 2);
         assert_eq!(
             notices[0].to_string(),
-            "made with generator v7; this version (v1) may compose differently"
+            format!(
+                "made with generator v7; this version (v{}) may compose differently",
+                version::GENERATOR_VERSION
+            )
         );
         assert_eq!(notices[1].component, Component::Renderer);
     }

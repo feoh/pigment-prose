@@ -50,7 +50,7 @@ A private painting generator, not an AI image service. It runs entirely on the u
 
 ## Evidence on Hand
 
-- Approved paintings and their recipes: [docs/visual-review/baseline-08](docs/visual-review/baseline-08/README.md) (task 08 visual gate, 2026-09-27).
+- Approved paintings and their recipes: [docs/visual-review/baseline-25](docs/visual-review/baseline-25/README.md) (final rendering detail, task 25, 2026-09-28); the task 08 visual gate's are in [baseline-08](docs/visual-review/baseline-08/README.md) (2026-09-27).
 - Studio shell screenshot and measurements: [docs/evidence/studio-11](docs/evidence/studio-11/README.md).
 - Synthetic test passages: [fixtures/passages.json](fixtures/passages.json). There is no private or real user prose in the repository, and none may be added.
 - There are no users, testimonials, reviews or public reception to cite.
