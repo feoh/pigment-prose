@@ -1276,3 +1276,84 @@ fn the_studio_exports_a_real_8k_png_of_the_snapshot() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Task 14: on a GPU that cannot paint a 3840 px settled preview within
+/// the budget, the studio lowers its settled cap and later settled
+/// previews fit. Run on a slower adapter by name (this machine: the Intel
+/// iGPU, which paints but does not drive the display, so this runs
+/// headless): `PIGMENT_SLOW_ADAPTER=intel cargo test --release -p
+/// pigment-studio --lib slow_gpu -- --ignored --nocapture`.
+#[test]
+#[ignore = "needs a slower hardware GPU named by PIGMENT_SLOW_ADAPTER"]
+fn a_slow_gpu_lowers_the_settled_cap_and_then_fits_the_budget() {
+    use pigment_core::capability::AdapterPolicy;
+    use pigment_gpu::{GpuContext, PaintRenderer};
+
+    use crate::preview::{SETTLED_BUDGET, SETTLED_LONG_EDGE};
+
+    let name = std::env::var("PIGMENT_SLOW_ADAPTER").expect("set PIGMENT_SLOW_ADAPTER");
+    let policy = AdapterPolicy {
+        name_filter: Some(name),
+        ..AdapterPolicy::default()
+    };
+    let ctx = Arc::new(GpuContext::new(&policy).expect("the named adapter"));
+    assert!(!ctx.capabilities.adapter.software);
+    eprintln!("slow-GPU check on {}", ctx.capabilities.label());
+    let caps = ctx.capabilities.clone();
+    let worker = PreviewWorker::spawn(
+        PaintRenderer::new(ctx.clone()).unwrap(),
+        WorkerOptions::default(),
+        || {},
+    );
+    let exporter = Exporter::spawn(GateRenderer::open(), || {});
+    // A big window at 2×: a preview area of about 3500×2000 px.
+    let mut h = Harness::builder()
+        .with_size([2200.0, 1200.0])
+        .with_pixels_per_point(2.0)
+        .build_eframe(move |cc| {
+            crate::theme::install(&cc.egui_ctx);
+            StudioApp::new(
+                worker,
+                caps,
+                StudioOptions::default(),
+                Arc::new(Mutex::new(Report::default())),
+                Box::new(Shared::default()),
+                exporter,
+            )
+        });
+    settle(&mut h);
+    let first = h.state().view.shown.unwrap();
+    eprintln!(
+        "first settled preview {}×{}: {:.0} ms; cap now {} px",
+        first.width,
+        first.height,
+        first.render.as_secs_f64() * 1e3,
+        h.state().settled_cap
+    );
+    if first.render <= SETTLED_BUDGET {
+        panic!(
+            "this adapter painted {}×{} within the budget; it is not a slow GPU for this check",
+            first.width, first.height
+        );
+    }
+    assert!(
+        h.state().settled_cap < SETTLED_LONG_EDGE,
+        "the cap was lowered"
+    );
+    // Later settled previews use the lower cap and fit the budget.
+    let mut worst = Duration::ZERO;
+    for _ in 0..5 {
+        h.state_mut().another_composition(Instant::now());
+        settle(&mut h);
+        let s = h.state().view.shown.unwrap();
+        assert!(s.width.max(s.height) <= h.state().settled_cap);
+        worst = worst.max(s.render);
+    }
+    eprintln!(
+        "next 5 settled previews at ≤ {} px: worst {:.0} ms (budget {} ms)",
+        h.state().settled_cap,
+        worst.as_secs_f64() * 1e3,
+        SETTLED_BUDGET.as_millis()
+    );
+    assert!(worst <= SETTLED_BUDGET, "{worst:?}");
+}

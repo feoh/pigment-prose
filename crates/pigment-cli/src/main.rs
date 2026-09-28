@@ -74,6 +74,15 @@ pigment-prose <command> [options]
       limits allow, every bounding box over the whole frame) instead.
       Defaults: sizes 960,1920,3840, 12 samples, 16:9, 7 runs (first 2 are
       warm-up).
+  bench [--runs N] [--sample N] [--adapter NAME] [--allow-software] [--strict]
+      Qualification benchmark (task 14) against the provisional targets in
+      docs/architecture.md: cold start (device, pipelines, first preview),
+      warm interaction (960 px) and settled (1920, 3840 px) previews, a
+      prose edit to a settled preview (new scene + render), 4K and 8K
+      exports including PNG encoding, and export cancel latency. Prints
+      the environment and a table of measured p95 vs target. --strict
+      exits non-zero if any target is missed. A software adapter is
+      labelled and never counts as a pass. Defaults: 9 runs, 5 seeds.
   export --out FILE.png (--recipe R.recipe.json | --sample N | --passage ID)
             [--passages FILE] [--variation V] [--aspect W:H]
             [--size 4k|8k|WxH] [--tile T | --gpu-budget MIB] [--order reverse]
@@ -98,6 +107,7 @@ fn main() -> ExitCode {
         Some("gpu-smoke") => parse(&args[1..]).and_then(|o| gpu_smoke(&o)),
         Some("contact-sheet") => parse(&args[1..]).and_then(|o| contact_sheet(&o)),
         Some("paint-bench") => parse(&args[1..]).and_then(|o| paint_bench(&o)),
+        Some("bench") => parse(&args[1..]).and_then(|o| bench(&o)),
         Some("export") => parse(&args[1..]).and_then(|o| export(&o)),
         Some("--version") => {
             println!("pigment-prose {}", version::APP_VERSION);
@@ -116,7 +126,7 @@ fn main() -> ExitCode {
 
 struct Opts(HashMap<String, String>);
 
-const BOOL_FLAGS: &[&str] = &["gl", "allow-software", "stress"];
+const BOOL_FLAGS: &[&str] = &["gl", "allow-software", "stress", "strict"];
 
 fn parse(args: &[String]) -> Result<Opts, String> {
     let mut m = HashMap::new();
@@ -840,6 +850,328 @@ fn paint_bench(o: &Opts) -> Result<(), String> {
             ms(medians[medians.len() - 1].0),
             ms(worst_total)
         );
+    }
+    Ok(())
+}
+
+/// The `q`-quantile of `v` (nearest rank).
+fn quantile(v: &[Duration], q: f64) -> Duration {
+    let mut v = v.to_vec();
+    v.sort();
+    v.get(((v.len() as f64 - 1.0) * q).round() as usize)
+        .copied()
+        .unwrap_or_default()
+}
+
+/// The first line of a text file, trimmed (for environment reports).
+fn first_line(path: &str, prefix: &str) -> Option<String> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let line = text.lines().find(|l| l.starts_with(prefix))?;
+    Some(line.split(':').nth(1).unwrap_or(line).trim().to_string())
+}
+
+/// One benchmark row: what, measured, target, and whether it counts.
+struct Row {
+    what: String,
+    measured: Duration,
+    detail: String,
+    target: Option<Duration>,
+}
+
+fn bench(o: &Opts) -> Result<(), String> {
+    let runs: usize = o.num("runs", 9)?;
+    let samples: u32 = o.num("sample", 5)?;
+    if runs < 3 || samples == 0 {
+        return Err("--runs must be at least 3 and --sample at least 1".into());
+    }
+    let scratch = std::env::temp_dir().join(format!("pigment-bench-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+    let result = bench_in(o, runs, samples, &scratch);
+    let _ = std::fs::remove_dir_all(&scratch);
+    result
+}
+
+fn bench_in(o: &Opts, runs: usize, samples: u32, scratch: &std::path::Path) -> Result<(), String> {
+    let aspect = AspectRatio::of(16, 9);
+    let t = Instant::now();
+    let ctx = Arc::new(GpuContext::new(&o.policy()).map_err(|e| e.to_string())?);
+    let device_time = t.elapsed();
+    let t = Instant::now();
+    let renderer = PaintRenderer::new(ctx.clone()).map_err(|e| e.to_string())?;
+    let pipeline_time = t.elapsed();
+    let caps = &ctx.capabilities;
+    let sw = caps.adapter.software;
+    println!(
+        "pigment-prose {} bench: renderer v{}, generator v{}, 16:9, default settings, {samples} seeds, {runs} warm runs each",
+        version::APP_VERSION,
+        version::RENDERER_VERSION,
+        version::GENERATOR_VERSION
+    );
+    println!("device: {}", caps.label());
+    println!(
+        "adapter: {:?} {:?}, driver {} ({}), wgpu {}",
+        caps.adapter.kind,
+        caps.adapter.backend,
+        caps.adapter.driver,
+        caps.adapter.driver_info,
+        caps.wgpu_version
+    );
+    println!(
+        "host: {} {}; cpu: {}; kernel: {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        first_line("/proc/cpuinfo", "model name").unwrap_or_else(|| "unknown".into()),
+        std::fs::read_to_string("/proc/sys/kernel/osrelease")
+            .map(|s| s.trim().to_string())
+            .unwrap_or_else(|_| "unknown".into())
+    );
+    if sw {
+        println!("WARNING: software adapter; these are NOT GPU measurements and nothing passes");
+    }
+    let form = FormSettings::default();
+    let appearance = Appearance::default();
+    let ids = RequestIds::default();
+    let request = |seeds: SeedBundle, scene: Arc<Scene>, w: u32, h: u32, policy| RenderRequest {
+        id: ids.next(),
+        purpose: RenderPurpose::Preview,
+        scene,
+        seeds,
+        appearance,
+        target: RenderTarget {
+            width: w,
+            height: h,
+            policy,
+            order: TileOrder::RowMajor,
+        },
+    };
+    let seeds_of = |label: &str| -> Result<SeedBundle, String> {
+        let digest = TextDigest::from_source(label).map_err(|e| e.to_string())?;
+        Ok(SeedBundle::derive(digest, Variation(0)))
+    };
+    let render = |req: &RenderRequest| -> Result<RenderReport, String> {
+        let mut sink = MemorySink::default();
+        renderer
+            .render(req, &CancelToken::new(), &mut NoProgress, &mut sink)
+            .map_err(|e| e.to_string())
+    };
+    let mut rows = Vec::new();
+
+    // Cold: the first preview after the renderer exists.
+    let t = Instant::now();
+    let seeds = seeds_of("bench cold start")?;
+    let scene = Arc::new(
+        LakeshoreGenerator
+            .generate(&seeds, &form, aspect)
+            .map_err(|e| e.to_string())?,
+    );
+    render(&request(seeds, scene, 1920, 1080, TilePolicy::Single))?;
+    let first = t.elapsed();
+    rows.push(Row {
+        what: "cold start: device + pipelines + first 1920×1080 preview".into(),
+        measured: device_time + pipeline_time + first,
+        detail: format!(
+            "device {}, pipelines {}, first preview {}",
+            ms(device_time),
+            ms(pipeline_time),
+            ms(first)
+        ),
+        target: None,
+    });
+
+    // Warm previews.
+    let mut scenes = Vec::new();
+    for i in 0..samples {
+        let seeds = seeds_of(&format!("sample passage {i}"))?;
+        let scene = Arc::new(
+            LakeshoreGenerator
+                .generate(&seeds, &form, aspect)
+                .map_err(|e| e.to_string())?,
+        );
+        scenes.push((seeds, scene));
+    }
+    for (label, w, h, target) in [
+        (
+            "interaction preview 960×540 (render + readback)",
+            960,
+            540,
+            33,
+        ),
+        (
+            "settled preview 1920×1080 (render + readback)",
+            1920,
+            1080,
+            150,
+        ),
+        (
+            "settled preview 3840×2160 (render + readback)",
+            3840,
+            2160,
+            150,
+        ),
+    ] {
+        let mut times = Vec::new();
+        for (seeds, scene) in &scenes {
+            let req = request(*seeds, scene.clone(), w, h, TilePolicy::Single);
+            for r in 0..runs + 2 {
+                let rep = render(&req)?;
+                if r >= 2 {
+                    times.push(rep.timings.render_readback);
+                }
+            }
+        }
+        rows.push(Row {
+            what: label.into(),
+            measured: quantile(&times, 0.95),
+            detail: format!("median {}, n={}", ms(quantile(&times, 0.5)), times.len()),
+            target: Some(Duration::from_millis(target)),
+        });
+    }
+
+    // A prose edit: new digest, new scene, settled preview.
+    let mut edits = Vec::new();
+    for r in 0..runs + 2 {
+        let t = Instant::now();
+        let seeds = seeds_of(&format!("an edited passage, version {r}"))?;
+        let scene = Arc::new(
+            LakeshoreGenerator
+                .generate(&seeds, &form, aspect)
+                .map_err(|e| e.to_string())?,
+        );
+        render(&request(seeds, scene, 1920, 1080, TilePolicy::Single))?;
+        if r >= 2 {
+            edits.push(t.elapsed());
+        }
+    }
+    rows.push(Row {
+        what: "prose edit → settled 1920×1080 (after the 300 ms debounce)".into(),
+        measured: quantile(&edits, 0.95),
+        detail: format!("median {}, n={}", ms(quantile(&edits, 0.5)), edits.len()),
+        target: Some(Duration::from_millis(250)),
+    });
+
+    // Exports, including PNG encoding and the atomic rename.
+    let (seeds, scene) = scenes[0].clone();
+    let export_req = |w: u32, h: u32| RenderRequest {
+        purpose: RenderPurpose::Export,
+        ..request(seeds, scene.clone(), w, h, TilePolicy::default_export())
+    };
+    for (label, w, h, target) in [
+        ("4K export 3840×2160 incl. PNG", 3840, 2160, 5_000),
+        ("8K export 7680×4320 incl. PNG", 7680, 4320, 20_000),
+    ] {
+        let mut times = Vec::new();
+        let mut bytes = 0;
+        for _ in 0..3 {
+            let dest = scratch.join("bench.png");
+            let t = Instant::now();
+            let rep = export_png(
+                &renderer,
+                &export_req(w, h),
+                &dest,
+                PngCompression::Fast,
+                &CancelToken::new(),
+                &mut NoProgress,
+            )
+            .map_err(|e| e.to_string())?;
+            times.push(t.elapsed());
+            bytes = rep.bytes;
+        }
+        rows.push(Row {
+            what: label.into(),
+            measured: quantile(&times, 1.0),
+            detail: format!(
+                "median {}, {} MiB file, n=3",
+                ms(quantile(&times, 0.5)),
+                bytes >> 20
+            ),
+            target: Some(Duration::from_millis(target)),
+        });
+    }
+
+    // Cancel latency: another thread cancels a 16K export at a moment that
+    // does not line up with tiles (like a person pressing Cancel), and the
+    // time until the export has stopped and cleaned up is measured.
+    let mut latencies = Vec::new();
+    for delay in [50u64, 150, 300] {
+        let cancel = CancelToken::new();
+        let dest = scratch.join("cancelled.png");
+        let pressed = Arc::new(std::sync::Mutex::new(None::<Instant>));
+        let canceller = {
+            let (cancel, pressed) = (cancel.clone(), pressed.clone());
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(delay));
+                *pressed.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+                cancel.cancel();
+            })
+        };
+        let rep = export_png(
+            &renderer,
+            &export_req(16384, 9216),
+            &dest,
+            PngCompression::Fast,
+            &cancel,
+            &mut NoProgress,
+        )
+        .map_err(|e| e.to_string())?;
+        let stopped = Instant::now();
+        let _ = canceller.join();
+        let pressed = pressed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .ok_or("the export finished before it could be cancelled")?;
+        if !matches!(rep.render.outcome, RenderOutcome::Cancelled { .. }) || dest.exists() {
+            return Err(format!(
+                "cancel at {delay} ms did not stop the export and remove the partial file"
+            ));
+        }
+        latencies.push(stopped.saturating_duration_since(pressed));
+    }
+    rows.push(Row {
+        what: "export cancel → stopped and cleaned up, 16384×9216, cancelled at 50/150/300 ms"
+            .into(),
+        measured: quantile(&latencies, 1.0),
+        detail: format!(
+            "{}; partial file removed each time",
+            latencies
+                .iter()
+                .map(|d| ms(*d))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        target: Some(Duration::from_millis(250)),
+    });
+
+    println!();
+    println!("| Scenario | Measured (p95, or max for n=3) | Target | Verdict | Detail |");
+    println!("| --- | --- | --- | --- | --- |");
+    let mut missed = 0;
+    for r in &rows {
+        let verdict = match (sw, r.target) {
+            (true, _) => "not GPU evidence".to_string(),
+            (_, None) => "measured".to_string(),
+            (_, Some(t)) if r.measured <= t => "meets".to_string(),
+            (_, Some(_)) => {
+                missed += 1;
+                "MISSED".to_string()
+            }
+        };
+        println!(
+            "| {} | {} | {} | {verdict} | {} |",
+            r.what,
+            ms(r.measured),
+            r.target.map_or("—".to_string(), |t| format!("≤ {}", ms(t))),
+            r.detail
+        );
+    }
+    println!();
+    println!(
+        "Not measured here: UI frame gaps and request→shown latency (see `pigment-studio --script`)."
+    );
+    if sw && o.0.contains_key("strict") {
+        return Err("software adapter: not a GPU qualification".into());
+    }
+    if missed > 0 && o.0.contains_key("strict") {
+        return Err(format!("{missed} target(s) missed"));
     }
     Ok(())
 }

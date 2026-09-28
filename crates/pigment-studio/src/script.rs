@@ -28,7 +28,7 @@ use pigment_core::request::RequestId;
 use pigment_core::settings::{ControlSpec, EDGE_LOOSENESS, FACETING};
 
 use crate::app::StudioApp;
-use crate::preview::{SETTLED_LONG_EDGE, preview_size};
+use crate::preview::preview_size;
 use crate::worker::{PreviewOutcome, PreviewResult};
 
 const TEXT: &str = " The wind moves over cold water and the pines lean toward the ridge.";
@@ -315,7 +315,7 @@ fn check_settled(app: &StudioApp) -> Settled {
     let aspect = app.doc.recipe().frame.aspect();
     let full = app
         .area_px
-        .and_then(|a| preview_size(aspect, a, SETTLED_LONG_EDGE));
+        .and_then(|a| preview_size(aspect, a, app.settled_cap));
     Settled {
         current: app.preview_is_current(),
         full_size: app.view.shown.map(|s| (s.width, s.height)) == full && full.is_some(),

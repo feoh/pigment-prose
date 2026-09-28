@@ -26,7 +26,10 @@ use crate::export::{self, Busy, ExportJob, ExportOutcome, Exporter, SizeChoice, 
 use crate::files::{
     self, Choice, DialogAnswer, DialogRequest, Dialogs, Effect, FileFlow, Intent, Parent, Step,
 };
-use crate::preview::{PreviewView, Quality, Scheduler, display_size, preview_size};
+use crate::preview::{
+    PreviewView, Quality, SETTLED_LONG_EDGE, Scheduler, adapt_settled_cap, display_size,
+    preview_size,
+};
 use crate::script::{Report, Script};
 use crate::theme;
 use crate::worker::{PreviewJob, PreviewOutcome, PreviewResult, PreviewWorker, WorkerOptions};
@@ -168,6 +171,9 @@ pub struct StudioApp {
     /// Keyboard focus last frame, to scroll a newly focused control into
     /// view.
     last_focus: Option<egui::Id>,
+    /// Long-edge cap of settled previews: 3840 px, lowered for the rest of
+    /// the session if this GPU cannot paint that within the budget.
+    pub(crate) settled_cap: u32,
     pub(crate) exporter: Exporter,
     pub(crate) export_form: SizeForm,
     pub(crate) show_export: bool,
@@ -237,6 +243,7 @@ impl StudioApp {
             allow_close: false,
             open_advanced: None,
             last_focus: None,
+            settled_cap: SETTLED_LONG_EDGE,
             exporter,
             export_form: SizeForm::default(),
             show_export: false,
@@ -363,7 +370,8 @@ impl StudioApp {
         self.apply_draft();
         let Some(area) = self.area_px else { return };
         let aspect = self.doc.recipe().frame.aspect();
-        let Some((width, height)) = preview_size(aspect, area, quality.long_edge()) else {
+        let Some((width, height)) = preview_size(aspect, area, quality.long_edge(self.settled_cap))
+        else {
             return;
         };
         let job = self.current_job(width, height, now);
@@ -434,6 +442,21 @@ impl StudioApp {
             rep.interaction_shown += 1;
         }
         drop(rep);
+        // A settled preview over budget lowers the cap for the next ones.
+        if submission
+            .as_ref()
+            .is_some_and(|s| s.quality == Quality::Settled)
+        {
+            let rendered = shown.width.max(shown.height);
+            let cap = adapt_settled_cap(self.settled_cap, rendered, shown.render);
+            if cap < self.settled_cap {
+                eprintln!(
+                    "settled previews capped at {cap} px: {rendered} px took {:.0} ms on this GPU",
+                    shown.render.as_secs_f64() * 1e3
+                );
+                self.settled_cap = cap;
+            }
+        }
         self.shown = submission.map(|s| (s.job, s.quality));
         if self.opts.log_timings {
             println!(
@@ -1603,6 +1626,17 @@ impl StudioApp {
                             ),
                         );
                         row("Stale results dropped", self.view.stale_dropped.to_string());
+                        row(
+                            "Settled preview cap",
+                            if self.settled_cap < SETTLED_LONG_EDGE {
+                                format!(
+                                    "{} px (lowered: this GPU is slower at {SETTLED_LONG_EDGE} px)",
+                                    self.settled_cap
+                                )
+                            } else {
+                                format!("{} px", self.settled_cap)
+                            },
+                        );
                         if !self.opts.worker.delay.is_zero() {
                             row(
                                 "Simulated render delay",

@@ -31,7 +31,28 @@ pub const SETTLE_AFTER: Duration = Duration::from_millis(150);
 /// Long-edge cap of the settled preview. Raised from 1920 px in task 12 so
 /// the painting fills the preview area on high-DPI displays: 3840×2160
 /// renders in 9–15 ms on the RTX 4070 Ti (`paint-bench`, 2026-09-28).
+/// Slower GPUs lower it at run time ([`adapt_settled_cap`]).
 pub const SETTLED_LONG_EDGE: u32 = 3840;
+/// Settled previews should render within this (docs/architecture.md,
+/// "Responsiveness targets").
+pub const SETTLED_BUDGET: Duration = Duration::from_millis(150);
+/// The settled cap is never lowered below this: 1920×1080 renders in
+/// 83 ms p95 on the Intel UHD iGPU measured in task 14.
+pub const SETTLED_FLOOR: u32 = 1920;
+
+/// The settled cap after a settled preview with a long edge of `rendered`
+/// px took `render`. Unchanged while renders stay inside the budget. Past
+/// it, the cap drops to the size predicted to take two thirds of the
+/// budget (render time grows with the pixel count, so with the square of
+/// the edge), never below [`SETTLED_FLOOR`], and it never rises again.
+pub fn adapt_settled_cap(cap: u32, rendered: u32, render: Duration) -> u32 {
+    if render <= SETTLED_BUDGET || rendered <= SETTLED_FLOOR {
+        return cap;
+    }
+    let scale = (SETTLED_BUDGET.as_secs_f64() * 2.0 / 3.0 / render.as_secs_f64()).sqrt();
+    let target = (rendered as f64 * scale) as u32;
+    target.clamp(SETTLED_FLOOR, cap)
+}
 /// Long-edge cap while a slider is moving.
 pub const INTERACTION_LONG_EDGE: u32 = 960;
 /// Smallest preview edge rendered; below this the area is too small to use.
@@ -74,10 +95,11 @@ pub enum Quality {
 }
 
 impl Quality {
-    pub fn long_edge(self) -> u32 {
+    /// Long-edge cap for this quality, given the current settled cap.
+    pub fn long_edge(self, settled_cap: u32) -> u32 {
         match self {
-            Quality::Interaction => INTERACTION_LONG_EDGE,
-            Quality::Settled => SETTLED_LONG_EDGE,
+            Quality::Interaction => INTERACTION_LONG_EDGE.min(settled_cap),
+            Quality::Settled => settled_cap,
         }
     }
 }
@@ -332,6 +354,22 @@ mod tests {
         // Prose typed after a drag has settled renders settled.
         s.prose_edited(ms(2000));
         assert_eq!(s.take_due(ms(2300)), Some(Quality::Settled));
+    }
+
+    #[test]
+    fn a_slow_gpu_lowers_the_settled_cap_to_fit_the_budget() {
+        let ms = Duration::from_millis;
+        // Fast enough: unchanged.
+        assert_eq!(adapt_settled_cap(3840, 3840, ms(14)), 3840);
+        assert_eq!(adapt_settled_cap(3840, 3840, ms(150)), 3840);
+        // The Intel iGPU's 3840×2160 at ~317 ms: about 2150 px.
+        let c = adapt_settled_cap(3840, 3840, ms(317));
+        assert!((2000..2300).contains(&c), "{c}");
+        // Never below the floor, never raised, never from a floor-sized render.
+        assert_eq!(adapt_settled_cap(3840, 3840, ms(5000)), SETTLED_FLOOR);
+        assert_eq!(adapt_settled_cap(2400, 2400, ms(20)), 2400);
+        assert_eq!(adapt_settled_cap(3840, 1920, ms(400)), 3840);
+        assert!(adapt_settled_cap(c, c, ms(151)) <= c);
     }
 
     #[test]
