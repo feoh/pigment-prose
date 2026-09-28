@@ -1,4 +1,4 @@
-//! `pigment-studio`: the Pigment Prose desktop app (task 11).
+//! `pigment-studio`: the Pigment Prose desktop app (tasks 11–12).
 //!
 //! The GPU is opened once through `pigment_gpu::GpuContext` (the capability
 //! service: portable limits, software adapters refused unless allowed) and
@@ -19,6 +19,7 @@ use pigment_core::capability::AdapterPolicy;
 use pigment_gpu::{GpuContext, PaintRenderer, adapter};
 
 use pigment_studio::app::{StudioApp, StudioOptions};
+use pigment_studio::files::NativeDialogs;
 use pigment_studio::script::{self, Report};
 use pigment_studio::worker::PreviewWorker;
 
@@ -80,8 +81,8 @@ fn native_options(wgpu_options: WgpuConfiguration) -> eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Pigment Prose")
             .with_app_id("pigment-prose")
-            .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([640.0, 420.0]),
+            .with_inner_size([1440.0, 900.0])
+            .with_min_inner_size([760.0, 480.0]),
         renderer: eframe::Renderer::Wgpu,
         wgpu_options,
         persist_window: false,
@@ -159,10 +160,19 @@ fn main() -> ExitCode {
             ..Default::default()
         }),
         Box::new(move |cc| {
+            pigment_studio::theme::install(&cc.egui_ctx);
             let egui_ctx = cc.egui_ctx.clone();
             let worker =
                 PreviewWorker::spawn(renderer, opts.worker, move || egui_ctx.request_repaint());
-            Ok(Box::new(StudioApp::new(worker, caps, opts, rep)))
+            let egui_ctx = cc.egui_ctx.clone();
+            let dialogs = NativeDialogs::new(move || egui_ctx.request_repaint());
+            Ok(Box::new(StudioApp::new(
+                worker,
+                caps,
+                opts,
+                rep,
+                Box::new(dialogs),
+            )))
         }),
     );
     if let Err(e) = result {
@@ -223,7 +233,10 @@ fn init_failure(args: &Args, message: String) -> ExitCode {
     let shown = eframe::run_native(
         "Pigment Prose",
         native_options(WgpuConfiguration::default()),
-        Box::new(|_| Ok(Box::new(app))),
+        Box::new(|cc| {
+            pigment_studio::theme::install(&cc.egui_ctx);
+            Ok(Box::new(app))
+        }),
     );
     if let Err(e) = shown {
         eprintln!("pigment-studio: could not open a window to show this error either: {e}");

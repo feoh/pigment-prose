@@ -49,7 +49,43 @@ pub struct ControlSpec {
     pub implemented_by: &'static str,
 }
 
+/// Everything a slider edits: the structural settings and the appearance.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ControlValues {
+    pub form: FormSettings,
+    pub appearance: Appearance,
+}
+
 impl ControlSpec {
+    /// The field this control edits.
+    fn slot<'a>(&self, v: &'a mut ControlValues) -> &'a mut f64 {
+        let (f, a) = (&mut v.form, &mut v.appearance);
+        match self.key {
+            "form.faceting" => &mut f.faceting,
+            "form.relief" => &mut f.relief,
+            "form.woodland_density" => &mut f.woodland_density,
+            "painting.edge_looseness" => &mut a.painting.edge_looseness,
+            "painting.wash_gouache" => &mut a.painting.wash_gouache,
+            "painting.mark_scale" => &mut a.painting.mark_scale,
+            "painting.granulation" => &mut a.painting.granulation,
+            "painting.paper_grain" => &mut a.painting.paper_grain,
+            "palette.intensity" => &mut a.palette.intensity,
+            "atmosphere.haze" => &mut a.atmosphere.haze,
+            other => unreachable!("control {other} has no field"),
+        }
+    }
+
+    pub fn get(&self, v: &ControlValues) -> f64 {
+        let mut copy = *v;
+        *self.slot(&mut copy)
+    }
+
+    /// Sets this control's field and nothing else. Not validated: the UI
+    /// clamps by construction and the document validates.
+    pub fn set(&self, v: &mut ControlValues, value: f64) {
+        *self.slot(v) = value;
+    }
+
     pub fn check(&self, value: f64) -> Result<(), ValidationError> {
         if !value.is_finite() {
             return Err(ValidationError {
@@ -292,6 +328,25 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(f.validate().unwrap_err().field, "form.relief");
+    }
+
+    #[test]
+    fn each_control_edits_only_its_own_field_in_its_channel() {
+        let base = ControlValues::default();
+        for c in CONTROLS {
+            assert_eq!(c.get(&base), c.default, "{}", c.key);
+            let mut v = base;
+            let other = if c.default == c.max { c.min } else { c.max };
+            c.set(&mut v, other);
+            assert_eq!(c.get(&v), other, "{}", c.key);
+            for d in CONTROLS.iter().filter(|d| d.key != c.key) {
+                assert_eq!(d.get(&v), d.get(&base), "{} moved {}", c.key, d.key);
+            }
+            match c.channel {
+                Channel::Structure => assert_eq!(v.appearance, base.appearance, "{}", c.key),
+                _ => assert_eq!(v.form, base.form, "{}", c.key),
+            }
+        }
     }
 
     #[test]

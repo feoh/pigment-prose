@@ -30,14 +30,15 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | Hardware test suite only | `cargo test --release --locked -p pigment-gpu --test gpu_hardware -- --ignored --test-threads=1` |
 | Desktop studio | `cargo run --release -p pigment-studio` (`-- --help` for options) |
 | Studio acceptance run (real window) | `cargo run --release -p pigment-studio -- --script --preview-delay-ms 1500 --screenshot WINDOW.png`; exits non-zero if a check fails ([docs/studio.md](docs/studio.md)) |
+| Studio review screenshots (offscreen, real painter) | `PIGMENT_SCREENS=DIR cargo test --release --locked -p pigment-studio --lib review_screens -- --ignored --nocapture` (default `target/studio-screens`) |
 | Hardware export suite only | `cargo test --release --locked -p pigment-io --test gpu_export -- --ignored --test-threads=1 --nocapture` |
 
 `scripts/gpu-tests.sh` builds the CLI, prints `gpu-info`, runs `gpu-smoke` and then the ignored hardware tests. It exits non-zero if any step fails. **A machine without a hardware GPU fails these checks; it never skips them into a pass.** A software rasterizer is refused by default. With `--allow-software` it runs, labelled SOFTWARE, and `gpu-smoke` still exits non-zero.
 
 ## Test layers
 
-1. **Portable unit tests** (`crates/*/src/**`, `#[cfg(test)]`): contracts, validation, tile planning, the job model, invalidation, and frozen seed and scene checksums. They run in CI on Linux, Windows and macOS (`.github/workflows/ci.yml`). Any exact-value fixture here must hold on all three platforms (tiers 0–1 in the architecture doc).
-2. **Hardware GPU tests** (`crates/pigment-gpu/tests/gpu_hardware.rs`, `crates/pigment-io/tests/gpu_export.rs` and `crates/pigment-studio/tests/gpu_preview.rs`, `#[ignore = "needs a hardware GPU…"]`): tiled vs single-tile byte identity, repeatability, cancellation, limits. Run them manually on real hardware and save the log under `docs/evidence/` with the date and OS in the file name.
+1. **Portable unit tests** (`crates/*/src/**`, `#[cfg(test)]`): contracts, validation, tile planning, the job model, invalidation, frozen seed and scene checksums, and the studio's interaction tests (headless egui_kittest with a CPU stand-in renderer). They run in CI on Linux, Windows and macOS (`.github/workflows/ci.yml`). Any exact-value fixture here must hold on all three platforms (tiers 0–1 in the architecture doc).
+2. **Hardware GPU tests** (`crates/pigment-gpu/tests/gpu_hardware.rs`, `crates/pigment-io/tests/gpu_export.rs`, `crates/pigment-studio/tests/gpu_preview.rs` and `ui_tests::review_screens`, `#[ignore = "needs a hardware GPU…"]`): tiled vs single-tile byte identity, repeatability, cancellation, limits. Run them manually on real hardware and save the log under `docs/evidence/` with the date and OS in the file name.
 3. **Visual review** (task 08 onward): contact sheets judged by a person against [docs/art-direction.md](docs/art-direction.md). Automated checks never count as visual approval.
 
 ## Evidence and claims
@@ -50,6 +51,10 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 - Declare every third-party crate once in the root `[workspace.dependencies]` with a full minimum version, and refer to it from member crates with `.workspace = true`. Commit `Cargo.lock`.
 - Before adding a dependency, check its license. Dependencies must be compatible with distributing the MIT-licensed project; so far all are permissive (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode). Note new licenses in the change description; the distribution audit is task 15.
 - Upgrade wgpu and egui together: the shell and renderer must share one wgpu major.
+
+## Studio design
+
+The studio's product context is [PRODUCT.md](PRODUCT.md) and its visual system is [DESIGN.md](DESIGN.md) (values in `crates/pigment-studio/src/theme.rs`). New UI inherits that system: graphite neutrals, one accent for the primary action and focus, amber and coral for state only, Atkinson Hyperlegible Next with mono for figures only. Bundled fonts are under the SIL OFL 1.1; any new font or asset needs its license recorded.
 
 ## Privacy rules for code
 

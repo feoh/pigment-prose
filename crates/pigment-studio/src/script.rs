@@ -1,8 +1,15 @@
 //! `pigment-studio --script`: a scripted run of the real window, used as the
-//! task 11 acceptance check. It types into the prose editor, resizes the
-//! window twice, waits for the preview to settle, feeds the view a
-//! deliberately out-of-order old result, captures the window, then starts
-//! one more (delayed) render and closes the window while it runs.
+//! task 11 and 12 acceptance check. It types into the prose editor, resizes
+//! the window twice, waits for the preview to settle, feeds the view a
+//! deliberately out-of-order old result, drags a structure slider (Form)
+//! and then a paint slider (Edge Looseness) every frame for a second each,
+//! asks for Another Composition, captures the window with the Advanced
+//! section open, then starts one more (delayed) render and closes the
+//! window while it runs.
+//!
+//! After each drag it checks that the preview settles on the newest values
+//! at the full preview size, that no older result was ever displayed after
+//! a newer one, and that the paint drag rebuilt no scene.
 //!
 //! Frames are requested continuously, so the gap between frames measures
 //! whether the UI thread was ever blocked, in particular while the worker
@@ -13,8 +20,10 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use pigment_core::request::RequestId;
+use pigment_core::settings::{ControlSpec, EDGE_LOOSENESS, FACETING};
 
 use crate::app::StudioApp;
+use crate::preview::{SETTLED_LONG_EDGE, preview_size};
 use crate::worker::{PreviewOutcome, PreviewResult};
 
 const TEXT: &str = " The wind moves over cold water and the pines lean toward the ridge.";
@@ -26,6 +35,17 @@ const SIZES: [(Duration, [f32; 2]); 2] = [
     (Duration::from_millis(1800), [1360.0, 860.0]),
 ];
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(20);
+/// How long each slider is dragged (one new value per frame).
+const DRAG_FOR: Duration = Duration::from_millis(1000);
+
+/// What a settled preview must show.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Settled {
+    /// The image on screen was made from the document's current values.
+    pub current: bool,
+    /// At the settled preview size, not the interaction size.
+    pub full_size: bool,
+}
 
 #[derive(Debug, Default)]
 pub struct Report {
@@ -56,6 +76,20 @@ pub struct Report {
     /// that the user is told and previews stop, not that they settle.
     pub device_loss_expected: bool,
     pub device_loss_shown: Option<bool>,
+    /// Previews displayed that were rendered at interaction quality.
+    pub interaction_shown: u32,
+    /// Results displayed although a newer one had already been shown.
+    pub out_of_order_displays: u32,
+    pub last_displayed: Option<RequestId>,
+    /// Slider values submitted by the drags.
+    pub drag_values: u32,
+    pub after_form_drag: Option<Settled>,
+    pub after_paint_drag: Option<Settled>,
+    /// Scenes built while only paint was dragged (must be 0).
+    pub paint_drag_scene_builds: Option<u32>,
+    pub after_another: Option<Settled>,
+    /// Another Composition changed the variation and nothing else.
+    pub another_kept_seed_and_settings: Option<bool>,
 }
 
 fn ms(d: Duration) -> f64 {
@@ -85,6 +119,12 @@ impl Report {
                 self.stale_rejected == Some(true),
             ),
         ];
+        let ok = |s: Option<Settled>| {
+            s == Some(Settled {
+                current: true,
+                full_size: true,
+            })
+        };
         if self.device_loss_expected {
             checks.push((
                 "device loss shown and previews stopped",
@@ -95,7 +135,39 @@ impl Report {
                 "settled on the newest request",
                 self.settled_on_newest == Some(true),
             ));
+            checks.push((
+                "dragged Form: settled on the newest values at full size",
+                ok(self.after_form_drag),
+            ));
+            checks.push((
+                "dragged Edge Looseness: settled on the newest values at full size",
+                ok(self.after_paint_drag),
+            ));
+            checks.push((
+                "paint-only drag rebuilt no scene",
+                self.paint_drag_scene_builds == Some(0),
+            ));
+            checks.push((
+                "Another Composition: settled on the new variation at full size",
+                ok(self.after_another),
+            ));
+            checks.push((
+                "Another Composition kept the prose seed and every setting",
+                self.another_kept_seed_and_settings == Some(true),
+            ));
+            if !self.delayed {
+                // With a slow simulated GPU every drag job is superseded
+                // before it finishes, so only an undelayed run shows them.
+                checks.push((
+                    "interaction previews shown while dragging",
+                    self.interaction_shown > 0,
+                ));
+            }
         }
+        checks.push((
+            "never displayed an older result after a newer one",
+            self.out_of_order_displays == 0,
+        ));
         if self.delayed {
             checks.push((
                 "UI frames kept coming while rendering (gap < 250 ms)",
@@ -122,6 +194,13 @@ impl Report {
             self.superseded,
             self.displayed,
             self.max_in_flight
+        );
+        out += &format!(
+            "slider values dragged {}, interaction previews shown {}, scenes built during the paint drag {}\n",
+            self.drag_values,
+            self.interaction_shown,
+            self.paint_drag_scene_builds
+                .map_or("?".to_string(), |n| n.to_string()),
         );
         out += &format!(
             "UI frames while a job was in flight: {}, longest gap {:.1} ms\n",
@@ -168,12 +247,46 @@ impl Report {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
     Typing,
     Settling,
+    Drag(Slider),
+    SettleDrag(Slider),
+    SettleAnother,
     Capturing,
     Closing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Slider {
+    Form,
+    Paint,
+}
+
+impl Slider {
+    fn spec(self) -> &'static ControlSpec {
+        match self {
+            Slider::Form => &FACETING,
+            Slider::Paint => &EDGE_LOOSENESS,
+        }
+    }
+}
+
+/// No preview is pending, running or scheduled.
+fn settled(app: &StudioApp, now: Instant) -> bool {
+    !app.view.is_pending() && app.worker.in_flight() == 0 && app.scheduler.wait(now).is_none()
+}
+
+fn check_settled(app: &StudioApp) -> Settled {
+    let aspect = app.doc.recipe().frame.aspect();
+    let full = app
+        .area_px
+        .and_then(|a| preview_size(aspect, a, SETTLED_LONG_EDGE));
+    Settled {
+        current: app.preview_is_current(),
+        full_size: app.view.shown.map(|s| (s.width, s.height)) == full && full.is_some(),
+    }
 }
 
 #[derive(Debug)]
@@ -183,6 +296,11 @@ pub struct Script {
     typed: usize,
     stage: Stage,
     stage_since: Instant,
+    scenes_built: u32,
+    before_another: Option<(
+        pigment_core::recipe::Recipe,
+        pigment_core::settings::ControlValues,
+    )>,
 }
 
 impl Script {
@@ -193,6 +311,8 @@ impl Script {
             typed: 0,
             stage: Stage::Typing,
             stage_since: Instant::now(),
+            scenes_built: 0,
+            before_another: None,
         }
     }
 
@@ -203,6 +323,7 @@ impl Script {
 
     pub fn step(&mut self, app: &mut StudioApp, ctx: &egui::Context, now: Instant) {
         ctx.request_repaint(); // keep frames flowing so gaps are measurable
+        app.allow_close = true; // the script's typing is not work to save
         let start = *self.start.get_or_insert(now);
         let t = now - start;
         let busy = app.worker.in_flight() > 0;
@@ -273,13 +394,69 @@ impl Script {
                     let replaced = app.accept(ctx, stale, now);
                     let mut r = app.report.lock().unwrap_or_else(|e| e.into_inner());
                     r.settled_on_newest = Some(settled && newest.is_some() && newest == shown);
-                    r.device_loss_shown = Some(app.view.device_lost && app.worker.in_flight() == 0);
                     r.stale_rejected = Some(!replaced && app.view.shown.map(|s| s.id) == shown);
                     drop(r);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
-                        egui::UserData::default(),
-                    ));
-                    self.to(Stage::Capturing, now);
+                    if app.view.device_lost {
+                        self.capture(app, ctx, now);
+                    } else {
+                        self.to(Stage::Drag(Slider::Form), now);
+                    }
+                }
+            }
+            Stage::Drag(slider) => {
+                let spec = slider.spec();
+                let e = (now - self.stage_since).as_secs_f64();
+                // Sweep across most of the range, a new value every frame.
+                let x = 0.5 + 0.45 * (e * 7.0).sin();
+                let v = spec.min + (spec.max - spec.min) * x;
+                app.set_control(spec, (v * 100.0).round() / 100.0, now, true);
+                app.report
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .drag_values += 1;
+                if now - self.stage_since >= DRAG_FOR {
+                    self.to(Stage::SettleDrag(slider), now);
+                }
+            }
+            Stage::SettleDrag(slider) => {
+                if settled(app, now) || now - self.stage_since > SETTLE_TIMEOUT {
+                    let result = check_settled(app);
+                    let built = app.worker.stats().scenes_built;
+                    let mut r = app.report.lock().unwrap_or_else(|e| e.into_inner());
+                    match slider {
+                        Slider::Form => {
+                            r.after_form_drag = Some(result);
+                            drop(r);
+                            self.scenes_built = built;
+                            self.to(Stage::Drag(Slider::Paint), now);
+                        }
+                        Slider::Paint => {
+                            r.after_paint_drag = Some(result);
+                            r.paint_drag_scene_builds = Some(built - self.scenes_built);
+                            drop(r);
+                            self.before_another = Some((app.doc.recipe().clone(), app.values()));
+                            app.another_composition(now);
+                            self.to(Stage::SettleAnother, now);
+                        }
+                    }
+                }
+            }
+            Stage::SettleAnother => {
+                if settled(app, now) || now - self.stage_since > SETTLE_TIMEOUT {
+                    let result = check_settled(app);
+                    let kept = self.before_another.take().is_some_and(|(before, values)| {
+                        let after = app.doc.recipe();
+                        after.seed.digest == before.seed.digest
+                            && after.seed.variation.0 == before.seed.variation.0 + 1
+                            && app.values() == values
+                            && after.frame == before.frame
+                    });
+                    let mut r = app.report.lock().unwrap_or_else(|e| e.into_inner());
+                    r.after_another = Some(result);
+                    r.another_kept_seed_and_settings = Some(kept);
+                    drop(r);
+                    app.open_advanced = Some(true);
+                    self.capture(app, ctx, now);
                 }
             }
             Stage::Capturing => {
@@ -308,7 +485,7 @@ impl Script {
                     // One more edit rendered immediately, then close while
                     // it is still in flight.
                     app.draft.push('!');
-                    app.submit(now);
+                    app.submit(now, crate::preview::Quality::Settled);
                     self.to(Stage::Closing, now);
                 }
             }
@@ -324,6 +501,19 @@ impl Script {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
+    }
+}
+
+impl Script {
+    /// Captures the window. Whether a simulated device loss was shown is
+    /// judged here, so it holds whichever stage the loss happened in.
+    fn capture(&mut self, app: &StudioApp, ctx: &egui::Context, now: Instant) {
+        app.report
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .device_loss_shown = Some(app.view.device_lost && app.worker.in_flight() == 0);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+        self.to(Stage::Capturing, now);
     }
 }
 

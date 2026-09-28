@@ -13,4 +13,7 @@ log="${1:-/dev/null}"
   cargo test --release --locked -p pigment-gpu --test gpu_hardware -- --ignored --test-threads=1
   cargo test --release --locked -p pigment-io --test gpu_export -- --ignored --test-threads=1 --nocapture
   cargo test --release --locked -p pigment-studio --test gpu_preview -- --ignored --test-threads=1 --nocapture
+  # The studio window's states rendered offscreen with the real painter
+  # (PNGs in target/studio-screens, or $PIGMENT_SCREENS).
+  cargo test --release --locked -p pigment-studio --lib review_screens -- --ignored --nocapture
 } 2>&1 | tee "$log"

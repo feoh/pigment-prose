@@ -1,0 +1,77 @@
+$ pigment-studio --script --screenshot window.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 187 (superseded before starting 0), displayed 180, max in flight 2
+slider values dragged 200, interaction previews shown 174, scenes built during the paint drag 0
+UI frames while a job was in flight: 46, longest gap 10.8 ms
+longest busy gaps: 11 ms at 5.15 s, 11 ms at 6.78 s, 11 ms at 5.17 s, 10 ms at 5.23 s, 10 ms at 5.25 s
+request→shown latency: median 10.1 ms, p95 20.2 ms, max 33.2 ms; render+readback median 3.80 ms, max 14.52 ms (n=180)
+close → worker stopped: 2.1 ms (joined: true)
+window captured: docs/evidence/studio-12/window.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] interaction previews shown while dragging
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit status: 0
+
+$ pigment-studio --script --preview-delay-ms 1500 --screenshot /tmp/pp12/window-delayed.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 186 (superseded before starting 178), displayed 5, max in flight 2
+slider values dragged 200, interaction previews shown 0, scenes built during the paint drag 0
+UI frames while a job was in flight: 1051, longest gap 19.7 ms
+longest busy gaps: 20 ms at 10.16 s, 20 ms at 10.48 s, 19 ms at 10.72 s, 19 ms at 11.15 s, 19 ms at 10.88 s
+request→shown latency: median 1549.6 ms, p95 1887.4 ms, max 1887.4 ms; render+readback median 10.51 ms, max 18.54 ms (n=5)
+close → worker stopped: 6.2 ms (joined: true)
+window captured: /tmp/pp12/window-delayed.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] settled on the newest request
+[ok] dragged Form: settled on the newest values at full size
+[ok] dragged Edge Looseness: settled on the newest values at full size
+[ok] paint-only drag rebuilt no scene
+[ok] Another Composition: settled on the new variation at full size
+[ok] Another Composition kept the prose seed and every setting
+[ok] never displayed an older result after a newer one
+[ok] UI frames kept coming while rendering (gap < 250 ms)
+[ok] closed while a render was in flight
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit status: 0
+
+$ pigment-studio --script --lose-device-after 3 --screenshot /tmp/pp12/device-lost.png
+pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan)
+preview 4: GPU device lost: simulated device loss
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+keystrokes 68, resizes 2, previews submitted 4 (superseded before starting 0), displayed 3, max in flight 1
+slider values dragged 201, interaction previews shown 1, scenes built during the paint drag 0
+UI frames while a job was in flight: 2, longest gap 20.7 ms
+longest busy gaps: 21 ms at 0.02 s, 11 ms at 4.40 s
+request→shown latency: median 29.8 ms, p95 30.0 ms, max 30.0 ms; render+readback median 5.04 ms, max 15.58 ms (n=3)
+close → worker stopped: 2.1 ms (joined: true)
+window captured: /tmp/pp12/device-lost.png
+[ok] typed into the editor
+[ok] resized the window twice
+[ok] at most one running + one pending job
+[ok] out-of-order old result rejected
+[ok] device loss shown and previews stopped
+[ok] never displayed an older result after a newer one
+[ok] worker shut down within 1 s
+[ok] window captured
+RESULT: PASS
+exit status: 0
+

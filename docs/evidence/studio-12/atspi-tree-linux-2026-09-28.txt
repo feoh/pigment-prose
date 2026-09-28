@@ -1,0 +1,70 @@
+
+(process:658926): dbind-WARNING **: 22:01:36.461: AT-SPI: Error in GetItems, sender=:1.28, error=Unknown object '/org/a11y/atspi/cache'
+application: 'pigment-studio'
+  frame: '' [focusable]
+    label: 'Pigment Prose'
+    button: 'Open…' [focusable]
+    button: 'Save' [focusable]
+    button: 'Save As…' [focusable]
+    button: 'Export PNG…' [focusable]
+    label: 'Untitled'
+    toggle button: 'Diagnostics' [focusable]
+    toggle button: 'Painting only' [focusable]
+    label: 'NVIDIA GeForce RTX 4070 Ti (Vulkan)'
+    label: 'Preview 2080×1170 · render 6.2 ms · shown 30 ms after request'
+    label: 'Preview: Current'
+    label: 'PROSE'
+    label: 'The text seeds the painting. Its meaning is never read.'
+    entry: 'PROSE' [focusable]
+    label: '61 bytes · seed'
+    label: '9b7d0655'
+    check box: 'Save the prose in the recipe file' [focusable]
+    label: 'Recipes are saved without the prose.'
+    label: 'COMPOSITION'
+    label: '0'
+    label: 'Variation'
+    label: 'Same prose and settings, a new arrangement of the land.'
+    button: 'Previous' [focusable]
+    button: 'Another composition' [focusable]
+    label: 'Shape'
+    combo box: 'Shape' [focusable]
+    label: 'A new shape recomposes the painting.'
+    label: 'PAINTING'
+    label: 'Structure'
+    label: 'Moves the landscape: recomposes the painting.'
+    label: 'Form'
+    label: '0.55'
+    slider: 'Form' [focusable]
+    label: 'rounded, eroded masses'
+    label: 'angular, faceted planes'
+    label: 'Paint handling'
+    label: 'How the paint is laid down. The landscape stays put.'
+    label: 'Edge Looseness'
+    label: '0.40'
+    slider: 'Edge Looseness' [focusable]
+    label: 'controlled, crisp edges'
+    label: 'soft, bleeding edges'
+    label: 'Wash / Gouache'
+    label: '0.25'
+    slider: 'Wash / Gouache' [focusable]
+    label: 'translucent watercolor washes'
+    label: 'opaque gouache body color'
+    label: 'Appearance'
+    label: 'Color and air. The landscape stays put.'
+    label: 'Atmosphere'
+    label: '0.40'
+    slider: 'Atmosphere' [focusable]
+    label: 'clear, crisp distance'
+    label: 'hazy, dissolving distance'
+    label: 'Color intensity'
+    label: '0.60'
+    slider: 'Color intensity' [focusable]
+    label: 'muted, near-neutral'
+    label: 'vivid, saturated'
+    label: 'Palette'
+    combo box: 'Palette' [focusable]
+    button: 'ADVANCED' [focusable]
+    button: 'Reset all painting controls' [focusable]
+    scroll bar: ''
+    unknown: '' [focusable]
+    image: 'Painting preview'

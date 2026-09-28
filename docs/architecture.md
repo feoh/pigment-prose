@@ -2,14 +2,14 @@
 
 This document freezes the interfaces that tasks 04–23 build on. Where it says **exists**, the code is in the repository, tested, and runs today. Where it names a later task, that task implements the item at the stated path with the stated signature. Decision record: [ADR 0001](decisions/0001-renderer-and-desktop-shell.md). Spike evidence: [architecture-spike.md](architecture-spike.md). Build and test commands: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. The painting renderer (tasks 06–07), tiled PNG export (task 09, [export.md](export.md)), recipe files (task 10) and the desktop shell with its preview lifecycle (task 11, [studio.md](studio.md)) exist. The artistic controls and the export dialog do not yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
+**Status of what runs today.** The portable core (including text seeding, the recipe format and the lakeshore scene generator, tasks 04–05), the GPU smoke path and the scene debug views are implemented. The painting renderer (tasks 06–07), tiled PNG export (task 09, [export.md](export.md)), recipe files (task 10), the desktop shell with its preview lifecycle (task 11) and the artistic controls, compositions and recipe open/save (task 12, [studio.md](studio.md)) exist. The export dialog does not yet. The GPU paths were verified on Linux (Vulkan) with the RTX 4070 Ti and the Intel iGPU; see [docs/evidence/](evidence/). Portable CI (tests only, no GPU) passes on Linux, Windows and macOS. GPU rendering on Windows and macOS is unverified.
 
 ## Stack
 
 - **Rust 1.98** (pinned in `rust-toolchain.toml`), edition 2024, one Cargo workspace. `Cargo.lock` is committed. Dependencies are declared once in `[workspace.dependencies]` with exact minimum versions (`wgpu = "30.0.1"`), and the lock file pins the full graph. Build with `--locked`.
 - **wgpu 30.0.1**, WebGPU core features only, device limits `wgpu::Limits::default()`.
 - **eframe/egui 0.36** desktop shell (task 11), sharing the renderer's device.
-- **Licenses (survey, not the task 15 audit):** the 72 third-party crates resolved for Linux (`cargo metadata --filter-platform x86_64-unknown-linux-gnu`) are all permissive: MIT and/or Apache-2.0, with Zlib, ISC, BSD-2-Clause, Unicode-3.0 and Unlicense options. No copyleft. **Task 11 update:** with eframe/egui 0.36.2 the Linux graph is 256 crates, all permissive (MIT and/or Apache-2.0, Zlib, BSD, ISC, 0BSD, Unlicense, Unicode-3.0). `self_cell` is dual `Apache-2.0 OR GPL-2.0-only` and is used under Apache-2.0. `epaint_default_fonts` bundles fonts under **OFL-1.1** (Noto Emoji) and the **Ubuntu Font Licence 1.0** (Ubuntu-Light), plus MIT/Bitstream (Hack) and MIT (emoji icons). Those need their notices shipped with the app (task 15) and impose nothing on exported images. rfd is not added until the file dialogs (tasks 12–13).
+- **Licenses (survey, not the task 15 audit):** the 72 third-party crates resolved for Linux (`cargo metadata --filter-platform x86_64-unknown-linux-gnu`) are all permissive: MIT and/or Apache-2.0, with Zlib, ISC, BSD-2-Clause, Unicode-3.0 and Unlicense options. No copyleft. **Task 11 update:** with eframe/egui 0.36.2 the Linux graph is 256 crates, all permissive (MIT and/or Apache-2.0, Zlib, BSD, ISC, 0BSD, Unlicense, Unicode-3.0). `self_cell` is dual `Apache-2.0 OR GPL-2.0-only` and is used under Apache-2.0. `epaint_default_fonts` bundles fonts under **OFL-1.1** (Noto Emoji) and the **Ubuntu Font Licence 1.0** (Ubuntu-Light), plus MIT/Bitstream (Hack) and MIT (emoji icons). Those need their notices shipped with the app (task 15) and impose nothing on exported images. **Task 12 update:** `rfd` 0.17 (MIT) for the native dialogs and `raw-window-handle` 0.6 (MIT/Apache-2.0/Zlib, already in the graph through winit). The studio bundles **Atkinson Hyperlegible Next** (Regular, SemiBold) and **Atkinson Hyperlegible Mono** (Regular) under the **SIL Open Font License 1.1** (`crates/pigment-studio/fonts/OFL*.txt`); task 15 must ship those notices too. Dev-only (tests, not shipped): `egui_kittest` and `kittest` (MIT/Apache-2.0), `toml` and `serde_spanned` (MIT/Apache-2.0).
 
 ## Workspace layout
 
@@ -20,7 +20,7 @@ This document freezes the interfaces that tasks 04–23 build on. Where it says 
 | `crates/pigment-gpu/tests/gpu_hardware.rs` | test | Hardware GPU suite, `#[ignore]` by default. | exists |
 | `crates/pigment-cli/` → binary `pigment-prose` | bin | Diagnostics: `gpu-info`, `gpu-smoke`, `contact-sheet` (task 05, debug views to PNG), `paint-bench`, `export` (task 09). Task 14 adds `bench`. | exists |
 | `crates/pigment-io/` | lib | PNG `TileSink` with temp-file and atomic finalize, and the export job (09); recipe files and the document model (10). | exists (09, 10) |
-| `crates/pigment-studio/` → binary `pigment-studio` (+ lib for tests) | bin | eframe/egui desktop app (11–13): `app.rs`, `worker.rs`, `preview.rs`, `script.rs`. | exists (11) |
+| `crates/pigment-studio/` → binary `pigment-studio` (+ lib for tests) | bin | eframe/egui desktop app (11–13): `app.rs`, `controls.rs`, `files.rs`, `theme.rs`, `worker.rs`, `preview.rs`, `script.rs`, headless UI tests in `ui_tests.rs`. | exists (11, 12) |
 | `spikes/gpu-tiles/` | separate Cargo project | Task 02 throwaway spike, excluded from the workspace. | frozen |
 
 Dependency direction: `pigment-core` ← `pigment-gpu`, `pigment-core` ← `pigment-io`, and both ← `pigment-studio`. `pigment-io` reaches the GPU only through the `Renderer` trait, so it builds without wgpu; its hardware tests use `pigment-gpu` as a dev-dependency. `pigment-cli` depends on `core`, `gpu` and `io`. `pigment-core` never depends on the others.
@@ -44,7 +44,7 @@ Dependency direction: `pigment-core` ← `pigment-gpu`, `pigment-core` ← `pigm
 | Palettes | `palette::{Palette, palette, PALETTES, LAKESHORE, GOLDEN_EVENING}` | `crates/pigment-core/src/palette.rs` | exists (task 06) |
 | PaintingSettings | `settings::PaintingSettings` (+ `Appearance`, `PaletteSettings`, `AtmosphereSettings`) | `crates/pigment-core/src/settings.rs` | exists; effects → 06/07 |
 | Form settings | `settings::FormSettings` | same | exists; effects → 05/07 |
-| Control specification | `settings::CONTROLS`, `ControlSpec`, `Channel`, `Group` | same | exists; UI → 12 |
+| Control specification | `settings::CONTROLS`, `ControlSpec` (`get`/`set` on `ControlValues`), `Channel`, `Group` | same | exists; UI: `pigment_studio::controls` (task 12) |
 | Frame / export dimensions | `frame::Frame`, `AspectRatio`, `CanvasExtents`, `CanvasMapping`, `UHD_4K`, `UHD_8K` | `crates/pigment-core/src/frame.rs` | exists |
 | RenderRequest | `request::RenderRequest`, `RenderTarget` (size, `TilePolicy`, `TileOrder`), `RenderPurpose`, `RequestId`, `RequestIds` | `crates/pigment-core/src/request.rs` | exists |
 | RenderResult | `request::RenderReport`, `RenderOutcome`, `RenderTimings`; pixels flow through `TileSink` | same | exists |
@@ -142,7 +142,7 @@ match report.outcome {
 
 ## Tiling and memory budget
 
-- **Preview:** `TilePolicy::Single`, one tile at preview size. A 1920×1080 test-card tile allocates 33.6 MB.
+- **Preview:** `TilePolicy::Single`, one tile at preview size. A 1920×1080 test-card tile allocates 33.6 MB. The painting renderer's cost model is 16 B/px, so a settled preview at the 3840×2160 cap (task 12) allocates about 133 MB plus its apron, inside the 256 MiB export budget; the preview size is capped, so this is the preview's bound.
 - **Export:** `TilePolicy::Budget { gpu_bytes, host_bytes }` with defaults of **256 MiB** of renderer-owned GPU allocations and a **256 MiB** host band buffer. The planner takes the largest of 2048/1024/512/256 px that fits both budgets and the device texture limit. At 8K with the spike's cost model that is 2048 px (102.7 MiB). With a 28 MiB budget it is 1024 px (27.4 MiB, the task 02 measurement, reproduced by `tiles::tests`).
 - **Regression:** `TilePolicy::Fixed { edge }` forces a tile size, including non-divisors such as 333, for seam tests. `TileOrder::ReverseInBand` visits each band right to left. Bands still complete top to bottom, and the output is byte-identical (task 09).
 - **Out of memory:** resource creation runs inside `GpuContext::scoped`, which turns an allocation failure into `RenderError::OutOfMemory`. `pigment_io::export_png` retries with half the GPU budget until no tile edge down to 256 px fits, then reports the error (task 09). It never silently falls back to a lower resolution.
@@ -156,7 +156,7 @@ match report.outcome {
 - **Stale results:** request ids increase monotonically (`RequestIds`). The UI shows a result only if `PreviewState::accept(id)`, meaning it is newer than what is on screen. A late old result is dropped. While `PreviewState::is_pending()` is true, show a quiet "rendering…" state. The controls always show the newest values.
 - **Cancellation granularity:** between tiles, and before the first tile. A preview is one tile (under 25 ms at 4K for the spike's shader), so for previews the effective mechanism is *superseding before start*. A single dispatch cannot be interrupted. Export cancel latency is one tile.
 - **Debounce:** prose edits wait **300 ms** after the last keystroke, because they re-derive seeds and rebuild the scene. Slider drags are **not debounced**: every value is submitted and latest-wins coalescing absorbs the rate. Window/preview resizes wait **100 ms**.
-- **Preview size:** while a slider is being dragged, render at a long edge of **960 px** ("interaction preview"). After 150 ms without input, re-render at the preview area's physical pixel size, capped at a long edge of **1920 px** ("settled preview"). Both use the document's scene (`Frame::fit_within`) and never stretch to the window's aspect.
+- **Preview size:** while a slider is being dragged, render at a long edge of **960 px** ("interaction preview"). After 150 ms without input, re-render at the preview area's physical pixel size, capped at a long edge of **3840 px** ("settled preview"; 1920 px until task 12, raised so the painting fills the area on high-DPI displays after measuring 3840×2160 at 9–15 ms). Both use the document's scene and never stretch to the window's aspect; an interaction preview is scaled up to the settled size for display (implemented in task 12, `pigment_studio::preview`).
 - **Exports** use a separate single slot and are never superseded by previews. They take an immutable `RenderRequest` snapshot, and one export runs at a time (task 13).
 
 ## Controls and invalidation
@@ -232,8 +232,8 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 
 | Scenario | Measured so far | Target (p95 unless noted) |
 | --- | --- | --- |
-| Interaction preview, 960 px long edge, render + readback | spike painting shader: 0.99 ms at 960×540 | ≤ 33 ms |
-| Settled preview, ≤ 1920 px long edge | spike: 5.16 ms at 1080p; test card: 1.4 ms at 720p | ≤ 150 ms |
+| Interaction preview, 960 px long edge, render + readback | spike painting shader: 0.99 ms at 960×540; studio (task 12): request → shown median 10 ms, p95 ≤ 20 ms during drags | ≤ 33 ms |
+| Settled preview, ≤ 3840 px long edge | spike: 5.16 ms at 1080p; painting (`paint-bench`, task 12): 2.3 ms median at 1920×1080, 8.9 ms at 3840×2160 | ≤ 150 ms |
 | Prose edit → settled preview visible | — | ≤ 300 ms debounce + ≤ 250 ms |
 | UI frame time while rendering | — | never blocked by render work (worker thread) |
 | 4K export incl. PNG | spike: 72 ms; painting, 3840×3840: 104 ms (task 09) | ≤ 5 s |
@@ -252,7 +252,7 @@ These are **targets, not results**. They are derived from the task 02 pipeline o
 | 09 tiled PNG export | **Done.** Spec: [export.md](export.md); evidence: [evidence/export-09](evidence/export-09/README.md). `pigment-io/src/png_sink.rs` (`PngSink: TileSink`, streaming, `IEND` check), `atomic.rs` (`AtomicFile`, also for task 10), `export.rs` (`export_png`, `ExportSize`, OOM retry); `TileOrder` on `RenderTarget`; `pigment-prose export`; hardware suite `crates/pigment-io/tests/gpu_export.rs` |
 | 10 recipe persistence | **Done.** Spec: [recipe-files.md](recipe-files.md). `pigment-io/src/recipe_file.rs` (size-limited read, atomic `write_recipe`, redacted `RecipeFileError`), `document.rs` (`Document`: prose in memory, `keep_source_text` off by default, path, dirty state, validate-before-replace); `tests/recipes.rs` (47 baseline recipes, restart in a child process) |
 | 11 shell and preview | **Done.** Spec: [studio.md](studio.md); evidence: [evidence/studio-11](evidence/studio-11/README.md). `crates/pigment-studio/` (eframe/egui 0.36, `WgpuSetup::Existing` with `GpuContext`); `worker.rs` (render thread on `job::Mailbox`, scene reuse, bounded results, simulated delay and device loss); `preview.rs` (debounce, exact-aspect sizing, `PreviewView`); `script.rs` (`--script` acceptance run); `tests/gpu_preview.rs`. Interaction previews (960 px while dragging) arrive with the sliders in 12 |
-| 12 controls | `pigment-studio/src/controls.rs` generated from `settings::CONTROLS`; `Invalidation::between` decides what reruns |
+| 12 controls | **Done.** Spec: [studio.md](studio.md); evidence: [evidence/studio-12](evidence/studio-12/README.md). `controls.rs` (sliders from `settings::CONTROLS`, keyboard steps, value text), `files.rs` (rfd dialogs on a helper thread, the open/save/unsaved-changes state machine), `theme.rs` (the visual system, [DESIGN.md](../DESIGN.md)); interaction/settled previews in `preview.rs`; `ui_tests.rs` (headless egui_kittest). The worker's scene cache realizes `Invalidation::between` (tested per control) |
 | 13 export UI | `pigment-studio/src/export_dialog.rs`; `Frame::new` validation; progress from `job::Progress` |
 | 14 qualification | `scripts/check.sh`, `scripts/gpu-tests.sh`, `crates/*/tests/`, `docs/qualification.md` |
 | 15 Linux package | `packaging/linux/`, third-party notices, `docs/user-guide.md` |

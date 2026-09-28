@@ -2,11 +2,15 @@
 //! lifecycle"), kept free of egui so they can be tested directly.
 //!
 //! - **Debounce:** prose edits wait 300 ms after the last keystroke;
-//!   preview-area resizes wait 100 ms; shape (aspect ratio) changes and the
-//!   first frame render at once.
+//!   preview-area resizes wait 100 ms; shape (aspect ratio) changes, new
+//!   compositions and the first frame render at once.
+//! - **Sliders:** every slider value renders at once as an *interaction
+//!   preview* (long edge 960 px), not debounced; latest-wins coalescing in
+//!   the worker absorbs the rate. 150 ms after the last slider input the
+//!   preview is rendered again at the settled size.
 //! - **Size:** the painting keeps the document's aspect ratio and is fitted
 //!   inside the preview area at its physical pixel size, capped at a long
-//!   edge of 1920 px (the settled preview). It is never stretched to the
+//!   edge of 3840 px (the settled preview). It is never stretched to the
 //!   window's shape.
 //! - **Stale results:** a result is shown only if it is newer than the one
 //!   on screen ([`PreviewState::accept`]).
@@ -22,8 +26,14 @@ use crate::worker::{PreviewOutcome, PreviewResult};
 
 pub const PROSE_DEBOUNCE: Duration = Duration::from_millis(300);
 pub const RESIZE_DEBOUNCE: Duration = Duration::from_millis(100);
-/// Long-edge cap of the settled preview.
-pub const SETTLED_LONG_EDGE: u32 = 1920;
+/// Quiet time after the last slider input before the settled preview.
+pub const SETTLE_AFTER: Duration = Duration::from_millis(150);
+/// Long-edge cap of the settled preview. Raised from 1920 px in task 12 so
+/// the painting fills the preview area on high-DPI displays: 3840×2160
+/// renders in 9–15 ms on the RTX 4070 Ti (`paint-bench`, 2026-09-28).
+pub const SETTLED_LONG_EDGE: u32 = 3840;
+/// Long-edge cap while a slider is moving.
+pub const INTERACTION_LONG_EDGE: u32 = 960;
 /// Smallest preview edge rendered; below this the area is too small to use.
 pub const MIN_PREVIEW_EDGE: u32 = 16;
 
@@ -37,14 +47,52 @@ pub fn preview_size(aspect: AspectRatio, avail: (f32, f32), max_long: u32) -> Op
     (pw >= MIN_PREVIEW_EDGE && ph >= MIN_PREVIEW_EDGE).then_some((pw, ph))
 }
 
-/// When to submit the next preview.
+/// Size, in physical pixels, at which an image of `image` pixels is drawn
+/// inside `avail`: fitted with its own aspect ratio, capped at the settled
+/// long edge. A smaller interaction preview is scaled up to that size, so
+/// the painting does not jump while a slider moves; an image within a pixel
+/// and a half of it is drawn 1:1.
+pub fn display_size(image: (u32, u32), avail: (f32, f32)) -> (f32, f32) {
+    let (w, h) = (image.0.max(1) as f32, image.1.max(1) as f32);
+    let cap = SETTLED_LONG_EDGE as f32 / w.max(h);
+    let scale = (avail.0 / w).min(avail.1 / h).min(cap).max(0.0);
+    let fit = (w * scale, h * scale);
+    if (fit.0 - w).abs() <= 1.5 && (fit.1 - h).abs() <= 1.5 {
+        (w, h)
+    } else {
+        fit
+    }
+}
+
+/// What the next preview is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Quality {
+    /// A slider is moving: small and fast.
+    Interaction,
+    /// Input has settled: full preview size.
+    Settled,
+}
+
+impl Quality {
+    pub fn long_edge(self) -> u32 {
+        match self {
+            Quality::Interaction => INTERACTION_LONG_EDGE,
+            Quality::Settled => SETTLED_LONG_EDGE,
+        }
+    }
+}
+
+/// When to submit the next preview, and at which quality.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Scheduler {
     due: Option<Instant>,
+    /// Pending settled re-render after slider input.
+    settle: Option<Instant>,
 }
 
 impl Scheduler {
-    /// Render as soon as possible (first frame, shape change).
+    /// Render as soon as possible (first frame, shape change, new
+    /// composition, opened recipe).
     pub fn now(&mut self, now: Instant) {
         self.due = Some(now);
     }
@@ -61,18 +109,40 @@ impl Scheduler {
         self.due = Some(self.due.map_or(d, |old| old.max(d)));
     }
 
-    /// Whether a render is due; clears the deadline when it is.
-    pub fn take_due(&mut self, now: Instant) -> bool {
+    /// A slider moved (drag or key): render now at interaction quality and
+    /// again at the settled size once the input stops.
+    pub fn slider_moved(&mut self, now: Instant) {
+        self.due = Some(now);
+        self.settle = Some(now + SETTLE_AFTER);
+    }
+
+    /// Whether a render is due, and at which quality. Clears what it
+    /// returns.
+    pub fn take_due(&mut self, now: Instant) -> Option<Quality> {
+        let settling = self.settle.is_some_and(|s| now < s);
         if self.due.is_some_and(|d| now >= d) {
             self.due = None;
-            return true;
+            return Some(if settling {
+                Quality::Interaction
+            } else {
+                self.settle = None;
+                Quality::Settled
+            });
         }
-        false
+        if self.settle.is_some_and(|s| now >= s) {
+            self.settle = None;
+            return Some(Quality::Settled);
+        }
+        None
     }
 
     /// Time until the next deadline, for `request_repaint_after`.
     pub fn wait(&self, now: Instant) -> Option<Duration> {
-        self.due.map(|d| d.saturating_duration_since(now))
+        [self.due, self.settle]
+            .into_iter()
+            .flatten()
+            .min()
+            .map(|d| d.saturating_duration_since(now))
     }
 }
 
@@ -218,16 +288,72 @@ mod tests {
         let t0 = Instant::now();
         let mut s = Scheduler::default();
         s.prose_edited(t0);
-        assert!(!s.take_due(t0 + Duration::from_millis(299)));
+        assert!(s.take_due(t0 + Duration::from_millis(299)).is_none());
         s.prose_edited(t0 + Duration::from_millis(200)); // still typing
-        assert!(!s.take_due(t0 + Duration::from_millis(450)));
-        assert!(s.take_due(t0 + Duration::from_millis(500)));
-        assert!(!s.take_due(t0 + Duration::from_millis(501)), "cleared");
+        assert!(s.take_due(t0 + Duration::from_millis(450)).is_none());
+        assert_eq!(
+            s.take_due(t0 + Duration::from_millis(500)),
+            Some(Quality::Settled)
+        );
+        assert!(
+            s.take_due(t0 + Duration::from_millis(501)).is_none(),
+            "cleared"
+        );
         s.resized(t0);
         assert_eq!(s.wait(t0), Some(RESIZE_DEBOUNCE));
-        assert!(s.take_due(t0 + RESIZE_DEBOUNCE));
+        assert!(s.take_due(t0 + RESIZE_DEBOUNCE).is_some());
         s.now(t0);
-        assert!(s.take_due(t0));
+        assert_eq!(s.take_due(t0), Some(Quality::Settled));
+    }
+
+    #[test]
+    fn slider_input_renders_small_at_once_then_settles() {
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        let mut s = Scheduler::default();
+        // A drag: one value per frame, each rendered at once, small.
+        for f in 0..10 {
+            s.slider_moved(ms(f * 16));
+            assert_eq!(s.take_due(ms(f * 16)), Some(Quality::Interaction));
+            assert_eq!(s.take_due(ms(f * 16 + 1)), None);
+        }
+        // Released at 144 ms: nothing until 150 ms of quiet, then settled.
+        assert_eq!(s.wait(ms(200)), Some(Duration::from_millis(94)));
+        assert_eq!(s.take_due(ms(293)), None);
+        assert_eq!(s.take_due(ms(294)), Some(Quality::Settled));
+        assert_eq!(s.take_due(ms(400)), None);
+        assert_eq!(s.wait(ms(400)), None);
+        // A resize during a drag stays small; the settle still follows.
+        s.slider_moved(ms(1000));
+        s.take_due(ms(1000));
+        s.resized(ms(1010));
+        assert_eq!(s.take_due(ms(1110)), Some(Quality::Interaction));
+        assert_eq!(s.take_due(ms(1150)), Some(Quality::Settled));
+        // Prose typed after a drag has settled renders settled.
+        s.prose_edited(ms(2000));
+        assert_eq!(s.take_due(ms(2300)), Some(Quality::Settled));
+    }
+
+    #[test]
+    fn interaction_previews_are_drawn_at_the_settled_size() {
+        let avail = (1848.0, 1039.0);
+        let a = AspectRatio::of(16, 9);
+        let settled = preview_size(a, avail, SETTLED_LONG_EDGE).unwrap();
+        let small = preview_size(a, avail, INTERACTION_LONG_EDGE).unwrap();
+        assert_eq!(small, (960, 540));
+        let d = display_size(small, avail);
+        assert!((d.0 - settled.0 as f32).abs() < 2.0 && (d.1 - settled.1 as f32).abs() < 2.0);
+        // The settled preview itself is drawn 1:1.
+        assert_eq!(
+            display_size(settled, avail),
+            (settled.0 as f32, settled.1 as f32)
+        );
+        // Never above the settled cap, never stretched.
+        let big = display_size((960, 540), (9000.0, 9000.0));
+        let cap = SETTLED_LONG_EDGE as f32;
+        assert_eq!(big, (cap, cap * 9.0 / 16.0));
+        let tall = display_size((540, 960), (1000.0, 500.0));
+        assert!((tall.0 / tall.1 - 540.0 / 960.0).abs() < 1e-4 && tall.1 <= 500.0);
     }
 
     #[test]

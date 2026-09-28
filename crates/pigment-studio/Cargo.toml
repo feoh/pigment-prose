@@ -18,7 +18,13 @@ pigment-gpu.workspace = true
 pigment-io.workspace = true
 # Window captures from the scripted check.
 png.workspace = true
+pollster.workspace = true
+raw-window-handle.workspace = true
+rfd.workspace = true
 wgpu.workspace = true
+
+[dev-dependencies]
+egui_kittest.workspace = true
 
 [lints]
 workspace = true
