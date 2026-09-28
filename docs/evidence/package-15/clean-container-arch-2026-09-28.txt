@@ -1,0 +1,62 @@
+# docker run --rm --device /dev/dri/renderD128 -v WORK:/work archlinux:latest /work/run.sh  (2026-09-28, artifact b33f564b...)
+== container: Arch Linux, ldd (GNU libc) 2.44
+pigment-prose-0.1.0-x86_64-linux.tar.zst: OK
+  notices and guide: /opt/pp/share/doc/pigment-prose/
+  uninstall: /opt/pp/share/pigment-prose/uninstall.sh
+Note: /opt/pp/bin is not on your PATH; run the programs by their full path, or add it.
+pigment-prose 0.1.0
+pigment-studio 0.1.0
+== gpu-info with no Vulkan loader installed
+pigment-prose 0.1.0 (wgpu 30.0.1); 0 adapter(s)
+error: no usable GPU adapter.
+Check that a hardware GPU driver is installed and visible:
+  Linux: install the Vulkan loader and your GPU's Vulkan driver (Arch: vulkan-icd-loader with
+    nvidia-utils, vulkan-intel or vulkan-radeon; Debian/Ubuntu: libvulkan1 with the NVIDIA driver
+    or mesa-vulkan-drivers), then check `vulkaninfo --summary`
+  Windows: update the GPU driver (Direct3D 12 or Vulkan)
+  macOS: Metal is built in; the Mac must support Metal
+WGPU_BACKEND=vulkan|dx12|metal forces a backend when diagnosing.
+exit 1
+== installing only vulkan-icd-loader and vulkan-intel
+pacman exit 0
+error: package 'mesa' was not found
+vulkan-icd-loader 1.4.357.0-1
+vulkan-intel 1:26.2.3-1
+pigment-prose 0.1.0 (wgpu 30.0.1); 1 adapter(s)
+- Intel(R) Graphics (RPL-S)
+    backend=Vulkan type=Integrated software=false vendor=0x8086 device=0xa780
+    driver=Intel open-source Mesa driver (Mesa 26.2.3-arch1.1)
+    max_texture_dimension_2d=16384 max_buffer_size=2147483647 max_storage_buffer_binding_size=2147483644
+    max_compute_workgroup_size=(1024,1024) max_compute_invocations_per_workgroup=1024 max_storage_textures_per_shader_stage=102
+selected: Intel(R) Graphics (RPL-S) (Vulkan)
+exit 0
+pigment-prose 0.1.0 export: generator v2, renderer v2, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
+device: Intel(R) Graphics (RPL-S) (Vulkan) (wgpu 30.0.1)
+  7 / 12 tiles
+plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
+timings: device+pipelines 32597.74 ms, scene 0.55 ms, setup 3.75 ms, render+readback 1305.32 ms, PNG encode+write 206.89 ms, export total 1517.22 ms
+measured peak host memory (VmHWM, whole process): 4149.3 MiB
+wrote /work/ctr-8k.png (21.5 MiB)
+export exit 0
+Pigment Prose is uninstalled. Your recipes and images were not touched.
+0
+
+# run.sh
+#!/bin/bash
+set -u
+cd /work
+echo "== container: $(. /etc/os-release; echo $PRETTY_NAME), $(ldd --version | head -1)"
+pacman -Sy --noconfirm --needed zstd >/dev/null 2>&1
+sha256sum -c pigment-prose-0.1.0-x86_64-linux.tar.zst.sha256
+tar --zstd -xf pigment-prose-0.1.0-x86_64-linux.tar.zst -C /tmp
+/tmp/pigment-prose-0.1.0-x86_64-linux/install.sh --prefix /opt/pp | tail -3
+/opt/pp/bin/pigment-prose --version; /opt/pp/bin/pigment-studio --version
+echo "== gpu-info with no Vulkan loader installed"
+/opt/pp/bin/pigment-prose gpu-info; echo "exit $?"
+echo "== installing only vulkan-icd-loader and vulkan-intel"
+pacman -S --noconfirm vulkan-icd-loader vulkan-intel >/dev/null 2>&1; echo "pacman exit $?"
+pacman -Q vulkan-icd-loader vulkan-intel mesa
+/opt/pp/bin/pigment-prose gpu-info; echo "exit $?"
+/opt/pp/bin/pigment-prose export --recipe 01.recipe.json --size 8k --adapter intel --out /work/ctr-8k.png; echo "export exit $?"
+/opt/pp/share/pigment-prose/uninstall.sh
+ls /opt/pp/bin 2>/dev/null | wc -l

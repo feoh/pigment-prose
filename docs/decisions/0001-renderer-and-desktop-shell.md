@@ -24,7 +24,7 @@ The shell must:
 | Async updates | `egui::Context` is `Send + Sync`; a worker calls `request_repaint()` | message/subscription model | event loop + `invoke_from_event_loop` | JS events over IPC |
 | Native dialogs | via `rfd` 0.17.2 (MIT) | via `rfd` | via `rfd` | built-in dialog plugin |
 | Accessibility | AccessKit enabled by default (`accesskit` in eframe's default features) | no AccessKit dependency in iced 0.14's manifest | AccessKit via its winit backend | the webview's accessibility |
-| Packaging | plain Rust binary; packager chosen in task 15 | plain binary | plain binary | mature bundler |
+| Packaging | plain Rust binary; Linux: a per-user tarball (task 15, [linux-package.md](../linux-package.md)) | plain binary | plain binary | mature bundler |
 | License | MIT OR Apache-2.0 | MIT | GPL-3.0-only, royalty-free (requires attribution) or commercial | MIT OR Apache-2.0 |
 
 Checked directly: the wgpu requirements (crates.io dependency metadata), eframe's default features and the `WgpuSetup::Existing` and `register_native_texture` APIs (the published `egui-wgpu` 0.36.2 and `eframe` 0.36.2 sources), iced 0.14's manifest, and Slint's license string. Tauri's texture-sharing limitation follows from its webview architecture and was not prototyped.

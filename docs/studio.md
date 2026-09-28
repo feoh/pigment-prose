@@ -6,7 +6,7 @@
 
 ```sh
 cargo run --release -p pigment-studio                      # the app
-cargo run --release -p pigment-studio -- --help            # options
+cargo run --release -p pigment-studio -- --help            # options (and --version)
 cargo run --release -p pigment-studio -- --script --preview-delay-ms 1500 --screenshot w.png
 ```
 
@@ -106,6 +106,7 @@ Generated from `settings::CONTROLS` (`crates/pigment-studio/src/controls.rs`). R
 ## GPU initialization and failures
 
 - **Capability service:** `GpuContext::new(&AdapterPolicy)` uses portable WebGPU limits, ranks discrete over integrated, and refuses software rasterizers unless `--allow-software` is given (then labelled everywhere).
+- **Preparing the painter** (task 15): compiling the painting shader takes about 0.1 s once the driver has cached it, but the first time (after installing or a driver update) it took 3.6 s on the NVIDIA driver and 34 s, with a 4.2 GB peak, on Mesa's Intel driver. `painter::Preparation` compiles it once on its own thread; the preview and export workers each get a `Deferred` renderer sharing those pipelines (`PaintRenderer::sibling`), and wait for it on their own threads. The window opens at once, with the status word **Preparing** and "Preparing the GPU painter…" and why in the painting area; the controls work meanwhile. `--script` starts once the painter is ready. Measured cold on the Intel iGPU: the window at 0.3 s, the painter ready at 34 s. Before task 15 the window did not appear until both renderers had compiled.
 - **Initialization failure** (no adapter, only software, no match for `--adapter`, device refused): the error is printed, and a window titled "Pigment Prose needs a hardware GPU" shows the reason with driver hints and every adapter found, with Copy details and Quit. It exits with status 1 and never claims acceleration.
 - **Device lost:** the preview stops and says "The GPU was reset (device lost)… Save your recipe, then restart Pigment Prose to continue." Saving still works. No more jobs are submitted. When the painter has its own device (multi-GPU), the window keeps working. Tested with `--lose-device-after N`; a real driver reset has not been exercised.
 - **Multi-GPU systems:** the painting adapter (the policy's choice, or `--adapter NAME`) and the adapter showing the window can differ. The window goes on the best-ranked adapter that claims it can present (discrete first, ties to the painter); `--display-adapter NAME` overrides that. When both are the same adapter they share one device; otherwise each has its own, and previews cross by CPU readback as always. Diagnostics shows "Window shown on". On this machine, `--adapter intel` paints on the Intel iGPU and shows the window on the NVIDIA card (script PASS). `--display-adapter intel` cannot present, because the compositor cannot import that GPU's buffers even though its driver accepts the surface; the app names the adapter, suggests `--display-adapter` and exits 2. Measurements and the reasoning are in the [ADR 0001 amendment](decisions/0001-renderer-and-desktop-shell.md#amendment-2026-09-28-the-windows-device-on-multi-gpu-systems).

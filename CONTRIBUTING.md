@@ -19,6 +19,8 @@ All commands run from the repository root. `--locked` makes Cargo fail rather th
 | Lint | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Portable tests | `cargo test --workspace --locked` (the GPU suite shows as *ignored*) |
 | Seed reference check | `python3 scripts/seed-vectors.py --check` (stdlib only; `uv run` also works) |
+| Third-party notices (regenerate after a dependency change; CI checks) | `python3 scripts/third-party-notices.py --out packaging/linux/THIRD-PARTY-NOTICES.md` |
+| **Linux package** ([docs/linux-package.md](docs/linux-package.md); never published without the owner's permission) | `packaging/linux/build-package.sh`, then `packaging/linux/smoke-test.sh target/package/pigment-prose-VERSION-x86_64-linux.tar.zst [LOG]` |
 | **Hardware GPU checks** | `scripts/gpu-tests.sh [LOG_FILE]` |
 | **Full qualification** (clean checkout; [docs/qualification.md](docs/qualification.md)) | `scripts/qualify.sh [LOG_FILE]`: exit 0 only if nothing failed, 2 if no hardware GPU (BLOCKED) |
 | Qualification benchmark against the targets | `cargo run --release -p pigment-cli -- bench [--adapter NAME] [--strict]` |

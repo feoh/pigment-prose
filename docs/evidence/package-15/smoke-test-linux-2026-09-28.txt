@@ -4,11 +4,11 @@ pigment-prose-0.1.0-x86_64-linux.tar.zst: OK
 === unpacks
 === installs with --prefix
 Installed Pigment Prose:
-  programs: /tmp/pigment-smoke-ZdfIzh/prefix/bin/pigment-studio, /tmp/pigment-smoke-ZdfIzh/prefix/bin/pigment-prose
-  menu entry: /tmp/pigment-smoke-ZdfIzh/prefix/share/applications/pigment-prose.desktop
-  notices and guide: /tmp/pigment-smoke-ZdfIzh/prefix/share/doc/pigment-prose/
-  uninstall: /tmp/pigment-smoke-ZdfIzh/prefix/share/pigment-prose/uninstall.sh
-Note: /tmp/pigment-smoke-ZdfIzh/prefix/bin is not on your PATH; run the programs by their full path, or add it.
+  programs: /tmp/pigment-smoke-r7yS6m/prefix/bin/pigment-studio, /tmp/pigment-smoke-r7yS6m/prefix/bin/pigment-prose
+  menu entry: /tmp/pigment-smoke-r7yS6m/prefix/share/applications/pigment-prose.desktop
+  notices and guide: /tmp/pigment-smoke-r7yS6m/prefix/share/doc/pigment-prose/
+  uninstall: /tmp/pigment-smoke-r7yS6m/prefix/share/pigment-prose/uninstall.sh
+Note: /tmp/pigment-smoke-r7yS6m/prefix/bin is not on your PATH; run the programs by their full path, or add it.
 === pigment-studio --version
 pigment-studio 0.1.0
 === pigment-prose --version
@@ -17,8 +17,8 @@ pigment-prose 0.1.0
 === menu entry validates and runs the installed binary
 === binaries carry no build-host paths
 Pigment Prose 0.1.0 for x86_64 Linux
-commit: c1c43b43f59a22424e39e7153172f471b0d1c3cf
-commit date (SOURCE_DATE_EPOCH): 1790595766
+commit: 83c1f69103b8c5015ede566246caf1091959f06e
+commit date (SOURCE_DATE_EPOCH): 1790596845
 toolchain: rustc 1.98.1 (48a229cea 2026-09-01), cargo 1.98.1 (797e8a9bc 2026-08-05)
 target: x86_64-unknown-linux-gnu, release profile, cargo build --locked
 Cargo.lock sha256: 571c29ff996aac6c118e084daf90ad97f61b0b9038c8c5b03f0a711037d67285
@@ -37,16 +37,17 @@ pigment-prose 0.1.0 (wgpu 30.0.1); 2 adapter(s)
 selected: NVIDIA GeForce RTX 4070 Ti (Vulkan)
 === studio --script (preview, drags, 8K export, close)
 pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan); window on NVIDIA GeForce RTX 4070 Ti (Vulkan) (one shared device)
+pigment-studio: painter ready in 8 ms
 device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
 window: NVIDIA GeForce RTX 4070 Ti (Vulkan) (shared device)
-keystrokes 68, resizes 2, previews submitted 216 (superseded before starting 0), displayed 203, max in flight 2
-slider values dragged 199, interaction previews shown 197, scenes built during the paint drag 0
-8K export: 441 ms; 34 UI frames while it ran, longest gap 30.0 ms
-UI frames while a job was in flight: 47, longest gap 11.1 ms
-longest busy gaps: 11 ms at 4.78 s, 11 ms at 6.78 s, 11 ms at 4.91 s, 11 ms at 5.13 s, 11 ms at 0.01 s
-request→shown latency: median 10.1 ms, p95 20.4 ms, max 30.7 ms; render+readback median 3.94 ms, max 26.12 ms (n=203)
-close → worker stopped: 4.1 ms (joined: true)
-window captured: /tmp/pigment-smoke-ZdfIzh/window.png
+keystrokes 68, resizes 2, previews submitted 216 (superseded before starting 0), displayed 209, max in flight 2
+slider values dragged 200, interaction previews shown 203, scenes built during the paint drag 0
+8K export: 400 ms; 32 UI frames while it ran, longest gap 28.2 ms
+UI frames while a job was in flight: 23, longest gap 11.3 ms
+longest busy gaps: 11 ms at 5.15 s, 11 ms at 5.58 s, 11 ms at 4.93 s, 11 ms at 5.17 s, 10 ms at 4.40 s
+request→shown latency: median 10.0 ms, p95 20.1 ms, max 35.8 ms; render+readback median 3.22 ms, max 21.19 ms (n=209)
+close → worker stopped: 4.3 ms (joined: true)
+window captured: /tmp/pigment-smoke-r7yS6m/window.png
 [ok] typed into the editor
 [ok] resized the window twice
 [ok] at most one running + one pending job
@@ -69,30 +70,31 @@ RESULT: PASS
 pigment-prose 0.1.0 export: generator v2, renderer v2, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
 device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
 plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
-timings: device+pipelines 121.08 ms, scene 0.54 ms, setup 9.24 ms, render+readback 43.97 ms, PNG encode+write 160.85 ms, export total 214.18 ms
-measured peak host memory (VmHWM, whole process): 292.4 MiB
-wrote /tmp/pigment-smoke-ZdfIzh/recipe-8k.png (21.5 MiB)
+timings: device+pipelines 101.68 ms, scene 0.55 ms, setup 9.48 ms, render+readback 43.97 ms, PNG encode+write 163.33 ms, export total 216.91 ms
+measured peak host memory (VmHWM, whole process): 291.7 MiB
+wrote /tmp/pigment-smoke-r7yS6m/recipe-8k.png (21.5 MiB)
 === 8K PNG decodes: 7680x4320, IHDR sRGB IDAT IEND only
 decoded recipe-8k.png: 7680x4320, chunks IHDR sRGB IDAT IEND, 22506358 bytes
 === offline: CLI 8K export (unshare -rn)
 pigment-prose 0.1.0 export: generator v2, renderer v2, 7680x4320 (aspect 16:9), Budget { gpu_bytes: 268435456, host_bytes: 268435456 }, RowMajor, Fast
 device: NVIDIA GeForce RTX 4070 Ti (Vulkan) (wgpu 30.0.1)
 plan: 4x3 tiles of 2048x2048 px, apron 50 px; estimated renderer GPU allocations 67.2 MiB per tile set, host band 60.0 MiB (cost model, not measured)
-timings: device+pipelines 100.97 ms, scene 0.55 ms, setup 9.27 ms, render+readback 42.40 ms, PNG encode+write 164.78 ms, export total 216.57 ms
-measured peak host memory (VmHWM, whole process): 293.2 MiB
-wrote /tmp/pigment-smoke-ZdfIzh/offline-8k.png (21.5 MiB)
+timings: device+pipelines 89.81 ms, scene 0.54 ms, setup 9.56 ms, render+readback 42.99 ms, PNG encode+write 170.26 ms, export total 222.95 ms
+measured peak host memory (VmHWM, whole process): 293.0 MiB
+wrote /tmp/pigment-smoke-r7yS6m/offline-8k.png (21.5 MiB)
 === offline export is byte-identical
 === offline: studio --script (unshare -rn)
 pigment-studio: painting on NVIDIA GeForce RTX 4070 Ti (Vulkan); window on NVIDIA GeForce RTX 4070 Ti (Vulkan) (one shared device)
+pigment-studio: painter ready in 8 ms
 device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
 window: NVIDIA GeForce RTX 4070 Ti (Vulkan) (shared device)
-keystrokes 68, resizes 2, previews submitted 223 (superseded before starting 0), displayed 215, max in flight 2
-slider values dragged 200, interaction previews shown 209, scenes built during the paint drag 0
-8K export: 421 ms; 39 UI frames while it ran, longest gap 23.1 ms
-UI frames while a job was in flight: 37, longest gap 19.9 ms
-longest busy gaps: 20 ms at 7.04 s, 12 ms at 6.79 s, 11 ms at 7.09 s, 10 ms at 4.56 s, 10 ms at 4.52 s
-request→shown latency: median 10.1 ms, p95 20.2 ms, max 39.9 ms; render+readback median 3.63 ms, max 19.04 ms (n=215)
-close → worker stopped: 4.1 ms (joined: true)
+keystrokes 68, resizes 2, previews submitted 215 (superseded before starting 0), displayed 202, max in flight 2
+slider values dragged 201, interaction previews shown 196, scenes built during the paint drag 0
+8K export: 359 ms; 32 UI frames while it ran, longest gap 28.4 ms
+UI frames while a job was in flight: 44, longest gap 11.4 ms
+longest busy gaps: 11 ms at 4.42 s, 11 ms at 5.18 s, 10 ms at 4.61 s, 10 ms at 4.46 s, 10 ms at 4.86 s
+request→shown latency: median 10.0 ms, p95 20.1 ms, max 30.5 ms; render+readback median 3.33 ms, max 16.28 ms (n=202)
+close → worker stopped: 4.2 ms (joined: true)
 window captured: (not saved: no --screenshot path)
 [ok] typed into the editor
 [ok] resized the window twice
