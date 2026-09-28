@@ -96,9 +96,14 @@ step "5. privacy: prose and path markers in CLI logs and PNG"
 marker="Quillwort7Q3 zephyr lantern over marbled tarns"
 dir="$work/pathmarker-K81"
 mkdir -p "$dir"
+# A recipe that keeps the marker prose. Its digest must match the text (the
+# loader checks), so it comes from the independent seed reference.
 python3 - "$dir/kept.recipe.json" "$marker" <<'EOF'
-import json, sys
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("sv", "scripts/seed-vectors.py")
+sv = importlib.util.module_from_spec(spec); spec.loader.exec_module(sv)
 r = json.load(open("docs/visual-review/baseline-08/corpus-16x9/01.recipe.json"))
+r["seed"]["digest"] = sv.digest(sys.argv[2]).hex()
 r["source_text"] = sys.argv[2]
 json.dump(r, open(sys.argv[1], "w"), indent=2)
 EOF
