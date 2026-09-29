@@ -98,7 +98,7 @@ impl SeasonState {
 pub enum Cycle {
     /// Winter, spring, summer, autumn: snow and deciduous leaf fall.
     Temperate,
-    /// A dry season and a wet season, no snow (a later biome, task 20).
+    /// A dry season and a wet/growth season, with no snow.
     DryWet,
 }
 
@@ -182,6 +182,61 @@ pub const DESERT: SeasonProfile = SeasonProfile {
         (0.38, state([0.0, 0.0, 0.0, 0.76, 0.0, 0.2, 0.55, 0.35])), // drying
         (0.58, state([0.0, 0.0, 0.0, 0.62, 0.0, 0.0, 1.0, 0.05])),  // peak dry
         (0.78, state([0.0, 0.0, 0.0, 0.68, 0.0, 0.0, 0.75, 0.1])),  // late dry
+    ],
+};
+
+/// Tropical jungle: a lush wet/growth period followed by a shorter dry spell.
+/// Wet/dry is an appearance cycle, not a precipitation or ecological model.
+pub const JUNGLE: SeasonProfile = SeasonProfile {
+    name: "tropical jungle",
+    cycle: Cycle::DryWet,
+    keys: &[
+        //            snow  ground tree  leaf  autumn fresh dry   bloom
+        (0.00, state([0.0, 0.0, 0.0, 0.96, 0.0, 0.15, 0.0, 0.65])),
+        (0.20, state([0.0, 0.0, 0.0, 1.00, 0.0, 0.35, 0.0, 0.85])),
+        (0.46, state([0.0, 0.0, 0.0, 1.00, 0.0, 0.0, 0.05, 0.70])),
+        (0.66, state([0.0, 0.0, 0.0, 0.88, 0.0, 0.0, 0.62, 0.20])),
+        (0.82, state([0.0, 0.0, 0.0, 0.82, 0.0, 0.0, 1.00, 0.05])),
+    ],
+};
+
+/// Open tundra: a long, bright snow season and a very short growing window.
+/// Snow covers the low ground from autumn through late spring; at midsummer
+/// the new biome's base painting is the neutral, briefly snow-free look.
+pub const TUNDRA: SeasonProfile = SeasonProfile {
+    name: "open tundra",
+    cycle: Cycle::Temperate,
+    keys: &[
+        //            snow  ground tree  leaf  autumn fresh dry   bloom
+        (
+            0.00,
+            state([1.00, 1.00, 0.20, 0.00, 0.00, 0.00, 0.85, 0.00]),
+        ), // midwinter
+        (
+            0.15,
+            state([0.90, 0.90, 0.15, 0.00, 0.00, 0.00, 0.65, 0.00]),
+        ), // deep snow
+        (
+            0.27,
+            state([0.55, 0.58, 0.05, 0.25, 0.00, 0.25, 0.30, 0.10]),
+        ), // thaw
+        (
+            0.39,
+            state([0.12, 0.12, 0.00, 0.72, 0.00, 0.88, 0.00, 0.65]),
+        ), // short spring
+        (0.50, SeasonState::NEUTRAL), // brief, snow-free high summer
+        (
+            0.63,
+            state([0.02, 0.00, 0.00, 1.00, 0.12, 0.00, 0.25, 0.35]),
+        ), // late summer
+        (
+            0.75,
+            state([0.20, 0.18, 0.05, 0.70, 0.70, 0.00, 0.55, 0.02]),
+        ), // first snow
+        (
+            0.88,
+            state([0.72, 0.70, 0.15, 0.18, 0.15, 0.00, 0.80, 0.00]),
+        ), // long autumn
     ],
 };
 
@@ -337,6 +392,45 @@ mod tests {
     fn keyframes_are_hit_exactly() {
         for (t, s) in ALPINE.keys {
             assert_eq!(ALPINE.at(*t), *s);
+        }
+    }
+
+    #[test]
+    fn tundra_cycle_has_a_long_snow_season_and_a_short_growth_window() {
+        assert_eq!(TUNDRA.at(0.0), TUNDRA.at(1.0));
+        assert_eq!(TUNDRA.at(0.5), SeasonState::NEUTRAL);
+        assert!(TUNDRA.at(0.15).snow > TUNDRA.at(0.5).snow);
+        assert!(TUNDRA.at(0.39).fresh > TUNDRA.at(0.15).fresh);
+        assert!(TUNDRA.at(0.88).ground_snow > TUNDRA.at(0.63).ground_snow);
+        for i in 0..=10_000 {
+            assert!(
+                TUNDRA
+                    .at(i as f64 / 10_000.0)
+                    .channels()
+                    .iter()
+                    .all(|v| (0.0..=1.0).contains(v))
+            );
+        }
+    }
+
+    #[test]
+    fn desert_cycle_is_dry_wet_continuous_and_never_snowy() {
+        assert_eq!(DESERT.at(0.0), DESERT.at(1.0));
+        assert!(DESERT.at(0.20).fresh > DESERT.at(0.58).fresh);
+        assert!(DESERT.at(0.58).dry > DESERT.at(0.20).dry);
+        assert!(DESERT.at(0.20).bloom > DESERT.at(0.58).bloom);
+
+        for i in 0..=10_000 {
+            let state = DESERT.at(i as f64 / 10_000.0);
+            assert_eq!(state.snow, 0.0);
+            assert_eq!(state.ground_snow, 0.0);
+            assert_eq!(state.tree_snow, 0.0);
+            assert!(
+                state
+                    .channels()
+                    .iter()
+                    .all(|value| (0.0..=1.0).contains(value))
+            );
         }
     }
 

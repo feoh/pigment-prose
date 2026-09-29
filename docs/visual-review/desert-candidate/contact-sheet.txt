@@ -1,0 +1,14 @@
+pigment-prose 0.1.0 contact-sheet: desert generator v3, renderer v3, view paint, aspect 16:9, cell 512x288, form faceting=0.78 relief=0.42 woodland_density=0.14
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Desert, intensity: 0.82 }, atmosphere: AtmosphereSettings { haze: 0.24 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud mesa)	image fnv
+1	sample passage 0	mesa-basin	false	49	6336	dc2a5da3e4bee5d0	0.00	-	0	0.00	0.00	0.00	0.33	0.00	27.1 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 72.8	8b3aff533eb0c8de
+2	sample passage 1	mesa-basin	false	44	5746	fd1874f65903b2f8	0.00	-	0	0.00	0.00	0.00	0.64	0.00	24.9 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 75.1	9b668f3b7628c7ad
+3	sample passage 2	mesa-basin	false	45	5502	137248e1d9fc8a85	0.00	-	0	0.00	0.00	0.00	0.52	0.00	28.3 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 71.6	80c8733899cc74b4
+4	sample passage 3	mesa-basin	false	47	5954	c5c9591792219355	0.00	-	0	0.00	0.00	0.00	0.61	0.00	29.9 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 69.9	218770eabbca6fa2
+5	sample passage 4	mesa-basin	false	49	6445	928c3d7129d39768	0.00	-	0	0.00	0.00	0.00	0.64	0.00	26.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 73.1	9c076b136aebcc09
+6	sample passage 5	mesa-basin	false	47	6189	92f6d522e7007cf0	0.00	-	0	0.00	0.00	0.00	0.76	0.00	26.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 73.9	8e09ce3a33f348d3
+7	sample passage 6	mesa-basin	false	48	6714	9e13db5c01526896	0.00	-	0	0.00	0.00	0.00	0.38	0.00	24.6 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 75.3	f2e14b6dd7ea084a
+8	sample passage 7	mesa-basin	false	45	5723	66bdf8f09e72dd82	0.00	-	0	0.00	0.00	0.00	0.51	0.00	29.7 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 70.3	7dcbe3e2cfb3a1f4
+9	sample passage 8	mesa-basin	false	48	5275	7c1f5c5bfe0f9ee5	0.00	-	0	0.00	0.00	0.00	0.54	0.00	29.2 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 70.8	3e8e5e1313902196
+10	sample passage 9	mesa-basin	false	46	5796	6baf3fccb20907ba	0.00	-	0	0.00	0.00	0.00	0.72	0.00	30.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 69.9	c2fac94c68975cf7

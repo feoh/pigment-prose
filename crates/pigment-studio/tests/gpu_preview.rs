@@ -32,6 +32,7 @@ fn job(text: &str, w: u32, h: u32, haze: f64) -> PreviewJob {
     let mut appearance = Appearance::default();
     appearance.atmosphere.haze = haze;
     PreviewJob {
+        biome: pigment_core::biome::BiomeId::Alpine,
         seeds: SeedBundle::derive(TextDigest::from_source(text).unwrap(), Variation(0)),
         form: FormSettings::default(),
         aspect: AspectRatio::of(16, 9),

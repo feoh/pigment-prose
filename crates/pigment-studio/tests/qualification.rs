@@ -1,7 +1,6 @@
-//! Task 14 qualification suite on real hardware: the integrated MVP from an
-//! approved recipe to a tiled PNG, tile seams measured at every boundary,
-//! brush and texture scale at two resolutions, and repeated exports with
-//! previews running alongside. Ignored by default; `scripts/gpu-tests.sh`
+//! Real-hardware qualification: the integrated MVP from an approved recipe to
+//! tiled PNG, tile seams, brush/texture scale, repeated previews/exports, and
+//! biome-specific stress cases. Ignored by default; `scripts/gpu-tests.sh`
 //! runs it (see docs/qualification.md).
 //!
 //! Tolerances follow docs/architecture.md, "Reproducibility tiers": exact
@@ -18,11 +17,10 @@ use std::time::{Duration, Instant};
 use pigment_core::capability::AdapterPolicy;
 use pigment_core::frame::Frame;
 use pigment_core::job::{CancelToken, NoProgress};
+use pigment_core::recipe::{Component, VersionNotice};
 use pigment_core::request::{
     MemorySink, RenderPurpose, RenderRequest, RenderTarget, Renderer, RequestId,
 };
-use pigment_core::scene::SceneGenerator;
-use pigment_core::scene::lakeshore::LakeshoreGenerator;
 use pigment_core::tiles::{TileOrder, TilePolicy};
 use pigment_gpu::{GpuContext, PaintRenderer};
 use pigment_io::Document;
@@ -80,13 +78,21 @@ fn approved(sheet: &str, cell: usize) -> (Document, String) {
             .join(format!("{cell:02}.recipe.json")),
     )
     .unwrap();
-    assert!(notices.is_empty(), "approved recipes are current");
+    assert_eq!(
+        notices,
+        [VersionNotice {
+            component: Component::Renderer,
+            recorded: 3,
+            current: pigment_core::version::RENDERER_VERSION,
+        }],
+        "baseline Alpine geometry and pixels are unchanged; only the renderer version advanced for jungle"
+    );
     (doc, checksum)
 }
 
 fn request(doc: &Document, w: u32, h: u32, policy: TilePolicy) -> RenderRequest {
     let r = doc.recipe();
-    let scene = LakeshoreGenerator
+    let scene = pigment_core::scene::generator(r.biome)
         .generate(&doc.seeds(), &r.form, r.frame.aspect())
         .unwrap();
     RenderRequest {
@@ -200,6 +206,7 @@ fn wait_export(e: &Exporter) -> ExportOutcome {
 
 fn export_job(doc: &Document, frame: Frame, dest: PathBuf) -> ExportJob {
     ExportJob {
+        biome: doc.recipe().biome,
         seeds: doc.seeds(),
         form: doc.recipe().form,
         aspect: doc.recipe().frame.aspect(),
@@ -239,7 +246,7 @@ fn approved_recipes_go_from_scene_to_preview_to_a_tiled_png() {
         let (doc, checksum) = approved(sheet, cell);
         let r = doc.recipe();
         // 1. Scene: exactly the approved geometry.
-        let scene = LakeshoreGenerator
+        let scene = pigment_core::scene::generator(r.biome)
             .generate(&doc.seeds(), &r.form, r.frame.aspect())
             .unwrap();
         assert_eq!(
@@ -254,6 +261,7 @@ fn approved_recipes_go_from_scene_to_preview_to_a_tiled_png() {
         preview.submit(
             RequestId(cell as u64),
             PreviewJob {
+                biome: r.biome,
                 seeds: doc.seeds(),
                 form: r.form,
                 aspect: r.frame.aspect(),
@@ -299,6 +307,187 @@ fn approved_recipes_go_from_scene_to_preview_to_a_tiled_png() {
         eprintln!("{sheet} {cell}: {ew}×{eh} export, 4× downsampled vs 960 preview PSNR {p:.1} dB");
         assert!(p > 24.0, "{sheet} {cell}: PSNR {p}");
     }
+}
+
+/// A desert recipe survives save/reopen and exercises the shared GPU
+/// painter through a multi-tile export, bit-identical to one full render.
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn desert_recipe_reopens_and_tiled_export_matches_single() {
+    let ctx = ctx();
+    let renderer = PaintRenderer::new(ctx.clone()).unwrap();
+    let mut exporter = Exporter::spawn(PaintRenderer::new(ctx).unwrap(), || {});
+    let dir = Scratch::new("desert-e2e");
+    let recipe_path = dir.0.join("desert.recipe.json");
+    let mut doc = Document::from_prose(
+        "A dry wash winds below the layered red mesas.",
+        Frame::new(1600, 900).unwrap(),
+    )
+    .unwrap();
+    doc.set_biome(pigment_core::biome::BiomeId::Desert).unwrap();
+    let mut appearance = doc.appearance();
+    appearance.season.year = 0.68;
+    doc.set_appearance(appearance).unwrap();
+    doc.save_as(&recipe_path).unwrap();
+    let (doc, notices) = Document::open(&recipe_path).unwrap();
+    assert!(notices.is_empty());
+    assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Desert);
+
+    let frame = Frame::new(3840, 2160).unwrap();
+    let dest = dir.0.join("desert-4k.png");
+    exporter
+        .start(export_job(&doc, frame, dest.clone()))
+        .unwrap();
+    match wait_export(&exporter) {
+        ExportOutcome::Written { tiles, .. } => assert!(tiles > 1, "expected tiled export"),
+        outcome => panic!("desert export failed: {outcome:?}"),
+    }
+    let (width, height, tiled) = decode_rgb(&dest);
+    assert_eq!((width, height), (frame.width, frame.height));
+    let single = render_rgb(
+        &renderer,
+        &request(&doc, frame.width, frame.height, TilePolicy::Single),
+    );
+    assert_eq!(tiled, single, "desert tile boundaries must be invisible");
+}
+
+/// A tundra recipe survives save/reopen and exercises the shared GPU painter
+/// through a winter 4K tiled export, bit-identical to one full render.
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn tundra_recipe_reopens_and_winter_tiled_export_matches_single() {
+    let ctx = ctx();
+    let renderer = PaintRenderer::new(ctx.clone()).unwrap();
+    let mut exporter = Exporter::spawn(PaintRenderer::new(ctx).unwrap(), || {});
+    let dir = Scratch::new("tundra-e2e");
+    let recipe_path = dir.0.join("tundra.recipe.json");
+    let mut doc = Document::from_prose(
+        "A brief midsummer grazes the low rolling tundra.",
+        Frame::new(1600, 900).unwrap(),
+    )
+    .unwrap();
+    doc.set_biome(pigment_core::biome::BiomeId::Tundra).unwrap();
+    let mut appearance = doc.appearance();
+    appearance.season.year = 0.15;
+    doc.set_appearance(appearance).unwrap();
+    doc.save_as(&recipe_path).unwrap();
+    let (doc, notices) = Document::open(&recipe_path).unwrap();
+    assert!(notices.is_empty());
+    assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Tundra);
+
+    let frame = Frame::new(3840, 2160).unwrap();
+    let dest = dir.0.join("tundra-winter-4k.png");
+    exporter
+        .start(export_job(&doc, frame, dest.clone()))
+        .unwrap();
+    match wait_export(&exporter) {
+        ExportOutcome::Written { tiles, .. } => assert!(tiles > 1, "expected tiled export"),
+        outcome => panic!("tundra export failed: {outcome:?}"),
+    }
+    let (width, height, tiled) = decode_rgb(&dest);
+    assert_eq!((width, height), (frame.width, frame.height));
+    let single = render_rgb(
+        &renderer,
+        &request(&doc, frame.width, frame.height, TilePolicy::Single),
+    );
+    assert_eq!(tiled, single, "tundra tile boundaries must be invisible");
+}
+
+/// An owner-approved jungle recipe is saved without its source prose,
+/// reopened, then exported at 4K through multiple tiles and compared with the
+/// one-tile painter. The understory fans and canopy shapes cross tile edges.
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn jungle_recipe_reopens_source_free_and_tiled_export_matches_single() {
+    let ctx = ctx();
+    let renderer = PaintRenderer::new(ctx.clone()).unwrap();
+    let mut exporter = Exporter::spawn(PaintRenderer::new(ctx).unwrap(), || {});
+    let dir = Scratch::new("jungle-e2e");
+    let recipe_path = dir.0.join("jungle.recipe.json");
+    let mut doc = Document::from_prose(
+        "A narrow clearing beneath a high canopy.",
+        Frame::new(1600, 900).unwrap(),
+    )
+    .unwrap();
+    doc.set_biome(pigment_core::biome::BiomeId::Jungle).unwrap();
+    doc.set_keep_source_text(false);
+    let mut appearance = doc.appearance();
+    appearance.season.year = 0.82;
+    doc.set_appearance(appearance).unwrap();
+    doc.save_as(&recipe_path).unwrap();
+    let recipe_bytes = std::fs::read(&recipe_path).unwrap();
+    assert!(!String::from_utf8_lossy(&recipe_bytes).contains("narrow clearing"));
+    let (doc, notices) = Document::open(&recipe_path).unwrap();
+    assert!(notices.is_empty());
+    assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Jungle);
+    assert!(doc.prose().is_none());
+
+    let frame = Frame::new(3840, 2160).unwrap();
+    let dest = dir.0.join("jungle-4k.png");
+    exporter
+        .start(export_job(&doc, frame, dest.clone()))
+        .unwrap();
+    match wait_export(&exporter) {
+        ExportOutcome::Written { tiles, .. } => assert!(tiles > 1, "expected tiled export"),
+        outcome => panic!("jungle export failed: {outcome:?}"),
+    }
+    let (width, height, tiled) = decode_rgb(&dest);
+    assert_eq!((width, height), (frame.width, frame.height));
+    let single = render_rgb(
+        &renderer,
+        &request(&doc, frame.width, frame.height, TilePolicy::Single),
+    );
+    assert_eq!(tiled, single, "jungle tile boundaries must be invisible");
+}
+
+/// Record real preview and 8K export costs for the densest reviewed jungle
+/// scene. The tiled exporter must stay within the established bounded-memory
+/// policy; report RSS and time as qualification evidence.
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn jungle_preview_and_8k_export_performance_is_recorded() {
+    let ctx = ctx();
+    let renderer = PaintRenderer::new(ctx.clone()).unwrap();
+    let mut exporter = Exporter::spawn(PaintRenderer::new(ctx).unwrap(), || {});
+    let dir = Scratch::new("jungle-8k");
+    let mut doc = Document::from_prose(
+        "A narrow clearing beneath a high canopy.",
+        Frame::new(1600, 900).unwrap(),
+    )
+    .unwrap();
+    doc.set_biome(pigment_core::biome::BiomeId::Jungle).unwrap();
+    doc.set_variation(pigment_core::seed::Variation(7));
+    let preview_start = Instant::now();
+    let preview = render_rgb(&renderer, &request(&doc, 960, 540, TilePolicy::Single));
+    let preview_elapsed = preview_start.elapsed();
+    assert_eq!(preview.len(), 960 * 540 * 3);
+
+    let frame = Frame::new(7680, 4320).unwrap();
+    let dest = dir.0.join("jungle-8k.png");
+    let before = rss();
+    let started = Instant::now();
+    exporter
+        .start(export_job(&doc, frame, dest.clone()))
+        .unwrap();
+    let outcome = wait_export(&exporter);
+    let elapsed = started.elapsed();
+    let after = rss();
+    let tiles = match outcome {
+        ExportOutcome::Written { tiles, .. } => tiles,
+        outcome => panic!("jungle 8K export failed: {outcome:?}"),
+    };
+    let bytes = std::fs::metadata(&dest).unwrap().len();
+    eprintln!(
+        "jungle preview 960×540: {:.2}s; 8K tiled export: {:.2}s, {tiles} tiles, {:.1} MiB PNG, RSS delta {} MiB",
+        preview_elapsed.as_secs_f64(),
+        elapsed.as_secs_f64(),
+        bytes as f64 / (1u64 << 20) as f64,
+        before.zip(after).map_or_else(
+            || "unavailable".to_string(),
+            |(b, a)| format!("{:.1}", (a as i64 - b as i64) as f64 / (1u64 << 20) as f64)
+        ),
+    );
+    assert!(tiles > 1, "8K must use bounded tiled export");
 }
 
 /// Seams: a painting tiled with 333 px tiles (a non-divisor, so boundaries
@@ -461,6 +650,7 @@ fn repeated_exports_with_previews_stay_bounded() {
             preview.submit(
                 RequestId(id),
                 PreviewJob {
+                    biome: d.recipe().biome,
                     seeds: d.seeds(),
                     form: r.form,
                     aspect: r.frame.aspect(),

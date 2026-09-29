@@ -1,0 +1,19 @@
+pigment-prose 0.1.0 contact-sheet: jungle generator v3, renderer v4, view paint, aspect 16:9, cell 480x270, form faceting=0.42 relief=0.58 woodland_density=0.82
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Jungle, intensity: 0.78 }, atmosphere: AtmosphereSettings { haze: 0.48 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud mesa tundra-ground jungle-ground jungle-canopy)	image fnv
+1	sample passage 0 season=0	tropical-jungle	false	70	2414	56b5899276b68375	0.00	-	0	0.02	0.02	0.00	0.15	0.02	0.0 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 38.4 59.9	182807ce7415fdc7
+2	sample passage 0 season=0.2	tropical-jungle	false	70	2414	56b5899276b68375	0.00	-	0	0.02	0.02	0.00	0.15	0.02	0.0 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 38.4 59.9	d2fc2dee2ae63001
+3	sample passage 0 season=0.5	tropical-jungle	false	70	2414	56b5899276b68375	0.00	-	0	0.02	0.02	0.00	0.15	0.02	0.0 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 38.4 59.9	da5c382e4c142913
+4	sample passage 0 season=0.82	tropical-jungle	false	70	2414	56b5899276b68375	0.00	-	0	0.02	0.02	0.00	0.15	0.02	0.0 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 38.4 59.9	66b9308a3734c465
+5	sample passage 0 season=1	tropical-jungle	false	70	2414	56b5899276b68375	0.00	-	0	0.02	0.02	0.00	0.15	0.02	0.0 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 38.4 59.9	182807ce7415fdc7
+6	sample passage 3 season=0	tropical-jungle	false	70	2414	678e45386f7cf0ef	0.00	-	0	0.02	0.01	0.00	0.14	0.03	1.1 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 36.4 60.9	bbba1e42859d435c
+7	sample passage 3 season=0.2	tropical-jungle	false	70	2414	678e45386f7cf0ef	0.00	-	0	0.02	0.01	0.00	0.14	0.03	1.1 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 36.4 60.9	2d5dd6fd09c5bf40
+8	sample passage 3 season=0.5	tropical-jungle	false	70	2414	678e45386f7cf0ef	0.00	-	0	0.02	0.01	0.00	0.14	0.03	1.1 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 36.4 60.9	acbbc5520a2387a4
+9	sample passage 3 season=0.82	tropical-jungle	false	70	2414	678e45386f7cf0ef	0.00	-	0	0.02	0.01	0.00	0.14	0.03	1.1 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 36.4 60.9	1e780ae72261885a
+10	sample passage 3 season=1	tropical-jungle	false	70	2414	678e45386f7cf0ef	0.00	-	0	0.02	0.01	0.00	0.14	0.03	1.1 0.0 0.0 0.0 0.0 0.0 1.6 0.0 0.0 0.0 0.0 0.0 36.4 60.9	bbba1e42859d435c
+11	sample passage 7 season=0	tropical-jungle	false	70	2414	0b8997f46fba3a8d	0.00	-	0	0.01	0.01	0.00	0.15	0.02	0.5 0.0 0.0 0.0 0.0 0.0 1.3 0.0 0.0 0.0 0.0 0.0 35.5 62.8	e2736de81a3b93cd
+12	sample passage 7 season=0.2	tropical-jungle	false	70	2414	0b8997f46fba3a8d	0.00	-	0	0.01	0.01	0.00	0.15	0.02	0.5 0.0 0.0 0.0 0.0 0.0 1.3 0.0 0.0 0.0 0.0 0.0 35.5 62.8	0ff1e568fb7dc5d1
+13	sample passage 7 season=0.5	tropical-jungle	false	70	2414	0b8997f46fba3a8d	0.00	-	0	0.01	0.01	0.00	0.15	0.02	0.5 0.0 0.0 0.0 0.0 0.0 1.3 0.0 0.0 0.0 0.0 0.0 35.5 62.8	15c55781579ff48e
+14	sample passage 7 season=0.82	tropical-jungle	false	70	2414	0b8997f46fba3a8d	0.00	-	0	0.01	0.01	0.00	0.15	0.02	0.5 0.0 0.0 0.0 0.0 0.0 1.3 0.0 0.0 0.0 0.0 0.0 35.5 62.8	34023d2d6a0448d9
+15	sample passage 7 season=1	tropical-jungle	false	70	2414	0b8997f46fba3a8d	0.00	-	0	0.01	0.01	0.00	0.15	0.02	0.5 0.0 0.0 0.0 0.0 0.0 1.3 0.0 0.0 0.0 0.0 0.0 35.5 62.8	e2736de81a3b93cd

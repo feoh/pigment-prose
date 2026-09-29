@@ -1,13 +1,13 @@
 # Recipe files and the source-text choice (task 10)
 
-This covers saving and reopening editable paintings, and where the privacy boundary between a recipe and an exported image sits. The recipe **format** (schema 2, canonical JSON, the strict loader, the schema 1 migration) is specified in [seeds-and-recipes.md](seeds-and-recipes.md). This document covers files on disk and the document model:
+This covers saving and reopening editable paintings, and where the privacy boundary between a recipe and an exported image sits. The recipe **format** (schema 3, canonical JSON, the strict loader, the schema 1/2 migrations) is specified in [seeds-and-recipes.md](seeds-and-recipes.md). This document covers files on disk and the document model:
 
 - `crates/pigment-io/src/recipe_file.rs`: `read_recipe`, `write_recipe`, `RecipeFileError`
 - `crates/pigment-io/src/document.rs`: `Document`, `SaveError`
 
 ## What a recipe file holds
 
-A recipe holds everything needed to repaint without the prose: the text digest and variation (`seed`), the frame, every form, painting, palette and atmosphere setting, and the algorithm and component versions. Every key is required, so nothing is filled in with a default. The UI shows the painting from these fields alone.
+A recipe holds everything needed to repaint without the prose: the text digest and variation (`seed`), stable biome ID, frame, and every form, painting, palette, atmosphere, and season setting, and the algorithm and component versions. Every key is required, so nothing is filled in with a default. The UI shows the painting from these fields alone.
 
 - **Where:** wherever the user saves it. The app keeps no gallery, database, auto-save history or hidden copies, makes no network, telemetry or sync calls, and writes nothing outside the chosen file (plus its temporary sibling while saving). The suggested suffix is `.recipe.json` (`RECIPE_EXTENSION`). Nothing depends on it.
 - **Reproduction after restart:** a saved recipe reopened by a new process rebuilds the same seeds, settings and scene (`a_saved_recipe_reproduces_after_restart` runs the save in a child process). On the same device, driver and backend it also repaints the same pixels (`approved_recipes_repaint_identically_after_save_and_load`). Across devices, see the reproducibility tiers in [architecture.md](architecture.md#reproducibility-tiers).

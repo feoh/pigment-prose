@@ -56,6 +56,7 @@ pub struct ControlSpec {
 /// Everything a slider edits: the structural settings and the appearance.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct ControlValues {
+    pub biome: crate::biome::BiomeId,
     pub form: FormSettings,
     pub appearance: Appearance,
 }
@@ -210,6 +211,10 @@ pub enum PaletteId {
     GoldenEvening,
     /// Warm stone and sand with cool violet shadows.
     Desert,
+    /// Muted earth, lichen and glacial blues for open tundra.
+    Tundra,
+    /// Layered humid greens, warm canopy light and blue-green shadow.
+    Jungle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

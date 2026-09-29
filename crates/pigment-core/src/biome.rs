@@ -2,29 +2,35 @@
 //! capabilities to the shared scene, season and paint systems; it is not a
 //! renderer or a copy of one.
 //!
-//! There is intentionally only one registered biome today. Until a second
-//! complete profile is approved, prose continues to seed the alpine scene
-//! exactly as before and the UI does not show a redundant biome picker.
+//! Only fully integrated profiles are advertised; stable IDs remain part of
+//! recipe identity so selection survives save/load and scene caching.
+
+use serde::{Deserialize, Serialize};
 
 use crate::scene::Plant;
 use crate::season::{self, SeasonProfile};
 use crate::settings::{FormSettings, HAZE, PALETTE_INTENSITY, PaletteId, RELIEF, WOODLAND_DENSITY};
 
 /// Stable internal identity for a supported landscape family.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+#[repr(u8)]
 pub enum BiomeId {
+    #[default]
     Alpine,
     Desert,
+    Tundra,
+    Jungle,
 }
 
 impl BiomeId {
-    /// Stable spelling reserved for versioned recipes once multiple biomes
-    /// are exposed. Existing schema-2 recipes remain byte-for-byte unchanged
-    /// and resolve to this sole registered profile.
+    /// Stable spelling persisted in schema-3 recipes.
     pub const fn as_str(self) -> &'static str {
         match self {
             BiomeId::Alpine => "alpine",
             BiomeId::Desert => "desert",
+            BiomeId::Tundra => "tundra",
+            BiomeId::Jungle => "jungle",
         }
     }
 
@@ -34,6 +40,8 @@ impl BiomeId {
         match id {
             "alpine" => Some(BiomeId::Alpine),
             "desert" => Some(BiomeId::Desert),
+            "tundra" => Some(BiomeId::Tundra),
+            "jungle" => Some(BiomeId::Jungle),
             _ => None,
         }
     }
@@ -46,6 +54,8 @@ pub enum WaterForm {
     Lake,
     /// No persistent open-water body in the rocky-desert family.
     Arid,
+    /// No persistent lake; any pools are isolated and use the shared water role.
+    Sparse,
 }
 
 /// A complete, validated set of defaults/capabilities for one landscape.
@@ -87,10 +97,6 @@ pub const ALPINE: BiomeProfile = BiomeProfile {
 /// renderer already knows how to paint this plant form.
 const DESERT_PLANTS: &[Plant] = &[Plant::Shrub];
 
-/// Profile values are kept out of `PROFILES` until terrain, recipe selection,
-/// the painter and visual-review fixtures are complete. This lets the profile
-/// contract and authored season/palette be validated without advertising an
-/// incomplete biome as a working choice.
 pub const DESERT: BiomeProfile = BiomeProfile {
     id: BiomeId::Desert,
     display_name: "Rocky desert",
@@ -102,19 +108,62 @@ pub const DESERT: BiomeProfile = BiomeProfile {
     vegetation: DESERT_PLANTS,
     water: WaterForm::Arid,
     palette: PaletteId::Desert,
-    palette_intensity: 0.58,
-    haze: 0.34,
+    palette_intensity: 0.82,
+    haze: 0.24,
     season: &season::DESERT,
+};
+
+/// Approved low-growing vegetation and exposed tundra ground.
+const JUNGLE_PLANTS: &[Plant] = &[
+    Plant::Broadleaf,
+    Plant::Birch,
+    Plant::Shrub,
+    Plant::Flowering,
+];
+
+pub const JUNGLE: BiomeProfile = BiomeProfile {
+    id: BiomeId::Jungle,
+    display_name: "Tropical jungle",
+    form: FormSettings {
+        faceting: 0.42,
+        relief: 0.58,
+        woodland_density: 0.82,
+    },
+    vegetation: JUNGLE_PLANTS,
+    water: WaterForm::Sparse,
+    palette: PaletteId::Jungle,
+    palette_intensity: 0.78,
+    haze: 0.48,
+    season: &season::JUNGLE,
+};
+
+pub const TUNDRA: BiomeProfile = BiomeProfile {
+    id: BiomeId::Tundra,
+    display_name: "Open tundra",
+    form: FormSettings {
+        faceting: 0.38,
+        relief: 0.30,
+        woodland_density: 0.28,
+    },
+    vegetation: &[Plant::Shrub],
+    water: WaterForm::Sparse,
+    palette: PaletteId::Tundra,
+    palette_intensity: 0.62,
+    haze: 0.32,
+    season: &season::TUNDRA,
 };
 
 /// Profiles available to application code. The UI should expose a selector
 /// only when this registry contains more than one fully implemented profile.
-pub const PROFILES: &[BiomeProfile] = &[ALPINE];
+/// Only profiles with owner-approved visual studies are selectable.
+pub const PROFILES: &[BiomeProfile] = &[ALPINE, DESERT, TUNDRA, JUNGLE];
 
 pub fn profile(id: BiomeId) -> &'static BiomeProfile {
     match id {
         BiomeId::Alpine => &ALPINE,
         BiomeId::Desert => &DESERT,
+        BiomeId::Tundra => &TUNDRA,
+        BiomeId::Jungle => &JUNGLE,
     }
 }
 
@@ -144,6 +193,13 @@ impl BiomeProfile {
         {
             return Err("season keyframes must be ordered, in range and bounded");
         }
+        if self.season.cycle == season::Cycle::DryWet
+            && !self.season.keys.iter().all(|(_, state)| {
+                state.snow == 0.0 && state.ground_snow == 0.0 && state.tree_snow == 0.0
+            })
+        {
+            return Err("dry/wet seasonal profiles cannot use snow channels");
+        }
         for (spec, value) in [
             ("form.faceting", self.form.faceting),
             ("form.relief", self.form.relief),
@@ -169,10 +225,12 @@ mod tests {
 
     #[test]
     fn only_complete_registered_biomes_are_advertised() {
-        assert_eq!(PROFILES.len(), 1);
+        assert_eq!(PROFILES.len(), 4);
         assert_eq!(profile(BiomeId::Alpine).id, BiomeId::Alpine);
         assert_eq!(BiomeId::parse("alpine"), Some(BiomeId::Alpine));
         assert_eq!(BiomeId::parse("desert"), Some(BiomeId::Desert));
+        assert_eq!(BiomeId::parse("tundra"), Some(BiomeId::Tundra));
+        assert_eq!(BiomeId::parse("jungle"), Some(BiomeId::Jungle));
         assert_eq!(BiomeId::parse("unknown"), None);
         assert!(PROFILES.iter().all(|profile| profile.validate().is_ok()));
     }
@@ -186,7 +244,64 @@ mod tests {
     }
 
     #[test]
-    fn desert_profile_is_valid_but_not_advertised_before_its_generator_is_complete() {
+    fn approved_tundra_profile_is_complete_and_advertised() {
+        assert!(TUNDRA.validate().is_ok());
+        assert_eq!(TUNDRA.id.as_str(), "tundra");
+        assert_eq!(TUNDRA.palette, PaletteId::Tundra);
+        assert_eq!(TUNDRA.season.cycle, season::Cycle::Temperate);
+        assert!(PROFILES.iter().any(|profile| profile.id == BiomeId::Tundra));
+        assert_eq!(TUNDRA.water, WaterForm::Sparse);
+        assert_eq!(TUNDRA.vegetation, &[Plant::Shrub]);
+    }
+
+    #[test]
+    fn approved_jungle_profile_is_complete_and_advertised() {
+        assert!(JUNGLE.validate().is_ok());
+        assert_eq!(JUNGLE.id.as_str(), "jungle");
+        assert_eq!(JUNGLE.season.cycle, season::Cycle::DryWet);
+        assert_eq!(JUNGLE.palette, PaletteId::Jungle);
+        assert!(PROFILES.iter().any(|profile| profile.id == BiomeId::Jungle));
+        assert_eq!(
+            JUNGLE.vegetation,
+            &[
+                Plant::Broadleaf,
+                Plant::Birch,
+                Plant::Shrub,
+                Plant::Flowering
+            ]
+        );
+    }
+
+    #[test]
+    fn dry_wet_profiles_cannot_introduce_snow() {
+        static SNOW_KEYS: &[(f64, season::SeasonState)] = &[
+            (0.0, season::SeasonState::NEUTRAL),
+            (
+                0.5,
+                season::SeasonState {
+                    snow: 0.1,
+                    ..season::SeasonState::NEUTRAL
+                },
+            ),
+        ];
+        static SNOW_PROFILE: season::SeasonProfile = season::SeasonProfile {
+            name: "invalid dry/wet profile",
+            cycle: season::Cycle::DryWet,
+            keys: SNOW_KEYS,
+        };
+        let invalid = BiomeProfile {
+            season: &SNOW_PROFILE,
+            ..DESERT
+        };
+        assert_eq!(
+            invalid.validate(),
+            Err("dry/wet seasonal profiles cannot use snow channels")
+        );
+        assert!(DESERT.validate().is_ok());
+    }
+
+    #[test]
+    fn desert_profile_is_registered_with_its_bounded_climate_and_landscape() {
         assert!(DESERT.validate().is_ok());
         assert_eq!(DESERT.id.as_str(), "desert");
         assert_eq!(DESERT.water, WaterForm::Arid);
@@ -195,7 +310,7 @@ mod tests {
         assert_eq!(DESERT.season.cycle, season::Cycle::DryWet);
         assert_eq!(DESERT.season.at(0.58).snow, 0.0);
         assert_eq!(DESERT.season.at(0.58).dry, 1.0);
-        assert_eq!(PROFILES.len(), 1);
-        assert!(!PROFILES.iter().any(|profile| profile.id == BiomeId::Desert));
+        assert_eq!(PROFILES.len(), 4);
+        assert!(PROFILES.iter().any(|profile| profile.id == BiomeId::Desert));
     }
 }

@@ -2,7 +2,7 @@
 
 A painting has a time of year. The **Season** control moves it around a continuous yearly cycle, not a set of presets. It changes what is on the land (snow, leaves, grass, flowers) and never the land itself: the mountains, the water, where every tree stands, and the geometry checksum are the same all year.
 
-Code: `pigment_core::season` (the model), `settings::SEASON` (the control), `recipe` schema 2 (persistence), and the seasonal paths in `crates/pigment-gpu/src/paint.wgsl`. Review: [round 8](visual-review/round-08/README.md).
+Code: `pigment_core::season` (the model), `settings::SEASON` (the control), `recipe` schema 3 (persistence), and the seasonal paths in `crates/pigment-gpu/src/paint.wgsl`. Review: [round 8](visual-review/round-08/README.md).
 
 ## The year coordinate
 
@@ -78,30 +78,36 @@ Each control owns its own part of the picture, so they never fight:
 ## The control and persistence
 
 - **Season** is a Main control in the Appearance group (`settings::SEASON`), after Wash / Gouache. Its ends are both midwinter and its value text names the season. It is **cyclic**: Page Up/Down and the arrow keys carry on past the ends (from the year's end to 0.01, from 0 to 0.99). Home and End go to 0 and 1, and Delete resets to midsummer. Changing it repaints without rebuilding the scene.
-- **Recipe schema 2** adds `season.year` (required). Schema 1 files, the only format before seasons, load through one explicit migration: they are checked against the schema 1 table, then get `season.year = 0.5`, the midsummer they were painted in, so they paint exactly as before. Saving writes schema 2, and builds that read only schema 1 reject such a file with "recipe schema 2 is not supported". Tested: the 47 approved schema 1 recipes migrate, repaint byte for byte, and re-save as schema 2 with only the schema number and the season added ([seeds-and-recipes.md](seeds-and-recipes.md#recipe-schema-2)).
+- **Recipe schema 3** stores required `season.year` and stable `biome` identity. Schema 1 gains the original midsummer (`season.year = 0.5`), then schema 1 and 2 migrate to `biome = "alpine"`; existing geometry and appearance defaults remain. Saving writes schema 3, and older builds reject it as a future schema ([seeds-and-recipes.md](seeds-and-recipes.md#recipe-schema-3)).
 - The season is an appearance setting, so it is part of the export snapshot and of every recipe, and has nothing to do with the prose seed.
 
 ## Biome registration and extension contract
 
-The owner-approved task 17 scope is one registered **Alpine** profile covering the existing mountain lakeshores and wooded valleys. Prose remains non-semantic seed material: every input continues to generate this same landscape family. The profile is registered in `crates/pigment-core/src/biome.rs`; `BiomeId::Alpine` has the stable internal ID `alpine`. The profile collects the existing structure defaults, allowed vegetation, the existing lake water form, base palette/atmosphere defaults and `season::ALPINE`. It does not duplicate or fork the scene generator, season model, paint shaders or export path.
-
-There is no biome picker while Alpine is the only fully implemented profile. Existing schema-1 and schema-2 recipes stay unchanged, and their current output/season defaults are preserved; loading them resolves to the sole registered Alpine profile. Do not add a redundant biome field to those recipes. When a second biome is approved, expose a selector and add an explicit stable biome ID in a new recipe schema with tested migrations that map old recipes to `alpine`; unknown IDs must fail clearly. Switching biome may regenerate structure. Changing season, palette, atmosphere or paint handling must not move geometry. Keep structural defaults separate from paint-only overrides, and preserve user appearance settings on a biome switch unless a documented control is biome-specific.
+The approved registered profiles are **Alpine** (`alpine`) for mountain lakeshores/wooded valleys, **Rocky desert** (`desert`) for stratified mesas, a dry basin/wash, and sparse shrubs, and **Open tundra** (`tundra`) for broad, low-relief ground, exposed stone, and sparse dwarf shrubs. **Tropical jungle** (`jungle`) is approved for selection following owner visual review. Prose remains non-semantic seed material. Each profile supplies structure, vegetation, water, palette, atmosphere, and seasonal defaults through shared scene, paint, and export paths. The Composition panel's Landscape selector switches profiles and applies that profile's structural, palette, and haze defaults while retaining paint handling and season. Stable identity is persisted in recipe schema 3; schema-1/2 recipes migrate to Alpine. Biome identity is also part of the scene cache key, so a switch cannot reuse the wrong composition.
 
 A biome brings a `SeasonProfile`: a name, a `Cycle` and its keyframes over the same eight channels.
 
-- **`Cycle::Temperate`** (the alpine profile): winter, spring, summer, autumn.
-- **`Cycle::DryWet`** (jungle, task 20): a dry season and a wet season. Such a profile keeps `snow`, `ground_snow` and `tree_snow` at 0 (no generic snow in every biome) and moves `dry` (cured, dusty ground and canopy), `leaf` (dry-season leaf drop for deciduous species), `fresh` (the flush after the rains) and `bloom`. A wet-season channel (standing water, saturated greens) would be a new channel added then, with neutral 0, so existing profiles are unaffected.
-- **Tundra** (task 19) is `Temperate` with a long `snow` season and a short `fresh`/`bloom` summer. **Desert** (task 18) may keep most channels neutral and use `bloom` for the brief flowering.
+- **`Cycle::Temperate`** (alpine and tundra): winter, spring, summer, autumn, with each profile choosing its own channel timing.
+- **`Cycle::DryWet`** (desert, task 18; jungle, task 20): a dry season and a wet/growth season. Such a profile keeps `snow`, `ground_snow` and `tree_snow` at 0 (no generic snow in every biome) and may move `dry` (cured, dusty ground and canopy), `leaf` (dry-season leaf drop for deciduous species), `fresh` (the flush after the rains) and `bloom`. A wet-season channel (standing water, saturated greens) would be a new channel added when needed, with neutral 0, so existing profiles are unaffected.
+- **Tundra** (task 19) is `Temperate` with a long `snow` season and a short `fresh`/`bloom` summer. The rocky-desert profile uses a restrained stylized dry/growth cycle: a brief subdued flowering/greening period and a long dry period. Its snow channels are validated as zero; seasons affect paint only and do not alter terrain or shrub placement.
 
 Rules for every profile:
 
 - The keyframe at the biome's default season must be `SeasonState::NEUTRAL` if that biome's approved painting predates its seasons.
 - Every channel stays in `[0, 1]`, and a profile never changes geometry or placement.
-- A profile is selectable only after its structure, vegetation/effects, season response, palette and recipe behavior are implemented and tested. Today every scene is the alpine lakeshore.
+- A profile is selectable only after its structure, vegetation/effects, season response, palette and recipe behavior are implemented and tested. Alpine, Rocky desert, Open tundra, and owner-approved Tropical jungle are registered.
 
-### Desert implementation status
+### Open tundra (task 19)
 
-A preliminary, deliberately non-selectable desert profile is being authored in `crates/pigment-core/src/biome.rs`: rocky-desert defaults use low shrub density, an arid water capability, a warm mineral palette with cool shadows, and a restrained stylized wet/dry seasonal cycle. It is **not** in `biome::PROFILES`; the existing lakeshore generator, versioned recipe identity and UI still produce/select Alpine only. The profile must not be presented as a working biome or used to imply that changing palette alone creates desert structure. The seasonal values describe artistic appearance, not a climate simulation.
+The tundra generator in `crates/pigment-core/src/scene/tundra.rs` keeps the scene open and low-growing: layered rolling ground rather than peaks, no tree stands or lake, and sparse shrubs whose placement is independent of season. Its temperate cycle has a long snow season and a brief growing window; the `tundra` palette and season affect paint without changing geometry. The approved ten-seed and seasonal visual comparisons are in `docs/visual-review/tundra-candidate/`.
+
+### Tropical jungle (task 20)
+
+`crates/pigment-core/src/scene/jungle.rs` builds three overlapping canopy horizons, a broken overhead canopy, and a bounded set of varied understory accents. The approved biome uses a separate humid-green palette and a stylized dry/wet year; it does not simulate rain, and no seasonal values affect geometry or vegetation placement. Owner-approved art evidence and the three-seed seasonal comparison are in `docs/visual-review/jungle-candidate/`. Performance, tile-seam, source-free recipe, and export qualifications are tracked separately in that directory.
+
+### Rocky desert (task 18)
+
+The integrated rocky-desert generator is in `crates/pigment-core/src/scene/desert.rs`; Mesa paint is in the shared `crates/pigment-gpu/src/paint.wgsl`. It uses seeded mesa silhouettes with irregular strata, a rolling basin/dry wash, sparse low shrubs, an arid water capability, a warm mineral palette with cool shadows, and a restrained stylized dry/growth seasonal cycle. `BiomeProfile::validate` rejects snow channels for dry/wet profiles. The 10-seed contact sheet and 3-seed seasonal comparison, approved by the owner before integration, are retained at `docs/visual-review/desert-candidate/`. Seasonal values describe painterly appearance, not a climate simulation.
 
 ### Add-a-biome checklist
 
@@ -109,7 +115,7 @@ A preliminary, deliberately non-selectable desert profile is being authored in `
 2. Extend the shared scene-generation inputs in `crates/pigment-core/src/scene/` and existing shared GPU painting paths only where a new structural/effect capability needs it. Do not copy `LakeshoreGenerator`, `paint.wgsl`, the season system, or export services.
 3. Add profile validation and tests in `crates/pigment-core/src/biome.rs`; add deterministic generator/geometry, season and painting tests in the existing module test suites. Demonstrate that paint/season edits preserve geometry and that biome changes reproduce from their recipe and seed domains.
 4. Add reviewed visual fixtures under `docs/visual-review/` and verify recipe round trips, migrations, tiled/export parity and supported GPU backends. Obtain explicit owner approval of the visual quality before advertising the biome.
-5. Only after all of the above passes, add it to `biome::PROFILES` and show the accessible picker in `crates/pigment-studio/src/`. For the second biome, version recipe identity in `crates/pigment-core/src/recipe.rs`, update `docs/seeds-and-recipes.md` and examples, and test that legacy recipes resolve to `alpine` while unknown IDs are rejected.
+5. Only after all of the above passes, add a profile to `biome::PROFILES` and show it in the accessible picker. For new profile identity, version recipes as needed, update docs/examples, and test legacy migrations and unknown-ID rejection.
 
 ## Cost
 
@@ -122,11 +128,11 @@ Measured on sample 15 at 1920 × 1080, single runs, render and readback: 3.9 ms 
 | Periodic, C¹, bounded, exact keyframes, midsummer neutral, labels | `pigment_core::season::tests` |
 | The control spec, value text, invalidation (repaint only) | `settings::tests`, `controls::tests`, `invalidate::tests`, `ui_tests::each_control_invalidates_only_its_stage_and_paint_keeps_geometry` |
 | Geometry unchanged in every season | `lakeshore::tests::appearance_and_paint_seed_never_touch_geometry` |
-| Schema 2 serialization, schema 1 migration, per-schema tables, range checks | `recipe::tests`, `pigment-io/tests/recipes.rs` |
+| Schema 3 biome round trip; schema 1/2 Alpine migration; tables and range checks | `recipe::tests`, `pigment-io/tests/recipes.rs` |
 | Midsummer is the default, 0 and 1 paint the same, every season differs | `gpu_hardware::midsummer_is_the_default_and_the_year_wraps` |
 | Palette precedence on sky and clouds | `gpu_hardware::the_sky_and_clouds_stay_the_palettes_in_every_season` |
 | Snowfall mask stability | `gpu_hardware::snow_only_grows_as_winter_deepens` |
 | Tile seams for snow and every other seasonal effect at 2K (tiles of 333 and 512 px) | `gpu_hardware::every_season_is_identical_tiled_and_single_at_high_resolution` |
 | Cyclic keyboard control; season leaves palette and haze alone | `ui_tests::the_season_wraps_from_the_keyboard_and_leaves_palette_and_air_alone` |
 | The approved midsummer images repaint exactly | `pigment-io/tests/gpu_export.rs::approved_recipes_repaint_identically_after_save_and_load` |
-| Schema 1 recipes migrate | `pigment-io/tests/recipes.rs::schema_1_recipes_migrate_to_midsummer_schema_2` |
+| Schema 1 recipes migrate | `pigment-io/tests/recipes.rs::schema_1_recipes_migrate_to_midsummer_and_alpine_schema_3` |

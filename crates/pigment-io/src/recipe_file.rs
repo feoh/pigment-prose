@@ -262,7 +262,7 @@ mod tests {
         let json = sample()
             .to_canonical_json()
             .unwrap()
-            .replace("\"schema\": 2", "\"schema\": 3")
+            .replace("\"schema\": 3", "\"schema\": 4")
             .replace(
                 "\"atmosphere\": {",
                 "\"weather\": \"autumn\",\n  \"atmosphere\": {",
@@ -271,8 +271,8 @@ mod tests {
         assert!(matches!(
             read_recipe(&path),
             Err(RecipeFileError::Recipe(RecipeError::UnsupportedSchema {
-                found: 3,
-                supported: 2
+                found: 4,
+                supported: 3
             }))
         ));
     }
@@ -438,11 +438,11 @@ mod documented_messages {
         let cases = [
             (
                 json[..json.len() / 2].to_string(),
-                "invalid recipe: the recipe ends unexpectedly (truncated?) at line 19, column 4",
+                "invalid recipe: the recipe ends unexpectedly (truncated?) at line 19, column 15",
             ),
             (
-                json.replace("\"schema\": 2", "\"schema\": 3"),
-                "invalid recipe: recipe schema 3 is not supported; this version reads schemas 1 to 2",
+                json.replace("\"schema\": 3", "\"schema\": 4"),
+                "invalid recipe: recipe schema 4 is not supported; this version reads schemas 1 to 3",
             ),
             (
                 json.replace("0.55", "1.7"),

@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "versions": {
     "normalization": "nfc-lf-utf8/1",
     "seed_algorithm": "pigment-seed/1",
@@ -10,6 +10,7 @@
     "digest": "7ac7f737542c62a3a903b3190f6dc3b4585bb653290dfaa2da804cad7ad37850",
     "variation": 2
   },
+  "biome": "alpine",
   "frame": {
     "width": 7680,
     "height": 4320

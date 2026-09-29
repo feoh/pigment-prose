@@ -219,7 +219,11 @@ impl std::fmt::Debug for StudioApp {
 
 /// Same scene and paint (ignoring size and when it was asked for).
 pub(crate) fn same_inputs(a: &PreviewJob, b: &PreviewJob) -> bool {
-    a.seeds == b.seeds && a.form == b.form && a.aspect == b.aspect && a.appearance == b.appearance
+    a.biome == b.biome
+        && a.seeds == b.seeds
+        && a.form == b.form
+        && a.aspect == b.aspect
+        && a.appearance == b.appearance
 }
 
 /// Same render inputs, including size.
@@ -291,6 +295,7 @@ impl StudioApp {
     /// The document as the controls edit it.
     pub fn values(&self) -> ControlValues {
         ControlValues {
+            biome: self.doc.recipe().biome,
             form: self.doc.recipe().form,
             appearance: self.doc.appearance(),
         }
@@ -308,6 +313,7 @@ impl StudioApp {
     /// The painting's inputs as they are now (size aside).
     fn current_job(&self, width: u32, height: u32, now: Instant) -> PreviewJob {
         PreviewJob {
+            biome: self.doc.recipe().biome,
             seeds: self.doc.seeds(),
             form: self.doc.recipe().form,
             aspect: self.doc.recipe().frame.aspect(),
@@ -360,9 +366,14 @@ impl StudioApp {
 
     fn apply_values(&mut self, v: ControlValues, edit: Edit, now: Instant) {
         // The sliders clamp to the specified ranges, so these validate.
+        let biome = if self.doc.recipe().biome != v.biome {
+            self.doc.set_biome(v.biome)
+        } else {
+            Ok(())
+        };
         let form = self.doc.set_form(v.form);
         let appearance = self.doc.set_appearance(v.appearance);
-        debug_assert!(form.is_ok() && appearance.is_ok());
+        debug_assert!(biome.is_ok() && form.is_ok() && appearance.is_ok());
         if edit.interacting {
             self.scheduler.slider_moved(now);
         } else {
@@ -558,6 +569,7 @@ impl StudioApp {
     /// A snapshot of the painting as it is now, for an export of `frame`.
     fn export_job(&self, frame: Frame, destination: PathBuf) -> ExportJob {
         ExportJob {
+            biome: self.doc.recipe().biome,
             seeds: self.doc.seeds(),
             form: self.doc.recipe().form,
             aspect: self.doc.recipe().frame.aspect(),
@@ -989,6 +1001,31 @@ impl StudioApp {
             }
         });
         ui.add_space(8.0);
+        let biome = self.doc.recipe().biome;
+        let mut picked_biome = None;
+        let label = ui.label(egui::RichText::new("Landscape").color(theme::INK));
+        egui::ComboBox::from_id_salt("biome")
+            .selected_text(pigment_core::biome::profile(biome).display_name)
+            .width(ui.available_width())
+            .show_ui(ui, |ui| {
+                for profile in pigment_core::biome::PROFILES {
+                    if ui
+                        .selectable_label(biome == profile.id, profile.display_name)
+                        .clicked()
+                    {
+                        picked_biome = Some(profile.id);
+                    }
+                }
+            })
+            .response
+            .labelled_by(label.id);
+        if let Some(picked) = picked_biome
+            && picked != biome
+            && self.doc.set_biome(picked).is_ok()
+        {
+            self.scheduler.now(now);
+        }
+        ui.add_space(8.0);
         let aspect = self.doc.recipe().frame.aspect();
         let current = Shape::of(aspect);
         let label = ui.label(egui::RichText::new("Shape").color(theme::INK));
@@ -1081,7 +1118,19 @@ impl StudioApp {
             }
         });
         ui.add_space(10.0);
-        let defaults = ControlValues::default();
+        let profile = pigment_core::biome::profile(values.biome);
+        let defaults = ControlValues {
+            biome: values.biome,
+            form: profile.form,
+            appearance: pigment_core::settings::Appearance {
+                palette: pigment_core::settings::PaletteSettings {
+                    id: profile.palette,
+                    intensity: profile.palette_intensity,
+                },
+                atmosphere: pigment_core::settings::AtmosphereSettings { haze: profile.haze },
+                ..Default::default()
+            },
+        };
         if ui
             .add_enabled(
                 values != defaults,

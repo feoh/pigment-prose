@@ -1,0 +1,40 @@
+{
+  "schema": 3,
+  "versions": {
+    "normalization": "nfc-lf-utf8/1",
+    "seed_algorithm": "pigment-seed/1",
+    "generator": 3,
+    "renderer": 4
+  },
+  "seed": {
+    "digest": "d6512ec27f29015a30476136d4882e428f4f0f4392f59d9526d6ef426c5d62e3",
+    "variation": 0
+  },
+  "biome": "jungle",
+  "frame": {
+    "width": 480,
+    "height": 270
+  },
+  "form": {
+    "faceting": 0.42,
+    "relief": 0.58,
+    "woodland_density": 0.82
+  },
+  "painting": {
+    "edge_looseness": 0.4,
+    "wash_gouache": 0.25,
+    "mark_scale": 1.0,
+    "granulation": 0.3,
+    "paper_grain": 0.3
+  },
+  "palette": {
+    "id": "jungle",
+    "intensity": 0.78
+  },
+  "atmosphere": {
+    "haze": 0.48
+  },
+  "season": {
+    "year": 0.5
+  }
+}

@@ -17,7 +17,6 @@ use pigment_core::job::{CancelToken, Phase, Progress, ProgressSink};
 use pigment_core::palette::palette;
 use pigment_core::request::{RenderReport, RenderRequest, Renderer, TileSink};
 use pigment_core::scene::{CanvasPoint, LayerRole, LightSide, Scene, metrics};
-use pigment_core::season;
 use pigment_core::seed::Domain;
 use pigment_core::settings::Appearance;
 use pigment_core::tiles::{Support, Tile, TileCostModel, TilePlan, apron_pixels};
@@ -601,9 +600,10 @@ impl Renderer for PaintRenderer {
         for v in channel_desc {
             fixed.extend(v.to_le_bytes());
         }
-        // The season's channels (task 16). The lakeshore scenes are the
-        // alpine biome; midsummer is all neutral, the approved look.
-        for v in season::ALPINE.at(a.season.year).gpu().as_flattened() {
+        // Biome season channels are selected by the scene's structural role;
+        // paint/season changes never feed back into the generated geometry.
+        let profile = pigment_core::biome::profile(req.scene.key().biome).season;
+        for v in profile.at(a.season.year).gpu().as_flattened() {
             fixed.extend(v.to_le_bytes());
         }
         let tiles = PaintTiles {

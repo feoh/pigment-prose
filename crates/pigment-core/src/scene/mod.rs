@@ -1,6 +1,6 @@
 //! Immutable structural scene.
 //!
-//! A `Scene` is a pure function of `(generator version, structural seeds,
+//! A `Scene` is a pure function of `(generator version, biome, structural seeds,
 //! FormSettings, AspectRatio)`: the [`SceneKey`]. It never depends on paint
 //! handling, palette, atmosphere, pixel size, tile layout or device. It is
 //! built once on the CPU, validated, wrapped in `Arc` and shared read-only by
@@ -18,11 +18,15 @@
 //! documented in `docs/scene-generation.md`). [`raster`] is a CPU reference
 //! rasterizer and topology checker for tests and diagnostics.
 
+pub mod desert;
+pub mod jungle;
 pub mod lakeshore;
 pub mod metrics;
 mod noise;
 pub mod raster;
+pub mod tundra;
 
+use crate::biome::BiomeId;
 use crate::error::{Problem, ValidationError};
 use crate::frame::{AspectRatio, CanvasExtents};
 use crate::seed::{Domain, SeedBundle, StreamSeed};
@@ -33,10 +37,33 @@ pub const MAX_LAYER_VERTICES: usize = 4096;
 /// Bound on the sum of all layer vertices (GPU upload and per-pixel cost).
 pub const MAX_SCENE_VERTICES: usize = 32768;
 
+/// Reusable low-shrub silhouette for open landscapes. `phase` is a stable
+/// seed draw, not an animated angle, so both profile and tile geometry repeat.
+pub(crate) fn low_shrub_outline(x: f64, y: f64, radius: f64, phase: f64) -> Vec<CanvasPoint> {
+    let profile = [0.55, 0.70, 0.88, 1.0, 0.78, 0.92, 0.72, 0.61, 0.55];
+    profile
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let t = i as f64 / (profile.len() - 1) as f64;
+            let wobble = if i == 0 || i + 1 == profile.len() {
+                1.0
+            } else {
+                0.96 + 0.04 * phase
+            };
+            CanvasPoint {
+                x: (x + (2.0 * t - 1.0) * radius) as f32,
+                y: (y - radius * r * wobble) as f32,
+            }
+        })
+        .collect()
+}
+
 /// Inputs that fully determine a scene.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SceneKey {
     pub generator_version: u32,
+    pub biome: BiomeId,
     pub structural_seeds: [StreamSeed; 3],
     pub form: FormSettings,
     pub aspect: AspectRatio,
@@ -46,11 +73,13 @@ impl SceneKey {
     pub fn new(
         generator_version: u32,
         seeds: &SeedBundle,
+        biome: BiomeId,
         form: FormSettings,
         aspect: AspectRatio,
     ) -> SceneKey {
         SceneKey {
             generator_version,
+            biome,
             structural_seeds: seeds.structural(),
             form,
             aspect,
@@ -80,10 +109,18 @@ pub enum LayerRole {
     Mountain = 8,
     /// Cloud masses in the sky (behind all terrain).
     Cloud = 9,
+    /// Layered, exposed mesa forms without alpine snow or forest response.
+    Mesa = 10,
+    /// Open tundra ground; paint it as low cover rather than forest.
+    TundraGround = 11,
+    /// Humid jungle understory and seasonal clearings.
+    JungleGround = 12,
+    /// Dense, species-varied tropical canopy in shared paint space.
+    JungleCanopy = 13,
 }
 
 impl LayerRole {
-    pub const ALL: [LayerRole; 10] = [
+    pub const ALL: [LayerRole; 14] = [
         LayerRole::Sky,
         LayerRole::FarRidge,
         LayerRole::MidRidge,
@@ -94,6 +131,10 @@ impl LayerRole {
         LayerRole::ForegroundRock,
         LayerRole::Mountain,
         LayerRole::Cloud,
+        LayerRole::Mesa,
+        LayerRole::TundraGround,
+        LayerRole::JungleGround,
+        LayerRole::JungleCanopy,
     ];
 
     pub fn name(self) -> &'static str {
@@ -108,6 +149,10 @@ impl LayerRole {
             LayerRole::ForegroundRock => "foreground-rock",
             LayerRole::Mountain => "mountain",
             LayerRole::Cloud => "cloud",
+            LayerRole::Mesa => "mesa",
+            LayerRole::TundraGround => "tundra-ground",
+            LayerRole::JungleGround => "jungle-ground",
+            LayerRole::JungleCanopy => "jungle-canopy",
         }
     }
 }
@@ -419,12 +464,25 @@ impl Fnv1a {
 /// the structural streams, form settings and aspect ratio.
 pub trait SceneGenerator: Send + Sync {
     fn version(&self) -> u32;
+    fn biome(&self) -> BiomeId {
+        BiomeId::Alpine
+    }
     fn generate(
         &self,
         seeds: &SeedBundle,
         form: &FormSettings,
         aspect: AspectRatio,
     ) -> Result<Scene, ValidationError>;
+}
+
+/// The single generator dispatch used by previews, exports, and tools.
+pub fn generator(biome: BiomeId) -> &'static dyn SceneGenerator {
+    match biome {
+        BiomeId::Alpine => &lakeshore::LakeshoreGenerator,
+        BiomeId::Desert => &desert::DesertGenerator,
+        BiomeId::Tundra => &tundra::TundraGenerator,
+        BiomeId::Jungle => &jungle::JungleGenerator,
+    }
 }
 
 /// Diagnostic scene for the GPU smoke path and tests: sky plus three angular
@@ -499,7 +557,10 @@ impl SceneGenerator for TestCard {
                 outline,
             });
         }
-        Scene::new(SceneKey::new(self.version(), seeds, *form, aspect), layers)
+        Scene::new(
+            SceneKey::new(self.version(), seeds, self.biome(), *form, aspect),
+            layers,
+        )
     }
 }
 

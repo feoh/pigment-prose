@@ -72,7 +72,7 @@ A preview is a smaller rendering of the same painting. An export at another size
 
 - **On the same computer and version**, a recipe makes the same image every time, pixel for pixel.
 - **On another GPU or driver** the same recipe makes the same composition, but pixels may differ very slightly.
-- **Across versions:** each recipe records the generator and renderer versions that made it. This version is generator 2 and renderer 2. A recipe from another version opens with a note that it may compose or paint differently. The program ships one generator and one renderer and does not keep old ones. Saving updates the recorded versions.
+- **Across versions:** each recipe records the generator and renderer versions that made it. This version is generator 3 and renderer 4. A recipe from another version opens with a note that it may compose or paint differently. The program ships one generator and one renderer and does not keep old ones. Saving updates the recorded versions.
 
 Keep the exported PNG if you need that exact image forever; keep the recipe to make it again, or to change it.
 

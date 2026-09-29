@@ -1,0 +1,22 @@
+pigment-prose 0.1.0 contact-sheet: tundra generator v3, renderer v3, view paint, aspect 16:9, cell 640x360, form faceting=0.38 relief=0.3 woodland_density=0.28
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Tundra, intensity: 0.62 }, atmosphere: AtmosphereSettings { haze: 0.32 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud mesa tundra-ground)	image fnv
+1	sample passage 0 season=0.00	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	85d9d360ae740ae0
+2	sample passage 0 season=0.15	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	74c554515242b3d7
+3	sample passage 0 season=0.39	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	8b917f0bd0d3cc13
+4	sample passage 0 season=0.50	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	ca5cf9c5cd8060f9
+5	sample passage 0 season=0.63	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	bb45652c1c7f5fd0
+6	sample passage 0 season=0.88	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	573dd6f6fb71f9ad
+7	sample passage 1 season=0.00	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	2601eabcf03967df
+8	sample passage 1 season=0.15	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	04bb265e845e3453
+9	sample passage 1 season=0.39	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	404394a726d02309
+10	sample passage 1 season=0.50	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	679039181e7090ed
+11	sample passage 1 season=0.63	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	2d06ac517d001d44
+12	sample passage 1 season=0.88	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	99421f32ccb2284f
+13	sample passage 2 season=0.00	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	d1ec17bf4a466e2b
+14	sample passage 2 season=0.15	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	3b577ffc8e8b58ae
+15	sample passage 2 season=0.39	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	d7774007645da825
+16	sample passage 2 season=0.50	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	8cf345eb7765a56b
+17	sample passage 2 season=0.63	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	2d3a10591d860bfc
+18	sample passage 2 season=0.88	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	a691ea97be881e12

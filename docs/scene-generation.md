@@ -4,7 +4,7 @@ This document specifies the structural scene for the first painting, a rocky woo
 
 **Task 05b (vistas for awe)** added two templates (`tower-peak`, `high-vantage`), cloud masses, a structural light pool, distance-scaled trees and awe metrics. It followed the user's review that the task 05 scenes read as "some hills and some scrub". Sections marked 05b below describe the additions, and [art-direction.md](art-direction.md#awe-metrics) describes the metrics. Round-by-round ratings are in [visual-review/](visual-review/).
 
-The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **3**: version 1 was approved at the task 08 visual gate (2026-09-27), version 2 (task 25: wind, and the rock builder described below) at review round 7 (2026-09-28), and version 3 (varied rock proportions, wear and lean) at review round 9 (2026-09-28). Any checksum change requires a version bump.
+The scene is **geometry only**: depth-ordered polygons with a semantic role and a structural light factor. `SceneKey` includes the stable biome ID as well as generator version, structural seeds, form and aspect, so switching biome invalidates cached geometry. Color, edges, washes, texture and trees are tasks 06–07. `GENERATOR_VERSION` is **3**: version 1 was approved at the task 08 visual gate (2026-09-27), version 2 (task 25: wind, and the rock builder described below) at review round 7 (2026-09-28), and version 3 (varied rock proportions, wear and lean) at review round 9 (2026-09-28). Any checksum change requires a version bump.
 
 ## Output: the layer model
 
@@ -37,9 +37,13 @@ Layers produced, back to front:
 | Near woods | `Woodland` | 0.20 | up to 5 stands along the near shore, each one plant (see [painting.md](painting.md#plants)) |
 | Rocks | `ForegroundRock` | 0.15 → 0.03 | 3–6 rocks, some with a smaller companion, each a body plus at least three planes (see Rocks below), sorted far to near |
 | Valley spurs (05b, `high-vantage`) | `NearRidge` | 0.44 → 0.14 | 4–7 ridges from alternating sides, far to near, each with a band of trees sized for its distance; the lake winds between them |
+| Rocky desert | `Mesa` | 0.93 → 0.12 | Overlapping mesa bodies with variable caps and irregular exposed strata; rolling basin and dry wash; sparse shrubs, no persistent lake |
+| Open tundra | `TundraGround`, `Woodland` | 0.82 → 0.18 | Open, low-relief rolling ground painted as cover and exposed stone (never forest); no peaks or lake; sparse low shrubs ride the foreground contour |
 | (removed) cliff edge | — | — | `high-vantage` once framed the view with a ledge the viewer stood on. Removed at the user's request (2026-09-27): the view now ends on the valley's nearest spur, which sits on the frame's bottom edge (nearness 1). There is no near shore, near woods or rocks in this template. |
 
-The two `Woodland` kinds are **placement regions** for task 07's trees. The debug views show them as flat masses, and their scalloped outlines are only a rough canopy envelope. The water's top edge (far shoreline), the near shore's top edge (near shoreline) and the rock bases give task 07 the reflection line and the shore contact.
+`TundraGround` paints tundra land with shared low-cover, exposed-stone and seasonal-snow materials instead of the tree-stand materials used on alpine ridges. `Woodland` is a **vegetation placement region**: alpine emits tree stands, while desert and tundra emit sparse low shrubs. Its debug view is a flat mass; the scalloped outline is only a rough vegetation envelope. In the alpine scene the far-water edge, near-shore edge and rock bases also provide the reflection line and shore contact.
+
+**`Mesa`** is a reusable structural role for exposed tableland surfaces. It deliberately selects a separate GPU material path: palette-driven warm stone and sediment strata without mountain snow, forest, or lake effects. It was added for the registered rocky-desert biome (`scene::desert::DesertGenerator`); the alpine lakeshore generator does not emit it. The painter uses the same scene coverage, tile, and paint-detail contracts rather than a biome-specific renderer.
 
 **Bounds:** at most 96 layers, 4096 vertices per layer and 32,768 per scene (validated by `Scene::new`). The densest case, `high-vantage` at 4:1 with maximum faceting, relief and density, stays under 90 layers and 30,000 vertices (tested; the worst of 180 extreme scenes measured 28,284). Distant spurs are sampled at up to 2 × `PROFILE_STEP`, and far woods at `PROFILE_STEP`, to stay within that bound.
 

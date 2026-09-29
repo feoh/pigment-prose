@@ -1,0 +1,10 @@
+pigment-prose 0.1.0 contact-sheet: desert generator v3, renderer v3, view paint, aspect 16:9, cell 640x360, form faceting=0.78 relief=0.42 woodland_density=0.14
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Desert, intensity: 0.82 }, atmosphere: AtmosphereSettings { haze: 0.24 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud mesa)	image fnv
+1	sample passage 0 season=0.20	mesa-basin	false	49	6336	dc2a5da3e4bee5d0	0.00	-	0	0.00	0.00	0.00	0.33	0.00	27.1 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 72.8	64b6eff9b8237591
+2	sample passage 0 season=0.58	mesa-basin	false	49	6336	dc2a5da3e4bee5d0	0.00	-	0	0.00	0.00	0.00	0.33	0.00	27.1 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 72.8	434deefc3a240e7f
+3	sample passage 1 season=0.20	mesa-basin	false	44	5746	fd1874f65903b2f8	0.00	-	0	0.00	0.00	0.00	0.64	0.00	24.9 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 75.1	a61df81692f2bec1
+4	sample passage 1 season=0.58	mesa-basin	false	44	5746	fd1874f65903b2f8	0.00	-	0	0.00	0.00	0.00	0.64	0.00	24.9 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 75.1	8f457e6f2688ee4f
+5	sample passage 2 season=0.20	mesa-basin	false	45	5502	137248e1d9fc8a85	0.00	-	0	0.00	0.00	0.00	0.52	0.00	28.3 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 71.6	46a95b45eb639aad
+6	sample passage 2 season=0.58	mesa-basin	false	45	5502	137248e1d9fc8a85	0.00	-	0	0.00	0.00	0.00	0.52	0.00	28.3 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 71.6	79aad6224c845c62

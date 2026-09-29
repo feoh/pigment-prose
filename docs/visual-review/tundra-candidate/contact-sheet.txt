@@ -1,0 +1,14 @@
+pigment-prose 0.1.0 contact-sheet: tundra generator v3, renderer v3, view paint, aspect 16:9, cell 512x288, form faceting=0.38 relief=0.3 woodland_density=0.28
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Tundra, intensity: 0.62 }, atmosphere: AtmosphereSettings { haze: 0.32 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud mesa tundra-ground)	image fnv
+1	sample passage 0	open-tundra	false	14	1014	a7a75dc9c20b9bae	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.2	5b4dc7120ac89c23
+2	sample passage 1	open-tundra	false	14	1014	ddf99f6306628e2c	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.6 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 66.3	b312f72ab2c4c9bc
+3	sample passage 2	open-tundra	false	14	1014	9d43ebfa94ebdf85	0.00	-	0	0.00	0.00	0.00	0.11	0.00	33.0 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 67.0	e97d48ce0cf40d3e
+4	sample passage 3	open-tundra	false	14	1014	3d02ee5740300e39	0.00	-	0	0.00	0.00	0.00	0.11	0.00	39.5 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 60.5	8b0df69287ec5255
+5	sample passage 4	open-tundra	false	14	1014	ab80e2cc137a7be8	0.00	-	0	0.00	0.00	0.00	0.11	0.00	31.8 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 68.1	de3c26f62dba8f4a
+6	sample passage 5	open-tundra	false	14	1014	f88e8f521d82d14b	0.00	-	0	0.00	0.00	0.00	0.11	0.00	39.7 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 60.3	b20e2d629a0e87e9
+7	sample passage 6	open-tundra	false	14	1014	880dd8a33d3457a9	0.00	-	0	0.00	0.00	0.00	0.11	0.00	35.8 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 64.2	d167f56668c18b15
+8	sample passage 7	open-tundra	false	14	1014	f15df33ccb3dc7ba	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.7 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 63.3	3e91a1aa12cb97a4
+9	sample passage 8	open-tundra	false	14	1014	49a8a6cae5acf8c9	0.00	-	0	0.00	0.00	0.00	0.11	0.00	34.8 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 65.1	ca399204cce06349
+10	sample passage 9	open-tundra	false	14	1014	227d67deecfe5fc3	0.00	-	0	0.00	0.00	0.00	0.11	0.00	36.4 0.0 0.0 0.0 0.0 0.0 0.1 0.0 0.0 0.0 0.0 63.5	a6be952d81d5770f

@@ -91,6 +91,8 @@ fn role_value(role: u32) -> f32 {
         case 6u: { return 0.10; }  // woodland
         case 7u: { return 0.40; }  // foreground rock
         case 9u: { return 0.70; }  // cloud
+        case 10u: { return 0.46; } // mesa
+        case 11u: { return 0.38; } // tundra ground
         default: { return 0.45; }  // mountain
     }
 }
@@ -106,6 +108,8 @@ fn role_color(role: u32) -> vec3<f32> {
         case 6u: { return vec3<f32>(0.04, 0.26, 0.06); }
         case 7u: { return vec3<f32>(0.78, 0.36, 0.10); }
         case 9u: { return vec3<f32>(0.90, 0.90, 0.86); }
+        case 10u: { return vec3<f32>(0.65, 0.38, 0.20); }
+        case 11u: { return vec3<f32>(0.48, 0.54, 0.34); }
         default: { return vec3<f32>(0.52, 0.52, 0.56); }
     }
 }

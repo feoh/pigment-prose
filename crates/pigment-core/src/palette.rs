@@ -209,13 +209,89 @@ pub const DESERT: Palette = Palette {
     dry_grass: Srgb(0xd0ac65),
 };
 
-pub const PALETTES: [&Palette; 3] = [&LAKESHORE, &GOLDEN_EVENING, &DESERT];
+/// Cool glacial light against restrained lichen, peat and slate; no lush
+/// forest saturation in a landscape with only low vegetation.
+pub const TUNDRA: Palette = Palette {
+    id: PaletteId::Tundra,
+    name: "Lichen and slate",
+    paper: Srgb(0xf1eee2),
+    sky_zenith: Srgb(0x789bac),
+    sky_horizon: Srgb(0xc9d1cb),
+    sun: Srgb(0xf3dfb1),
+    haze: Srgb(0xaabac0),
+    cloud: mat(0xf4f3ed, 0xa1aeb8),
+    storm: Srgb(0x667683),
+    far: mat(0xa5b5b8, 0x738691),
+    rock: mat(0x9b9782, 0x596571),
+    snow: mat(0xf4f4ed, 0xa6bbc5),
+    forest: mat(0x75816d, 0x45534d),
+    foliage_warm: Srgb(0xa4a86c),
+    foliage_cool: Srgb(0x687c70),
+    meadow: mat(0x92946a, 0x626c5d),
+    moss: Srgb(0x8c936d),
+    water_deep: Srgb(0x416576),
+    water_far: Srgb(0xa6c0c4),
+    water_sheen: Srgb(0xe6e9df),
+    sand: mat(0xb3a886, 0x747578),
+    plants: [
+        mat(0x98a06b, 0x5c6656),
+        mat(0x78836f, 0x4b5b54),
+        mat(0xa8a477, 0x687266),
+        mat(0x8e9567, 0x586354),
+        mat(0xb1a66f, 0x6e7564),
+        mat(0x8b8a67, 0x525b57),
+    ],
+    bark: Srgb(0x948e78),
+    wood: Srgb(0x6b675d),
+    blossom: [Srgb(0xd8a5a0), Srgb(0xe6dfc8)],
+    autumn: [Srgb(0xc8b56b), Srgb(0xb58c61), Srgb(0x92736e)],
+    twigs: mat(0x82877c, 0x59616a),
+    dry_grass: Srgb(0xa9a078),
+};
+
+/// Dense layered greens with warm light in the canopy and cool, deep understory.
+pub const JUNGLE: Palette = Palette {
+    id: PaletteId::Jungle,
+    name: "Jungle",
+    paper: Srgb(0xf1ead8),
+    sky_zenith: Srgb(0x527b87),
+    sky_horizon: Srgb(0xc4d1b0),
+    sun: Srgb(0xffdf9b),
+    haze: Srgb(0x94aa9c),
+    storm: Srgb(0x3d5960),
+    far: mat(0x739b88, 0x496c68),
+    rock: mat(0x9b8667, 0x4b5550),
+    forest: mat(0x327247, 0x10382e),
+    foliage_warm: Srgb(0x91ab4a),
+    foliage_cool: Srgb(0x1d5147),
+    meadow: mat(0x587a3f, 0x314d38),
+    moss: Srgb(0x4f7643),
+    plants: [
+        mat(0x4f9145, 0x174834),
+        mat(0x34745d, 0x123f3a),
+        mat(0x8ea85a, 0x455d3b),
+        mat(0x527743, 0x223f32),
+        mat(0x5b8b49, 0x234837),
+        mat(0x9c6555, 0x4f353b),
+    ],
+    bark: Srgb(0xb09a6c),
+    wood: Srgb(0x574333),
+    blossom: [Srgb(0xe28a81), Srgb(0xf4ddc8)],
+    autumn: [Srgb(0xd6b54b), Srgb(0xc97b3b), Srgb(0x9d4e43)],
+    twigs: mat(0x75634e, 0x3f3835),
+    dry_grass: Srgb(0xb9a15c),
+    ..LAKESHORE
+};
+
+pub const PALETTES: [&Palette; 5] = [&LAKESHORE, &GOLDEN_EVENING, &DESERT, &TUNDRA, &JUNGLE];
 
 pub fn palette(id: PaletteId) -> &'static Palette {
     match id {
         PaletteId::Lakeshore => &LAKESHORE,
         PaletteId::GoldenEvening => &GOLDEN_EVENING,
         PaletteId::Desert => &DESERT,
+        PaletteId::Tundra => &TUNDRA,
+        PaletteId::Jungle => &JUNGLE,
     }
 }
 

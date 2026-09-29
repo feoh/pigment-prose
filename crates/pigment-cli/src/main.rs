@@ -47,10 +47,12 @@ pigment-prose <command> [options]
             [--passages FILE | --passage ID --variations N | --sample N
              | --samples I,J,...]
             [--faceting F] [--relief R] [--density D] [--adapter NAME]
-            [--palette lakeshore|golden-evening] [--looseness L] [--wash W]
+            [--biome alpine|desert|tundra|jungle] [--palette lakeshore|golden-evening|desert|tundra|jungle]
+            [--looseness L] [--wash W]
             [--haze H] [--intensity I] [--marks M] [--grain G] [--granulation G]
             [--season Y] [--vary KEY=V1,V2,...] [--cells DIR]
-      Render lakeshore scenes (painted, or the structure debug views) into a
+      Render alpine, rocky-desert, open-tundra or tropical-jungle scenes (painted, or structure
+      debug views) into a
       grid PNG, plus SHEET.txt listing each cell's passage id,
       variation, template, geometry checksum and visible coverage by role.
       Cells: the corpus (default fixtures/passages.json) at one variation,
@@ -87,13 +89,15 @@ pigment-prose <command> [options]
             [--passages FILE] [--variation V] [--aspect W:H]
             [--size 4k|8k|WxH] [--tile T | --gpu-budget MIB] [--order reverse]
             [--compression fast|balanced] [--cancel-after TILES]
-            [--adapter NAME] [form and paint options as for contact-sheet]
+            [--adapter NAME] [--biome alpine|desert|tundra]
+            [form and paint options as for contact-sheet]
       Paint one scene at full resolution, tile by tile, straight into a PNG
       (bounded GPU and host memory; written beside FILE and renamed into
       place only when complete). A recipe supplies seed, variation, form,
       paint settings and aspect ratio; its frame is the default size. Sizes
       must match the scene's aspect ratio exactly; 4k/8k pick the largest
-      exact-aspect frame with a long edge of 3840/7680. Prints the tile plan,
+      exact-aspect frame with a long edge of 3840/7680. --biome chooses a profile
+      for a synthetic sample; recipes retain their saved biome. Prints the tile plan,
       timings, the cost model's GPU/host estimates and the measured peak
       host memory. --cancel-after cancels once that many tiles are done
       (the partial file must disappear). Defaults: --sample 0, 16:9, 8k,
@@ -474,7 +478,9 @@ fn set_paint(a: &mut Appearance, key: &str, v: &str) -> Result<(), String> {
         "season" => a.season.year = num()?,
         "palette" => {
             a.palette.id = serde_json::from_value(serde_json::Value::String(v.to_string()))
-                .map_err(|_| format!("--palette {v:?}: expected lakeshore or golden-evening"))?;
+                .map_err(|_| {
+                    format!("--palette {v:?}: expected lakeshore, golden-evening, desert, tundra or jungle")
+                })?;
         }
         _ => return Err(format!("unknown paint setting {key:?}")),
     }
@@ -534,7 +540,15 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
         "regions" => Some(DebugView::Regions),
         v => return Err(format!("--view {v:?}: expected paint, flat or regions")),
     };
+    let biome = o.0.get("biome").map_or("alpine", String::as_str);
+    let biome_id = pigment_core::biome::BiomeId::parse(biome)
+        .ok_or_else(|| format!("--biome {biome:?}: expected alpine, desert, tundra or jungle"))?;
+    let profile = pigment_core::biome::profile(biome_id);
+    let generator = pigment_core::scene::generator(biome_id);
     let mut appearance = Appearance::default();
+    appearance.palette.id = profile.palette;
+    appearance.palette.intensity = profile.palette_intensity;
+    appearance.atmosphere.haze = profile.haze;
     for key in PAINT_KEYS {
         if let Some(v) = o.0.get(key) {
             set_paint(&mut appearance, key, v)?;
@@ -550,9 +564,9 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     }
     let variation: u32 = o.num("variation", 0)?;
     let form = FormSettings {
-        faceting: o.num("faceting", FormSettings::default().faceting)?,
-        relief: o.num("relief", FormSettings::default().relief)?,
-        woodland_density: o.num("density", FormSettings::default().woodland_density)?,
+        faceting: o.num("faceting", profile.form.faceting)?,
+        relief: o.num("relief", profile.form.relief)?,
+        woodland_density: o.num("density", profile.form.woodland_density)?,
     };
     form.validate().map_err(|e| e.to_string())?;
     let make = |label: String, text: &str, v: u32| -> Result<Cell, String> {
@@ -655,11 +669,11 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     let mut sheet = vec![0x80u8; sw as usize * sh as usize * 3];
     let ids = RequestIds::default();
     let mut notes = format!(
-        "pigment-prose {} contact-sheet: lakeshore generator v{}, renderer v{}, view {}, aspect {}:{}, \
+        "pigment-prose {} contact-sheet: {biome} generator v{}, renderer v{}, view {}, aspect {}:{}, \
          cell {cw}x{ch}, form faceting={} relief={} woodland_density={}\nappearance: {appearance:?}\ndevice: {}\n\
          cell\tlabel\ttemplate\tmirrored\tlayers\tvertices\tchecksum\t{}\tcoverage % ({})\timage fnv\n",
         version::APP_VERSION,
-        version::GENERATOR_VERSION,
+        generator.version(),
         version::RENDERER_VERSION,
         view.map_or("paint".to_string(), |v| format!("{v:?}")),
         aspect.width,
@@ -674,11 +688,18 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
     let t0 = Instant::now();
     for (i, c) in cells.iter().enumerate() {
         let scene = Arc::new(
-            LakeshoreGenerator
+            generator
                 .generate(&c.seeds, &c.form, aspect)
                 .map_err(|e| format!("{}: {e}", c.label))?,
         );
-        let comp = Composition::draw(&c.seeds, aspect);
+        let composition = (biome == "alpine").then(|| Composition::draw(&c.seeds, aspect));
+        let template = match biome {
+            "alpine" => composition.as_ref().map_or("alpine", |c| c.template.name()),
+            "tundra" => "open-tundra",
+            "jungle" => "tropical-jungle",
+            _ => "mesa-basin",
+        };
+        let mirrored = composition.as_ref().is_some_and(|c| c.mirrored);
         let req = RenderRequest {
             id: ids.next(),
             purpose: RenderPurpose::Preview,
@@ -697,7 +718,7 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             .render(&req, &CancelToken::new(), &mut NoProgress, &mut sink)
             .map_err(|e| e.to_string())?;
         if let Some(dir) = cells_dir {
-            write_cell(dir, first + i, c, cw, ch, &sink.rgba8)?;
+            write_cell(dir, first + i, biome_id, c, cw, ch, &sink.rgba8)?;
         }
         let (col, row) = ((i % cols) as u32, (i / cols) as u32);
         let (ox, oy) = (GAP + col * (cw + GAP), GAP + row * (ch + GAP));
@@ -723,8 +744,8 @@ fn contact_sheet(o: &Opts) -> Result<(), String> {
             "{}\t{}\t{}\t{}\t{}\t{verts}\t{:016x}\t{}\t{}\t{:016x}\n",
             first + i,
             c.label,
-            comp.template.name(),
-            comp.mirrored,
+            template,
+            mirrored,
             scene.layers().len(),
             scene.geometry_checksum(),
             metrics::measure(&scene).columns(),
@@ -1216,7 +1237,13 @@ fn stress_scene(aspect: AspectRatio) -> Result<Scene, String> {
             }
         })
         .collect();
-    let key = SceneKey::new(0, &diagnostic_seeds(1), FormSettings::default(), aspect);
+    let key = SceneKey::new(
+        0,
+        &diagnostic_seeds(1),
+        pigment_core::biome::BiomeId::Alpine,
+        FormSettings::default(),
+        aspect,
+    );
     Scene::new(key, layers).map_err(|e| e.to_string())
 }
 
@@ -1225,6 +1252,7 @@ fn stress_scene(aspect: AspectRatio) -> Result<Scene, String> {
 fn write_cell(
     dir: &std::path::Path,
     n: usize,
+    biome: pigment_core::biome::BiomeId,
     c: &Cell,
     w: u32,
     h: u32,
@@ -1239,6 +1267,7 @@ fn write_cell(
         .collect();
     write_png(&png_path, w, h, &rgb)?;
     let mut r = Recipe::new(c.digest, Frame::new(w, h).map_err(|e| e.to_string())?);
+    r.biome = biome;
     r.seed.variation = Variation(c.variation);
     r.form = c.form;
     r.painting = c.appearance.painting;
@@ -1336,7 +1365,7 @@ fn export(o: &Opts) -> Result<(), String> {
     let variation: u32 = o.num("variation", 0)?;
     // Seeds, form, appearance and aspect: from a recipe, or a synthetic
     // sample/fixture passage with command-line settings.
-    let (seeds, mut form, mut appearance, aspect, recipe_frame) =
+    let (seeds, mut form, mut appearance, aspect, recipe_frame, biome) =
         if let Some(path) = o.0.get("recipe") {
             let json = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
             let r = Recipe::from_json(&json).map_err(|e| format!("{path}: {e}"))?;
@@ -1349,6 +1378,7 @@ fn export(o: &Opts) -> Result<(), String> {
                 r.appearance(),
                 r.frame.aspect(),
                 Some(r.frame),
+                r.biome,
             )
         } else {
             let text = if let Some(id) = o.0.get("passage") {
@@ -1365,12 +1395,22 @@ fn export(o: &Opts) -> Result<(), String> {
             };
             let digest = TextDigest::from_source(&text).map_err(|e| e.to_string())?;
             let aspect = parse_aspect(o.0.get("aspect").map_or("16:9", String::as_str))?;
+            let biome_name = o.0.get("biome").map_or("alpine", String::as_str);
+            let biome = pigment_core::biome::BiomeId::parse(biome_name).ok_or_else(|| {
+                format!("--biome {biome_name:?}: expected alpine, desert, tundra or jungle")
+            })?;
+            let profile = pigment_core::biome::profile(biome);
+            let mut appearance = Appearance::default();
+            appearance.palette.id = profile.palette;
+            appearance.palette.intensity = profile.palette_intensity;
+            appearance.atmosphere.haze = profile.haze;
             (
                 SeedBundle::derive(digest, Variation(variation)),
-                FormSettings::default(),
-                Appearance::default(),
+                profile.form,
+                appearance,
                 aspect,
                 None,
+                biome,
             )
         };
     for key in ["faceting", "relief", "density"] {
@@ -1453,7 +1493,7 @@ fn export(o: &Opts) -> Result<(), String> {
     }
     let t_scene = Instant::now();
     let scene = Arc::new(
-        LakeshoreGenerator
+        pigment_core::scene::generator(biome)
             .generate(&seeds, &form, aspect)
             .map_err(|e| e.to_string())?,
     );
@@ -1542,5 +1582,41 @@ fn export(o: &Opts) -> Result<(), String> {
             );
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn contact_cell_recipe_preserves_its_biome_identity() {
+        let dir = std::env::temp_dir().join(format!("pigment-cli-cell-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let digest = TextDigest::from_source("low rolling tundra").unwrap();
+        let cell = Cell {
+            label: "test".into(),
+            digest,
+            variation: 0,
+            seeds: SeedBundle::derive(digest, Variation(0)),
+            form: pigment_core::biome::TUNDRA.form,
+            appearance: Appearance::default(),
+        };
+        let rgba = vec![255; 64 * 64 * 4];
+        write_cell(
+            &dir,
+            1,
+            pigment_core::biome::BiomeId::Tundra,
+            &cell,
+            64,
+            64,
+            &rgba,
+        )
+        .unwrap();
+        let json = std::fs::read_to_string(dir.join("01.recipe.json")).unwrap();
+        let recipe = Recipe::from_json(&json).unwrap();
+        assert_eq!(recipe.biome, pigment_core::biome::BiomeId::Tundra);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

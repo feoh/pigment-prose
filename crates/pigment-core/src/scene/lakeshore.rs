@@ -524,11 +524,12 @@ impl SceneGenerator for LakeshoreGenerator {
         } else {
             LightSide::Right
         };
-        Ok(
-            Scene::new(SceneKey::new(self.version(), seeds, *form, aspect), layers)?
-                .with_light(light)
-                .with_wind(comp.wind),
-        )
+        Ok(Scene::new(
+            SceneKey::new(self.version(), seeds, self.biome(), *form, aspect),
+            layers,
+        )?
+        .with_light(light)
+        .with_wind(comp.wind))
     }
 }
 
@@ -3038,8 +3039,11 @@ mod tests {
     fn layers_run_back_to_front_by_role() {
         let order = |r: LayerRole| match r {
             LayerRole::Sky | LayerRole::Cloud => 0,
-            LayerRole::FarRidge => 1,
-            LayerRole::Mountain => 2,
+            LayerRole::FarRidge
+            | LayerRole::TundraGround
+            | LayerRole::JungleGround
+            | LayerRole::JungleCanopy => 1,
+            LayerRole::Mountain | LayerRole::Mesa => 2,
             LayerRole::MidRidge => 3,
             LayerRole::Woodland | LayerRole::NearRidge | LayerRole::Shore => 4,
             LayerRole::Water => 5,

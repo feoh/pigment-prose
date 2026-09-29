@@ -185,7 +185,7 @@ Source of truth: `settings::CONTROLS`. Ranges are inclusive. The UI clamps by co
 | Change | Seeds | Scene | Paint |
 | --- | --- | --- | --- |
 | prose (new digest), variation, normalization/seed algorithm | ✓ | ✓ | ✓ |
-| any `form.*`, frame aspect ratio, generator version | | ✓ | ✓ |
+| biome, any `form.*`, frame aspect ratio, generator version | | ✓ | ✓ |
 | any `painting.*`, `palette.*`, `atmosphere.*`, renderer version | | | ✓ |
 | frame pixel size at the same aspect ratio; `source_text` kept or dropped | | | |
 | preview area resized (not in the recipe) | | | ✓ (new target size, same scene) |

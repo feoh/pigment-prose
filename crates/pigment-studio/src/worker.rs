@@ -25,17 +25,16 @@ use pigment_core::request::{
     MemorySink, RenderOutcome, RenderPurpose, RenderRequest, RenderTarget, RenderTimings, Renderer,
     RequestId,
 };
-use pigment_core::scene::lakeshore::LakeshoreGenerator;
-use pigment_core::scene::{Scene, SceneGenerator, SceneKey};
+use pigment_core::scene::{Scene, SceneKey};
 use pigment_core::seed::SeedBundle;
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::{TileOrder, TilePolicy};
-use pigment_core::version::GENERATOR_VERSION;
 
 /// Everything one preview render needs: a snapshot, so later edits in the
 /// UI cannot reach a job in flight.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreviewJob {
+    pub biome: pigment_core::biome::BiomeId,
     pub seeds: SeedBundle,
     pub form: FormSettings,
     pub aspect: AspectRatio,
@@ -213,11 +212,12 @@ fn run<R: Renderer>(
 
         // Scene: reused while seeds, form and aspect ratio are unchanged.
         let t_scene = Instant::now();
-        let key = SceneKey::new(GENERATOR_VERSION, &p.seeds, p.form, p.aspect);
+        let generator = pigment_core::scene::generator(p.biome);
+        let key = SceneKey::new(generator.version(), &p.seeds, p.biome, p.form, p.aspect);
         let (scene, reused) = match &last_scene {
             Some((k, s)) if *k == key => (Ok(s.clone()), true),
             _ => (
-                LakeshoreGenerator
+                generator
                     .generate(&p.seeds, &p.form, p.aspect)
                     .map(Arc::new),
                 false,
@@ -382,6 +382,7 @@ pub(crate) mod tests {
 
     pub(crate) fn job(text: &str, w: u32, h: u32) -> PreviewJob {
         PreviewJob {
+            biome: pigment_core::biome::BiomeId::Alpine,
             seeds: SeedBundle::derive(TextDigest::from_source(text).unwrap(), Variation(0)),
             form: FormSettings::default(),
             aspect: AspectRatio::of(16, 9),
@@ -424,11 +425,15 @@ pub(crate) mod tests {
         let r2 = wait_for(&w, 1, Duration::from_secs(5)).pop().unwrap();
         assert!(r2.scene_reused, "paint settings and size keep the scene");
         j.form.relief = 0.9;
-        w.submit(RequestId(3), j);
+        w.submit(RequestId(3), j.clone());
         let r3 = wait_for(&w, 1, Duration::from_secs(5)).pop().unwrap();
         assert!(!r3.scene_reused, "form rebuilds it");
+        j.biome = pigment_core::biome::BiomeId::Desert;
+        w.submit(RequestId(4), j);
+        let r4 = wait_for(&w, 1, Duration::from_secs(5)).pop().unwrap();
+        assert!(!r4.scene_reused, "biome is a structural cache input");
         let s = w.stats();
-        assert_eq!((s.scenes_built, s.scenes_reused), (2, 1));
+        assert_eq!((s.scenes_built, s.scenes_reused), (3, 1));
     }
 
     #[test]

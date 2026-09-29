@@ -112,6 +112,10 @@ const R_WOODLAND = 6u;
 const R_ROCK = 7u;
 const R_MOUNTAIN = 8u;
 const R_CLOUD = 9u;
+const R_MESA = 10u;
+const R_TUNDRA_GROUND = 11u;
+const R_JUNGLE_GROUND = 12u;
+const R_JUNGLE_CANOPY = 13u;
 
 fn col(i: u32) -> vec3<f32> {
     return pal[i].xyz;
@@ -893,6 +897,27 @@ fn mixed_forest(c: vec2<f32>, depth: f32, shade: f32, bb: vec4<f32>) -> vec3<f32
     return mix(generic, rgb, amount);
 }
 
+// Tropical canopy: broad-leaved crowns, airy emergents, understory and
+// flowering forms occupy distinct, softly interlocking patches. Keep their
+// placement in the shared whole-image field so resolution and tiles agree.
+fn jungle_canopy(c: vec2<f32>, depth: f32, shade: f32, plant: u32) -> vec3<f32> {
+    if (plant != 0u) {
+        return plant_color(plant, c, depth, shade, vec4<f32>(0.0), 1.2);
+    }
+    let near = 1.0 - depth;
+    let base = forest_color(c, depth, shade);
+    let field = fbm(c + vec2<f32>(7.0, 19.0), 0.075 * (0.4 + near), 4u, 449u);
+    var rgb = plant_color(P_BROADLEAF, c, depth, shade, vec4<f32>(0.0), 1.3);
+    let emergent = plant_color(P_BIRCH, c, depth, shade, vec4<f32>(0.0), 1.5);
+    let understory = plant_color(P_SHRUB, c, depth, shade, vec4<f32>(0.0), 0.85);
+    let flowering = plant_color(P_FLOWERING, c, depth, shade, vec4<f32>(0.0), 1.0);
+    rgb = mix(rgb, emergent, smoothstep(0.40, 0.57, field));
+    rgb = mix(rgb, understory, smoothstep(0.68, 0.82, field));
+    let blossoms = 0.10 * smoothstep(0.58, 0.72, fbm(c, 0.09, 3u, 457u));
+    rgb = mix(rgb, flowering, blossoms);
+    return mix(base, rgb, smoothstep(0.78, 0.30, depth));
+}
+
 // Emergent trees of `plant` at crown size `size` over the canopy color
 // `under`, each with its shadow away from the light. Fades out below a few
 // pixels.
@@ -1058,6 +1083,26 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
         case R_MOUNTAIN: {
             rgb = mountain(c, depth, shade, horizon, summit, rise);
         }
+        case R_MESA: {
+            rgb = mesa_surface(c, depth, shade);
+        }
+        case R_TUNDRA_GROUND: {
+            rgb = meadow_color(c, depth, shade);
+            let exposed_stone = smoothstep(0.62, 0.78, fbm(c, 0.032, 4u, 181u));
+            rgb = mix(rgb, shaded(ROCK, shade), 0.28 * exposed_stone);
+        }
+        case R_JUNGLE_CANOPY: {
+            let plant = u32(layers[4u * l + 2u].y);
+            rgb = jungle_canopy(c, depth, shade, plant);
+        }
+        case R_JUNGLE_GROUND: {
+            rgb = meadow_color(c, depth, shade);
+            let dapple = fbm(c, 0.024 * P.handling.z, 4u, 191u);
+            rgb = mix(rgb, col(FOLIAGE_WARM), 0.34 * smoothstep(0.48, 0.72, dapple));
+            rgb = mix(rgb, col(FOLIAGE_COOL), 0.18 * smoothstep(0.68, 0.88, fbm(c, 0.052, 3u, 193u)));
+            let leaf_litter = fbm(c, 0.012 * P.handling.z, 4u, 195u);
+            rgb = mix(rgb, shaded(MOSS, shade), 0.26 * smoothstep(0.42, 0.72, leaf_litter));
+        }
         case R_MID_RIDGE: {
             rgb = mixed_forest(c, depth, shade, layers[4u * l + 1u]);
         }
@@ -1116,6 +1161,33 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
     }
 
     return Surface(aerial(rgb, role, depth), depth);
+}
+
+// Exposed mesa stone: broad painterly planes with broken strata, never snow,
+// trees, or a waterline. Warm rocks come from the active palette.
+fn mesa_surface(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
+    let grain = fbm(c, 0.014, 4u, 1601u);
+    let weather = fbm(c, 0.075, 3u, 1604u);
+    let vertical_stain = fbm(vec2<f32>(c.x, c.y * 0.14), 0.12, 4u, 1605u);
+    let strata = fbm(vec2<f32>(c.x * 0.11 + c.y * 0.025, c.y * 0.28), 0.016, 3u, 1602u);
+    let relief = clamp(shade + 0.16 * (grain - 0.5) + 0.08 * (weather - 0.5), 0.0, 1.0);
+    var stone = shaded(ROCK, relief) * (0.78 + 0.38 * weather) * (0.94 + 0.12 * grain);
+    let sediment = smoothstep(0.52, 0.68, strata);
+    let sandstone = shaded(SAND, relief) * (0.91 + 0.18 * grain);
+    let mineral_mix = 0.20 + 0.34 * smoothstep(0.56, 0.84, shade);
+    stone = mix(stone, sandstone, mineral_mix * sediment);
+    let oxide = smoothstep(0.61, 0.75, vertical_stain);
+    stone = mix(stone, mix(shaded(ROCK, relief), sandstone, 0.42), 0.18 * oxide);
+    if (seasonal()) {
+        let dry = clamp(P.season_b.z, 0.0, 1.0);
+        let fresh = clamp(P.season_b.y, 0.0, 1.0);
+        let growth = smoothstep(0.58, 0.78, fbm(c, 0.055, 3u, 1603u));
+        stone = mix(stone, shaded(SAND, relief), 0.32 * dry);
+        stone = mix(stone, shaded(MEADOW, relief), 0.24 * fresh * growth);
+    }
+    let ledge = smoothstep(0.70, 0.77, strata) * (1.0 - smoothstep(0.78, 0.84, strata));
+    stone = mix(stone, stone * 0.76, 0.22 * ledge);
+    return stone;
 }
 
 // A mountainside's anatomy (renderer v3, round 8: "mountainsides have

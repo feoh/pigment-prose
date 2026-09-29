@@ -65,8 +65,8 @@ pub fn front_layers(scene: &Scene, w: usize, h: usize) -> Vec<u16> {
 
 /// Visible fraction of the frame covered by each role (front-most layer
 /// only), from a `w × h` sample grid, in [`LayerRole::ALL`] order.
-pub fn role_coverage(scene: &Scene, w: usize, h: usize) -> [f64; 10] {
-    let mut counts = [0usize; 10];
+pub fn role_coverage(scene: &Scene, w: usize, h: usize) -> [f64; LayerRole::ALL.len()] {
+    let mut counts = [0usize; LayerRole::ALL.len()];
     for id in front_layers(scene, w, h) {
         if id != NONE {
             let role = scene.layers()[id as usize].role;
@@ -213,7 +213,13 @@ mod tests {
     #[test]
     fn rasterizer_fills_front_most_layer() {
         let aspect = AspectRatio::of(2, 1);
-        let key = SceneKey::new(0, &diagnostic_seeds(1), FormSettings::default(), aspect);
+        let key = SceneKey::new(
+            0,
+            &diagnostic_seeds(1),
+            crate::biome::BiomeId::Alpine,
+            FormSettings::default(),
+            aspect,
+        );
         let rect = |x0: f32, y0: f32, x1: f32, y1: f32, depth: f32| SceneLayer {
             role: LayerRole::Sky,
             depth,

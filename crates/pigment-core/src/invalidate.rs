@@ -3,7 +3,7 @@
 //! | Change | Seeds | Scene | Paint |
 //! | --- | --- | --- | --- |
 //! | prose (new digest), variation, normalization/seed algorithm | ✓ | ✓ | ✓ |
-//! | form settings, frame aspect ratio, generator version | | ✓ | ✓ |
+//! | biome, form settings, frame aspect ratio, generator version | | ✓ | ✓ |
 //! | painting, palette, atmosphere, renderer version | | | ✓ |
 //! | frame pixel size at the same aspect ratio | | | |
 //! | keeping or dropping `source_text` | | | |
@@ -35,6 +35,7 @@ impl Invalidation {
             || old.versions.normalization != new.versions.normalization
             || old.versions.seed_algorithm != new.versions.seed_algorithm;
         let scene = seeds
+            || old.biome != new.biome
             || old.form != new.form
             || old.frame.aspect() != new.frame.aspect()
             || old.versions.generator != new.versions.generator;
@@ -94,6 +95,11 @@ mod tests {
         assert_eq!(inv(|r| r.form.woodland_density = 0.1), SCENE);
         assert_eq!(inv(|r| r.frame = UHD_4K.rotated()), SCENE);
         assert_eq!(inv(|r| r.versions.generator += 1), SCENE);
+    }
+
+    #[test]
+    fn biome_changes_invalidate_scene_and_paint_but_not_seeds() {
+        assert_eq!(inv(|r| r.biome = crate::biome::BiomeId::Desert), SCENE);
     }
 
     #[test]

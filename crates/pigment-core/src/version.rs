@@ -14,10 +14,9 @@
 //!   recipe says exactly how its digest was produced. Both are frozen by
 //!   `fixtures/seed-vectors.json`; see docs/seeds-and-recipes.md.
 
-/// Recipe file format version written by this build. `2` (task 16) adds
-/// `season`; schema 1 files still load, through one explicit migration
-/// (`recipe::SCHEMA_V1`, season midsummer).
-pub const RECIPE_SCHEMA_VERSION: u32 = 2;
+/// Recipe file format version written by this build. `3` adds the stable
+/// biome identity; schemas 1 and 2 migrate to the original alpine profile.
+pub const RECIPE_SCHEMA_VERSION: u32 = 3;
 
 /// Scene generator version. `1` = the scene family approved at the task 08
 /// visual gate (2026-09-27); `2` = task 25: a seeded wind on every scene and
@@ -31,9 +30,10 @@ pub const GENERATOR_VERSION: u32 = 3;
 /// `2` = task 25: wind and current on water, rock surfaces (baseline in
 /// docs/visual-review/baseline-25/); `3` = task 16: the seasons, and (review
 /// round 8) mountainsides with their own anatomy (baseline in
-/// docs/visual-review/baseline-16/). Any visible change on the same device
-/// is a bump.
-pub const RENDERER_VERSION: u32 = 3;
+/// docs/visual-review/baseline-16/); `4` = per-biome seasonal channels and the
+/// tropical mixed-species canopy/foliage paint path. Existing approved
+/// alpine renders are unchanged.
+pub const RENDERER_VERSION: u32 = 4;
 
 /// Text normalization: NFC, then CRLF/CR to LF, as UTF-8 (`text::normalize`).
 pub const NORMALIZATION_ID: &str = "nfc-lf-utf8/1";

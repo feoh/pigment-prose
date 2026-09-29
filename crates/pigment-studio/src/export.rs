@@ -25,8 +25,6 @@ use pigment_core::job::{CancelToken, Phase, Progress};
 use pigment_core::request::{
     RenderOutcome, RenderPurpose, RenderRequest, RenderTarget, Renderer, RequestId,
 };
-use pigment_core::scene::SceneGenerator;
-use pigment_core::scene::lakeshore::LakeshoreGenerator;
 use pigment_core::seed::SeedBundle;
 use pigment_core::settings::{Appearance, FormSettings};
 use pigment_core::tiles::{TileOrder, TilePolicy};
@@ -146,6 +144,7 @@ pub fn suggested_name(recipe_path: Option<&Path>, frame: Frame) -> String {
 /// Everything one export needs, copied when the user pressed Export.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportJob {
+    pub biome: pigment_core::biome::BiomeId,
     pub seeds: SeedBundle,
     pub form: FormSettings,
     pub aspect: AspectRatio,
@@ -365,7 +364,7 @@ fn export(
         done: 0,
         total: 1,
     });
-    let scene = LakeshoreGenerator
+    let scene = pigment_core::scene::generator(job.biome)
         .generate(&job.seeds, &job.form, job.aspect)
         .map_err(RenderError::InvalidRequest)?;
     let request = RenderRequest {
@@ -577,6 +576,7 @@ pub(crate) mod tests {
 
     pub(crate) fn job(dest: &Path, frame: Frame) -> ExportJob {
         ExportJob {
+            biome: pigment_core::biome::BiomeId::Alpine,
             seeds: SeedBundle::derive(
                 TextDigest::from_source("Export test.").unwrap(),
                 Variation(0),

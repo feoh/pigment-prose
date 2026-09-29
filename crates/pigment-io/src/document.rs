@@ -206,6 +206,28 @@ impl Document {
         Ok(())
     }
 
+    /// Select a supported landscape and apply its structural, palette and
+    /// atmosphere defaults while preserving the user's painting and season.
+    pub fn set_biome(
+        &mut self,
+        biome: pigment_core::biome::BiomeId,
+    ) -> Result<(), ValidationError> {
+        let profile = pigment_core::biome::profile(biome);
+        profile
+            .validate()
+            .expect("registered biome profiles are valid");
+        let mut appearance = self.appearance();
+        appearance.palette.id = profile.palette;
+        appearance.palette.intensity = profile.palette_intensity;
+        appearance.atmosphere.haze = profile.haze;
+        appearance.validate()?;
+        profile.form.validate()?;
+        Self::update(&mut self.dirty, &mut self.recipe.biome, biome);
+        Self::update(&mut self.dirty, &mut self.recipe.form, profile.form);
+        self.set_appearance(appearance)?;
+        Ok(())
+    }
+
     /// Painting, palette, atmosphere and season together. Invalid values
     /// change nothing.
     pub fn set_appearance(&mut self, a: Appearance) -> Result<(), ValidationError> {
@@ -304,6 +326,69 @@ mod tests {
     }
 
     #[test]
+    fn biome_selection_applies_profile_defaults_and_survives_reopening() {
+        let mut doc = Document::from_prose(MARKER, UHD_4K).unwrap();
+        let mut appearance = doc.appearance();
+        appearance.painting.mark_scale = 0.72;
+        appearance.season.year = 0.18;
+        doc.set_appearance(appearance).unwrap();
+        doc.set_biome(pigment_core::biome::BiomeId::Desert).unwrap();
+        assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Desert);
+        assert_eq!(doc.recipe().form, pigment_core::biome::DESERT.form);
+        assert_eq!(doc.appearance().palette.id, PaletteId::Desert);
+        assert_eq!(
+            doc.appearance().atmosphere.haze,
+            pigment_core::biome::DESERT.haze
+        );
+        assert_eq!(doc.appearance().painting.mark_scale, 0.72);
+        assert_eq!(doc.appearance().season.year, 0.18);
+
+        let dir = TestDir::new("doc-biome");
+        let path = dir.path().join("desert.recipe.json");
+        doc.save_as(&path).unwrap();
+        let (opened, _) = Document::open(&path).unwrap();
+        assert_eq!(opened.recipe(), doc.recipe());
+    }
+
+    #[test]
+    fn tundra_selection_applies_approved_defaults_and_survives_reopening() {
+        let mut doc = Document::from_prose(MARKER, UHD_4K).unwrap();
+        doc.set_biome(pigment_core::biome::BiomeId::Tundra).unwrap();
+        assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Tundra);
+        assert_eq!(doc.recipe().form, pigment_core::biome::TUNDRA.form);
+        assert_eq!(doc.appearance().palette.id, PaletteId::Tundra);
+        assert_eq!(
+            doc.appearance().season.year,
+            pigment_core::season::DEFAULT_YEAR
+        );
+
+        let dir = TestDir::new("doc-tundra");
+        let path = dir.path().join("tundra.recipe.json");
+        doc.save_as(&path).unwrap();
+        let (opened, _) = Document::open(&path).unwrap();
+        assert_eq!(opened.recipe(), doc.recipe());
+    }
+
+    #[test]
+    fn jungle_selection_applies_approved_defaults_and_survives_reopening() {
+        let mut doc = Document::from_prose(MARKER, UHD_4K).unwrap();
+        doc.set_biome(pigment_core::biome::BiomeId::Jungle).unwrap();
+        assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Jungle);
+        assert_eq!(doc.recipe().form, pigment_core::biome::JUNGLE.form);
+        assert_eq!(doc.appearance().palette.id, PaletteId::Jungle);
+        assert_eq!(
+            doc.appearance().season.year,
+            pigment_core::season::DEFAULT_YEAR
+        );
+
+        let dir = TestDir::new("doc-jungle");
+        let path = dir.path().join("jungle.recipe.json");
+        doc.save_as(&path).unwrap();
+        let (opened, _) = Document::open(&path).unwrap();
+        assert_eq!(opened.recipe(), doc.recipe());
+    }
+
+    #[test]
     fn invalid_edits_change_nothing() {
         let mut d = Document::from_prose(MARKER, UHD_4K).unwrap();
         let dir = TestDir::new("doc-invalid");
@@ -352,6 +437,7 @@ mod tests {
             keys,
             [
                 "atmosphere",
+                "biome",
                 "form",
                 "frame",
                 "painting",
@@ -421,7 +507,7 @@ mod tests {
         let bad = dir.path().join("bad.recipe.json");
         for contents in [
             json[..json.len() / 2].to_string(),
-            json.replace("\"schema\": 2", "\"schema\": 3"),
+            json.replace("\"schema\": 3", "\"schema\": 4"),
             json.replace("0.55", "5.5"),
             "not json".to_string(),
         ] {

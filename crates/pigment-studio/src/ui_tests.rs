@@ -197,7 +197,13 @@ fn each_control_invalidates_only_its_stage_and_paint_keeps_geometry() {
         let inv = Invalidation::between(before.recipe(), a.doc.recipe());
         let key = |d: &Document| {
             let r = d.recipe();
-            SceneKey::new(GENERATOR_VERSION, &d.seeds(), r.form, r.frame.aspect())
+            SceneKey::new(
+                GENERATOR_VERSION,
+                &d.seeds(),
+                d.recipe().biome,
+                r.form,
+                r.frame.aspect(),
+            )
         };
         let structural = spec.channel == Channel::Structure;
         assert_eq!(
