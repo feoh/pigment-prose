@@ -632,6 +632,7 @@ fn repeated_exports_with_previews_stay_bounded() {
     let (doc, _) = approved("corpus-16x9", 6);
     let r = doc.recipe().clone();
     let mut id = 0u64;
+    let mut newest = None;
     let mut after_warmup = None;
     for n in 0..25 {
         let mut d = doc.clone();
@@ -661,7 +662,9 @@ fn repeated_exports_with_previews_stay_bounded() {
                 },
             );
             assert!(preview.in_flight() <= 2);
-            preview.drain();
+            for res in preview.drain() {
+                newest = Some(res.id);
+            }
             std::thread::sleep(Duration::from_millis(1));
         }
         match wait_export(&exporter) {
@@ -682,13 +685,12 @@ fn repeated_exports_with_previews_stay_bounded() {
     assert_eq!(names, ["00.png", "01.png", "02.png", "03.png", "04.png"]);
     // The newest preview arrives last.
     let deadline = Instant::now() + Duration::from_secs(10);
-    let mut newest = None;
-    while Instant::now() < deadline && preview.in_flight() > 0 || newest.is_none() {
+    // Completion can set in_flight to zero just AFTER the preceding drain.
+    // Observe the result identity, not a racy queue/activity snapshot. The
+    // final result may also have been drained while an export was running.
+    while Instant::now() < deadline && newest != Some(RequestId(id)) {
         for res in preview.drain() {
             newest = Some(res.id);
-        }
-        if Instant::now() > deadline {
-            break;
         }
         std::thread::sleep(Duration::from_millis(2));
     }

@@ -4,6 +4,20 @@
 
 **Solid forms, loose paint.** Seek Cézanne-like interlocking color planes and substantial geometry, with Winslow Homer-like watercolor handling: luminous translucent washes, selective crisp and soft edges, and restrained gouache-like opaque foreground accents. These are visual principles, not a request to reproduce a particular artwork. No training on, embedding, bundling or tracing the referenced works is required or planned.
 
+## Detail direction (2026-10-04)
+
+The owner rejected the flat, cutout-like treatment of mountains and clouds
+and asked for an order-of-magnitude increase in perceived natural detail,
+with minutes per image acceptable. The supplied examples call for
+light-responsive volume, fractured/eroded stone at several scales, rich
+vegetation and strong differences between prose seeds. Increasing noise or
+render resolution alone does not meet that direction. Preserve local,
+deterministic rendering; do not imply semantic prose interpretation.
+
+The renderer-v5 relief work is a first candidate, not an approved replacement
+baseline. Review its mountain/cloud improvements separately from the
+remaining composition and individual-tree anatomy gap.
+
 ## First painting
 
 A rocky wooded lakeshore below a mountain ridge, in the initial family of mountains and wooded valleys. Compose a readable foreground/midground/background at thumbnail scale:

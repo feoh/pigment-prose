@@ -1,0 +1,398 @@
+    Checking pigment-gpu v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-gpu)
+    Checking pigment-studio v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-studio)
+    Checking pigment-cli v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-cli)
+    Checking pigment-io v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-io)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.46s
+   Compiling pigment-gpu v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-gpu)
+   Compiling pigment-studio v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-studio)
+   Compiling pigment-io v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-io)
+   Compiling pigment-cli v0.1.0 (/home/feoh/src/personal/pigment-prose/crates/pigment-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.72s
+     Running unittests src/main.rs (target/debug/deps/pigment_prose-dc365633c1f9d2b5)
+
+running 1 test
+test tests::contact_cell_recipe_preserves_its_biome_identity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_core-55386a1de6959f97)
+
+running 151 tests
+test biome::tests::approved_jungle_profile_is_complete_and_advertised ... ok
+test biome::tests::only_complete_registered_biomes_are_advertised ... ok
+test biome::tests::alpine_profile_preserves_existing_application_defaults ... ok
+test biome::tests::approved_tundra_profile_is_complete_and_advertised ... ok
+test capability::tests::software_always_ranks_last ... ok
+test composite::tests::a_wash_at_density_one_is_its_pigment ... ok
+test composite::tests::opaque_fill_hides_what_is_under ... ok
+test biome::tests::dry_wet_profiles_cannot_introduce_snow ... ok
+test composite::tests::paper_survives_a_paper_colored_wash ... ok
+test composite::tests::glazes_only_darken_and_stay_finite ... ok
+test capability::tests::the_display_is_the_best_adapter_that_presents_ties_to_the_painter ... ok
+test biome::tests::desert_profile_is_registered_with_its_bounded_climate_and_landscape ... ok
+test frame::tests::exact_aspect_presets ... ok
+test frame::tests::extents_put_the_short_side_at_one ... ok
+test composite::tests::edge_blend_has_no_dark_fringe ... ok
+test frame::tests::mapping_is_resolution_independent ... ok
+test frame::tests::bad_frames_are_rejected ... ok
+test composite::tests::overlapping_washes_multiply ... ok
+test frame::tests::presets_and_orientations_validate ... ok
+test frame::tests::preview_fit_keeps_aspect_and_never_upscales ... ok
+test frame::tests::same_aspect_means_same_scene_key ... ok
+test invalidate::tests::biome_changes_invalidate_scene_and_paint_but_not_seeds ... ok
+test invalidate::tests::form_and_aspect_rebuild_the_scene ... ok
+test invalidate::tests::paint_only_changes_keep_the_scene ... ok
+test invalidate::tests::resolution_and_source_text_change_nothing ... ok
+test invalidate::tests::seed_changes_invalidate_everything ... ok
+test job::tests::closures_are_progress_sinks ... ok
+test job::tests::late_old_results_never_replace_newer_ones ... ok
+test job::tests::newer_submission_supersedes_pending_and_cancels_running ... ok
+test palette::tests::srgb_to_linear_endpoints ... ok
+test palette::tests::the_default_palette_is_green_where_it_should_be ... ok
+test palette::tests::lit_sides_are_lighter_than_shadows ... ok
+test palette::tests::every_palette_id_has_a_palette ... ok
+test recipe::tests::approved_tundra_identity_is_valid_in_recipes ... ok
+test recipe::tests::debug_shows_the_length_of_kept_source_text_only ... ok
+test recipe::tests::palette_and_paint_settings_do_not_touch_seeds ... ok
+test recipe::tests::documented_example_is_canonical_and_loads ... ok
+test recipe::tests::duplicate_keys_are_rejected_at_any_depth ... ok
+test recipe::tests::canonical_json_round_trips ... ok
+test recipe::tests::biome_identity_is_a_canonical_round_trip_field ... ok
+test recipe::tests::source_text_must_match_the_digest ... ok
+test recipe::tests::each_schema_is_checked_against_its_own_table ... ok
+test recipe::tests::newer_generator_and_renderer_load_with_notices ... ok
+test recipe::tests::schema_table_matches_the_structs ... ok
+test request::tests::ids_increase ... ok
+test recipe::tests::omitted_source_text_still_reproduces_the_seed ... ok
+test request::tests::memory_sink_rejects_misplaced_bands ... ok
+test recipe::tests::schema_2_recipes_migrate_to_alpine ... ok
+test recipe::tests::schema_1_recipes_migrate_to_midsummer ... ok
+test recipe::tests::variation_changes_the_scene_streams_only ... ok
+test recipe::tests::future_and_unknown_schemas_are_rejected_first ... ok
+test scene::jungle::tests::jungle_profile_and_dry_wet_year_are_valid_and_snow_free ... ok
+test recipe::tests::the_season_is_range_checked_and_leaves_the_seeds_alone ... ok
+test recipe::tests::unknown_algorithms_are_rejected ... ok
+test scene::lakeshore::tests::meanders_are_smooth ... ok
+test recipe::tests::out_of_range_values_are_rejected_not_clamped ... ok
+test scene::lakeshore::tests::rock_shapes_invert_their_orientation ... ok
+test recipe::tests::errors_never_contain_file_contents ... ok
+test scene::lakeshore::tests::canopies_mix_emergent_and_young_crowns ... ok
+test scene::lakeshore::tests::plant_weights_cover_the_unit_interval ... ok
+test recipe::tests::unknown_and_missing_fields_are_rejected ... ok
+test recipe::tests::wrong_types_and_bad_values_are_rejected ... ok
+test recipe::tests::corrupt_and_oversized_files_are_rejected ... ok
+test scene::noise::tests::lattice_is_bounded_and_seeded ... ok
+test scene::desert::tests::extreme_wide_scene_stays_within_shared_bounds ... ok
+test job::tests::rapid_submissions_stay_bounded ... ok
+test scene::desert::tests::variation_recomposes_desert_structure ... ok
+test scene::lakeshore::tests::generators_use_only_exact_arithmetic ... ok
+test scene::desert::tests::same_seed_reproduces_broad_dry_landforms_without_a_lake ... ok
+test scene::noise::tests::value_noise_hits_lattice_values_and_is_continuous ... ok
+test scene::noise::tests::values_are_frozen ... ok
+test scene::raster::tests::rasterizer_fills_front_most_layer ... ok
+test scene::raster::tests::simple_and_non_simple_polygons ... ok
+test scene::tests::invalid_scenes_are_rejected ... ok
+test scene::tests::paint_detail_stream_does_not_affect_geometry ... ok
+test scene::tests::same_key_same_checksum ... ok
+test scene::tests::pixel_size_does_not_change_the_scene_but_aspect_does ... ok
+test scene::tests::test_card_checksum_is_frozen ... ok
+test scene::tests::structure_inputs_change_geometry ... ok
+test season::tests::keyframes_are_hit_exactly ... ok
+test scene::tundra::tests::zero_vegetation_density_produces_an_unplanted_open_scene ... ok
+test season::tests::keyframes_are_ordered_in_range_and_bounded ... ok
+test season::tests::labels_name_the_quarters ... ok
+test season::tests::midsummer_is_exactly_neutral ... ok
+test season::tests::the_year_wraps_continuously ... ok
+test season::tests::winter_has_snow_and_bare_trees_and_summer_has_neither ... ok
+test scene::noise::tests::fbm_is_normalized_and_band_limited ... ok
+test season::tests::desert_cycle_is_dry_wet_continuous_and_never_snowy ... ok
+test seed::tests::advancing_one_stream_leaves_the_others_alone ... ok
+test seed::tests::corpus_passages_are_all_in_the_vectors ... ok
+test seed::tests::derivation_is_repeatable ... ok
+test seed::tests::digest_hex_round_trips_and_rejects_bad_input ... ok
+test seed::tests::from_streams_places_each_domain ... ok
+test season::tests::tundra_cycle_has_a_long_snow_season_and_a_short_growth_window ... ok
+test seed::tests::labels_are_distinct_and_only_paint_detail_ignores_variation ... ok
+test scene::tundra::tests::form_controls_morph_only_their_structural_features_within_bounds ... ok
+test seed::tests::one_character_edit_gives_an_unrelated_digest ... ok
+test seed::tests::declared_equivalences_hold ... ok
+test seed::tests::rng_matches_the_xoshiro_reference ... ok
+test seed::tests::streams_are_distinct ... ok
+test settings::tests::defaults_validate_and_bad_values_are_rejected_not_clamped ... ok
+test settings::tests::range_endpoints_are_inclusive ... ok
+test settings::tests::specs_are_well_formed_and_unique ... ok
+test settings::tests::the_three_named_channels_are_separate_main_controls ... ok
+test seed::tests::variation_changes_only_the_structural_streams ... ok
+test settings::tests::each_control_edits_only_its_own_field_in_its_channel ... ok
+test text::tests::empty_and_blank_are_rejected ... ok
+test text::tests::composed_and_decomposed_forms_are_equal ... ok
+test text::tests::debug_and_errors_never_show_text ... ok
+test scene::lakeshore::tests::checksums_are_frozen ... ok
+test seed::tests::rng_helpers_stay_in_range ... ok
+test seed::tests::frozen_vectors_reproduce_exactly ... ok
+test text::tests::line_endings_become_lf ... ok
+test text::tests::everything_else_is_kept ... ok
+test text::tests::normalization_tables_are_the_reviewed_unicode_version ... ok
+test text::tests::normalize_applies_the_input_gate ... ok
+test text::tests::nonblank_passages_are_accepted_unchanged ... ok
+test text::tests::size_bound_is_in_bytes_and_inclusive ... ok
+test scene::tundra::tests::scenes_are_open_low_and_reproducible ... ok
+test tiles::tests::apron_sums_chained_supports ... ok
+test tiles::tests::border_tiles_extend_beyond_the_frame ... ok
+test tiles::tests::budget_policy_matches_the_task_02_8k_measurement ... ok
+test tiles::tests::host_budget_limits_band_height ... ok
+test tiles::tests::impossible_plans_fail_with_reasons ... ok
+test tiles::tests::reverse_order_visits_the_same_tiles_band_by_band ... ok
+test job::tests::close_wakes_a_blocked_worker ... ok
+test season::tests::every_channel_is_continuous_and_bounded_all_year ... ok
+test scene::jungle::tests::jungle_scenes_are_reproducible_layered_and_bounded ... ok
+test scene::lakeshore::tests::pixel_size_keeps_the_scene_and_aspect_recomposes_it ... ok
+test scene::lakeshore::tests::layers_run_back_to_front_by_role ... ok
+test scene::lakeshore::tests::appearance_and_paint_seed_never_touch_geometry ... ok
+test scene::desert::tests::varied_mesa_strata_remain_simple_bounded_scene_layers ... ok
+test scene::lakeshore::tests::form_morphs_the_same_composition ... ok
+test scene::lakeshore::tests::relief_raises_the_mountain ... ok
+test scene::lakeshore::tests::faceting_changes_shape_and_planes ... ok
+test scene::lakeshore::tests::variation_changes_the_composition ... ok
+test scene::lakeshore::tests::same_recipe_same_scene ... ok
+test scene::lakeshore::tests::valley_spurs_have_blunt_tips ... ok
+test scene::lakeshore::tests::woodland_stands_have_varied_plants ... ok
+test scene::lakeshore::tests::silhouettes_stay_coherent ... ok
+test scene::lakeshore::tests::counts_stay_within_bounds ... ok
+test scene::lakeshore::tests::woodland_density_scales_the_woodland_regions ... ok
+test scene::lakeshore::tests::rocks_have_lit_and_shadowed_planes ... ok
+test scene::lakeshore::tests::vista_templates_score_higher_on_their_devices ... ok
+test scene::lakeshore::tests::dramatic_light_stages_contrast ... ok
+test recipe::tests::the_largest_valid_source_text_fits_the_size_bound ... ok
+test scene::lakeshore::tests::river_banks_never_break ... ok
+test tiles::tests::tiles_cover_every_pixel_exactly_once ... ok
+test scene::lakeshore::tests::woodland_stands_on_land ... ok
+test scene::lakeshore::tests::corpus_scenes_are_valid_in_every_orientation ... ok
+test scene::lakeshore::tests::a_larger_seed_sample_is_valid_at_extreme_forms ... ok
+
+test result: ok. 151 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.67s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_gpu-1103bfa291f2cfb0)
+
+running 5 tests
+test coverage::tests::index_size_is_bounded ... ok
+test relief::tests::cloud_bands_and_rock_facets_share_the_whole_mass ... ok
+test coverage::tests::indexed_matches_brute_force ... ok
+test coverage::tests::axes_agree_away_from_edges ... ok
+test relief::tests::envelopes_are_finite_bounded_repeatable_and_do_not_change_geometry ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.09s
+
+     Running tests/gpu_hardware.rs (target/debug/deps/gpu_hardware-83fe00c28ad1a352)
+
+running 18 tests
+test cancellation_stops_at_the_next_tile_and_aborts_the_sink ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test cloud_volume_ignores_flat_bands_and_responds_to_light ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test compositing_matches_the_reference_model ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test debug_layer_ids_match_the_cpu_rasterizer ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test debug_views_are_identical_tiled_and_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test every_season_is_identical_tiled_and_single_at_high_resolution ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test impossible_tile_plan_is_an_error_not_a_crash ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test midsummer_is_the_default_and_the_year_wraps ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test output_is_opaque_and_repeatable ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test paint_settings_change_pixels_but_not_the_scene ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_agrees_across_resolutions ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_is_identical_tiled_and_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_is_opaque_repeatable_and_varied ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test painting_is_valid_at_setting_extremes ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test relief_is_tile_order_independent_in_every_biome_and_orientation ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test snow_only_grows_as_winter_deepens ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test the_sky_and_clouds_stay_the_palettes_in_every_season ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tiled_output_is_byte_identical_to_single_tile ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 18 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_io-187838f9d332e56f)
+
+running 41 tests
+test atomic::tests::bad_destinations_fail_before_writing ... ok
+test atomic::tests::commit_replaces_and_discard_keeps_the_destination ... ok
+test document::tests::debug_never_shows_the_prose ... ok
+test atomic::tests::read_only_directory_is_refused ... ok
+test document::tests::dirty_state_follows_real_changes_only ... ok
+test document::tests::invalid_edits_change_nothing ... ok
+test document::tests::failed_save_keeps_path_dirty_state_and_file ... ok
+test document::tests::tundra_selection_applies_approved_defaults_and_survives_reopening ... ok
+test export::tests::unwritable_destinations_fail_before_rendering ... ok
+test document::tests::source_free_recipes_truly_omit_the_prose ... ok
+test png_sink::tests::invalid_sizes_are_rejected_before_writing ... ok
+test export::tests::presets_keep_the_scene_aspect ... ok
+test png_sink::tests::unwritable_destinations_fail_at_create ... ok
+test document::tests::jungle_selection_applies_approved_defaults_and_survives_reopening ... ok
+test document::tests::keep_choice_without_prose_saves_no_source ... ok
+test recipe_file::tests::future_schemas_are_rejected ... ok
+test recipe_file::tests::permission_errors_are_reported_and_keep_the_file ... ok
+test document::tests::biome_selection_applies_profile_defaults_and_survives_reopening ... ok
+test recipe_file::documented_messages::sample_messages_are_as_documented ... ok
+test recipe_file::tests::an_interrupted_save_keeps_the_previous_file ... ok
+test recipe_file::tests::invalid_recipes_are_never_written ... ok
+test recipe_file::tests::unicode_names_and_prose_round_trip ... ok
+test png_sink::tests::dropping_an_unfinished_sink_cleans_up ... ok
+test export::tests::invalid_sizes_fail_before_anything_is_written ... ok
+test atomic::tests::dropping_an_uncommitted_file_removes_it ... ok
+test export::tests::out_of_memory_at_the_floor_is_reported_and_leaves_no_file ... ok
+test export::tests::tile_plan_errors_are_not_retried ... ok
+test document::tests::saving_records_current_versions_and_notices_old_ones ... ok
+test document::tests::kept_prose_round_trips_and_can_be_dropped ... ok
+test recipe_file::tests::oversized_binary_and_missing_files_are_rejected_without_reading ... ok
+test document::tests::failed_open_leaves_the_current_document_unchanged ... ok
+test png_sink::tests::misordered_or_short_bands_are_errors ... ok
+test recipe_file::tests::round_trip_is_canonical_and_byte_stable ... ok
+test recipe_file::tests::errors_are_redacted ... ok
+test png_sink::tests::abort_removes_the_partial_file_and_keeps_the_old_one ... ok
+test recipe_file::tests::truncated_files_are_rejected_at_every_length ... ok
+test export::tests::cancellation_deletes_the_partial_file_and_keeps_the_old_one ... ok
+test png_sink::tests::streams_rgb_srgb_with_no_metadata ... ok
+test png_sink::tests::a_full_disk_is_reported_as_disk_full ... ok
+test export::tests::export_writes_the_whole_image_in_any_tile_order ... ok
+test export::tests::out_of_memory_retries_with_half_the_budget ... ok
+
+test result: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.25s
+
+     Running tests/gpu_export.rs (target/debug/deps/gpu_export-dfb1310bea503323)
+
+running 7 tests
+test approved_recipes_repaint_identically_after_save_and_load ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test cancelled_export_leaves_the_old_file_and_no_partial ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test custom_portrait_export_keeps_the_preview_composition ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test eight_k_export_keeps_the_preview_composition ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test impossible_budgets_and_bad_destinations_are_errors ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test kept_prose_never_reaches_the_exported_png ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tiled_png_export_equals_the_single_tile_render ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/recipes.rs (target/debug/deps/recipes-3c6d524eec5dd4ef)
+
+running 3 tests
+
+running 1 test
+test a_saved_recipe_reproduces_after_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+test schema_1_recipes_migrate_to_midsummer_and_alpine_schema_3 ... ok
+test a_saved_recipe_reproduces_after_restart ... ok
+test approved_recipes_round_trip_and_reproduce_their_scenes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src/lib.rs (target/debug/deps/pigment_studio-1bab5f30b7eaf15b)
+
+running 56 tests
+test controls::tests::every_control_is_shown_once_under_its_channel ... ok
+test export::tests::sizes_keep_the_paintings_exact_proportions ... ok
+test preview::tests::a_slow_gpu_lowers_the_settled_cap_to_fit_the_budget ... ok
+test preview::tests::interaction_previews_are_drawn_at_the_settled_size ... ok
+test ui_tests::a_slow_gpu_lowers_the_settled_cap_and_then_fits_the_budget ... ignored, needs a slower hardware GPU named by PIGMENT_SLOW_ADAPTER
+test theme::tests::text_meets_contrast_on_every_ground ... ok
+test controls::tests::value_text_names_the_nearer_end ... ok
+test files::tests::quitting_with_unsaved_work_asks_and_a_failed_save_keeps_the_window ... ok
+test files::tests::save_asks_for_a_path_once_then_saves_in_place ... ok
+test preview::tests::failures_and_device_loss_end_the_pending_state ... ok
+test files::tests::unsaved_work_is_never_replaced_without_asking ... ok
+test export::tests::suggested_names_never_come_from_the_prose ... ok
+test preview::tests::typing_is_debounced_and_resizes_do_not_starve_it ... ok
+test files::tests::cancelled_dialogs_change_nothing ... ok
+test preview::tests::an_out_of_order_old_result_never_replaces_the_newest ... ok
+test ui_tests::review_screens ... ignored, needs a hardware GPU; writes review screenshots
+test preview::tests::slider_input_renders_small_at_once_then_settles ... ok
+test ui_tests::the_studio_exports_a_real_8k_png_of_the_snapshot ... ignored, needs a hardware GPU; exports an 8K PNG from the studio
+test theme::tests::the_greys_are_neutral_enough_to_judge_colour ... ok
+test ui_tests::the_no_gpu_window_offers_an_installed_software_renderer_only_as_a_labelled_choice ... ok
+test preview::tests::sizes_keep_the_aspect_and_fit ... ok
+test controls::tests::the_season_is_named_not_placed_between_ends ... ok
+test export::tests::sizes_read_naturally ... ok
+test files::tests::busy_flows_ignore_new_requests ... ok
+test files::tests::a_bad_file_is_reported_and_leaves_the_document_alone ... ok
+test worker::tests::scene_errors_are_failures_not_panics ... ok
+test worker::tests::the_ui_is_woken_for_every_result ... ok
+test painter::tests::a_failed_preparation_fails_every_render_and_says_why ... ok
+test export::tests::cancelling_mid_render_removes_the_partial_and_keeps_the_old_file ... ok
+test worker::tests::simulated_device_loss_is_reported_for_every_later_job ... ok
+test export::tests::failures_are_reported_with_what_to_do_and_leave_nothing_behind ... ok
+test worker::tests::renders_and_reuses_the_scene_for_paint_and_size_changes ... ok
+test export::tests::shutdown_cancels_a_running_export_and_cleans_up ... ok
+test worker::tests::shutdown_interrupts_a_slow_render_promptly ... ok
+test painter::tests::workers_start_before_the_painter_is_ready_and_share_one_build ... ok
+test worker::tests::shutdown_does_not_hang_when_results_are_not_collected ... ok
+test export::tests::the_worker_wakes_the_ui_for_progress_and_the_end ... ok
+test ui_tests::each_control_invalidates_only_its_stage_and_paint_keeps_geometry ... ok
+test ui_tests::the_window_opens_and_explains_while_the_painter_is_prepared ... ok
+test ui_tests::cancelling_an_export_keeps_the_existing_file_and_leaves_no_partial ... ok
+test ui_tests::closing_during_an_export_asks_and_stopping_leaves_no_partial_file ... ok
+test ui_tests::the_preview_says_when_it_shows_earlier_settings ... ok
+test ui_tests::a_failed_export_says_what_to_do_and_keeps_the_existing_file ... ok
+test ui_tests::a_software_adapter_is_labelled_and_never_called_hardware ... ok
+test ui_tests::the_export_dialog_names_real_pixels_and_a_cancelled_destination_writes_nothing ... ok
+test ui_tests::source_free_recipes_open_and_save_without_inventing_prose ... ok
+test ui_tests::replacing_or_closing_unsaved_work_asks_first ... ok
+test ui_tests::invalid_custom_sizes_are_explained_and_cannot_be_exported ... ok
+test ui_tests::the_season_wraps_from_the_keyboard_and_leaves_palette_and_air_alone ... ok
+test worker::tests::a_burst_while_rendering_slowly_stays_bounded_and_ends_on_the_newest ... ok
+test ui_tests::failed_opens_and_saves_are_reported_and_change_nothing ... ok
+test ui_tests::sliders_moved_during_an_export_do_not_change_it ... ok
+test ui_tests::keyboard_alone_adjusts_a_slider_changes_composition_and_saves ... ok
+test export::tests::exports_a_snapshot_that_later_edits_cannot_reach ... ok
+test ui_tests::save_and_reopen_reproduce_settings_scene_and_kept_prose ... ok
+test ui_tests::portrait_and_square_paintings_export_at_their_own_proportions ... ok
+
+test result: ok. 53 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.79s
+
+     Running unittests src/main.rs (target/debug/deps/pigment_studio-9ba56068c63cab92)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gpu_preview.rs (target/debug/deps/gpu_preview-79a06ccaabbc3376)
+
+running 1 test
+test a_request_storm_stays_bounded_and_ends_on_the_newest ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/qualification.rs (target/debug/deps/qualification-180adf23919d6312)
+
+running 8 tests
+test approved_recipes_go_from_scene_to_preview_to_a_tiled_png ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test brush_and_texture_scale_hold_at_two_resolutions ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test desert_recipe_reopens_and_tiled_export_matches_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test jungle_preview_and_8k_export_performance_is_recorded ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test jungle_recipe_reopens_source_free_and_tiled_export_matches_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test repeated_exports_with_previews_stay_bounded ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tile_boundaries_show_no_seams ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+test tundra_recipe_reopens_and_winter_tiled_export_matches_single ... ignored, needs a hardware GPU; run scripts/gpu-tests.sh
+
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests pigment_studio
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+third-party-notices: packaging/linux/THIRD-PARTY-NOTICES.md is current

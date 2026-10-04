@@ -320,6 +320,85 @@ fn painting_is_identical_tiled_and_single() {
 
 #[test]
 #[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn cloud_volume_ignores_flat_bands_and_responds_to_light() {
+    use pigment_core::scene::{LayerRole, LightSide, Scene};
+
+    let frame = Frame::new(960, 540).unwrap();
+    let req = lakeshore_request("sample passage 0", frame, TilePolicy::Single);
+    let reference = render_paint(&req);
+    let mut layers = req.scene.layers().to_vec();
+    for layer in &mut layers {
+        if layer.role == LayerRole::Cloud {
+            layer.shade = 1.0 - layer.shade;
+        }
+    }
+    let mut changed = req.clone();
+    changed.scene = Arc::new(
+        Scene::new(*req.scene.key(), layers)
+            .unwrap()
+            .with_light(req.scene.light())
+            .with_wind(req.scene.wind()),
+    );
+    assert_eq!(
+        reference.rgba8,
+        render_paint(&changed).rgba8,
+        "old flat cloud bands must not leak through the participating volume"
+    );
+
+    let opposite = match req.scene.light() {
+        LightSide::Left => LightSide::Right,
+        LightSide::Right => LightSide::Left,
+    };
+    changed.scene = Arc::new((*req.scene).clone().with_light(opposite));
+    let flipped = render_paint(&changed);
+    let ids = raster::front_layers(&req.scene, 960, 540);
+    let mut sum = 0.0;
+    let mut samples = 0;
+    for (i, id) in ids.into_iter().enumerate() {
+        if id != raster::NONE && req.scene.layers()[id as usize].role == LayerRole::Cloud {
+            for ch in 0..3 {
+                sum +=
+                    (reference.rgba8[i * 4 + ch] as f64 - flipped.rgba8[i * 4 + ch] as f64).abs();
+                samples += 1;
+            }
+        }
+    }
+    assert!(samples > 1000);
+    assert!(
+        sum / samples as f64 > 2.0,
+        "cloud light must be directional"
+    );
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
+fn relief_is_tile_order_independent_in_every_biome_and_orientation() {
+    for profile in pigment_core::biome::PROFILES {
+        for (width, height) in [(769, 433), (433, 769)] {
+            let frame = Frame::new(width, height).unwrap();
+            let mut req = lakeshore_request("Relief regression", frame, TilePolicy::Single);
+            req.scene = Arc::new(
+                pigment_core::scene::generator(profile.id)
+                    .generate(&req.seeds, &profile.form, frame.aspect())
+                    .unwrap(),
+            );
+            req.appearance.palette.id = profile.palette;
+            req.appearance.season.year = 0.27;
+            let reference = render_paint(&req);
+            req.target.policy = TilePolicy::Fixed { edge: 223 };
+            req.target.order = TileOrder::ReverseInBand;
+            assert_eq!(
+                reference.rgba8,
+                render_paint(&req).rgba8,
+                "{:?} {width}x{height}: relief/density must be in whole-image space",
+                profile.id
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
 fn painting_is_opaque_repeatable_and_varied() {
     let frame = Frame::new(640, 360).unwrap();
     for text in [

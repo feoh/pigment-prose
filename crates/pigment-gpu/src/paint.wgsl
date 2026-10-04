@@ -365,7 +365,9 @@ fn crown_field_wide(c: vec2<f32>, size: f32, wide: f32, s: u32) -> vec2<f32> {
         }
     }
     let crown = clamp(1.0 - best, 0.0, 1.0);
-    let lit = clamp(0.55 - 0.75 * rel.y + 0.2 * light_x() * rel.x, 0.0, 1.0);
+    let nz = sqrt(max(0.0, 1.0 - dot(rel, rel)));
+    let lit = clamp(0.16 + 0.84 * dot(normalize(vec3<f32>(rel, nz + 0.01)),
+        normalize(vec3<f32>(0.55 * light_x(), -0.65, 0.6))), 0.0, 1.0);
     return vec2<f32>(crown, lit);
 }
 
@@ -421,7 +423,9 @@ fn spire_field(c: vec2<f32>, size: f32, s: u32) -> vec2<f32> {
             if (t < 0.0 || t > 1.0) {
                 continue;
             }
-            let half = 0.08 + 0.5 * t;
+            let whorl = fract(t * 7.0 + 0.18 * vnoise(vec2<f32>(t * 3.0, pt.x), s + 9u));
+            let branch = 0.65 + 0.35 * (1.0 - abs(2.0 * whorl - 1.0));
+            let half = (0.035 + 0.5 * t) * branch;
             let v = 1.0 - abs(d.x) / half;
             if (v > 0.0 && pt.y > best_y) {
                 best_y = pt.y;
@@ -751,7 +755,18 @@ fn plant_color_at(plant: u32, c: vec2<f32>, size: f32, depth: f32, shade: f32, b
             out = mix(out, trunk, smoothstep(reach, reach - 0.12, rel));
         }
     }
-    let mean = mix(mean_crown, gap, 0.25);
+    // Each tree's own tone (the same cells as its crown), so a stand is
+    // many individuals rather than one repeated stamp.
+    var tone = 0.5;
+    switch plant {
+        case P_BIRCH: { tone = crown_field_id(c, s, 1.0, 19u).z; }
+        case P_SHRUB: { tone = crown_field_id(c, s, 1.8, 23u).z; }
+        case P_CONIFER: { tone = spire_tone(c, s, 17u); }
+        default: { tone = crown_field_id(c, s, 1.0, 11u).z; }
+    }
+    out = individual_tree(out, tone, cr.x);
+    out = canopy_detail(out, c, s, cr, shade);
+    let mean = mix(mean_crown, gap, 0.25) * 0.72;
     return mix(mean, out, smoothstep(2.0, 5.0, s / P.look.w));
 }
 
@@ -786,7 +801,9 @@ fn foliage(base: vec3<f32>, c: vec2<f32>, depth: f32, shade: f32, decid: f32) ->
     }
     out = mix(dark, out, smoothstep(0.02, 0.35, cover));
     // Mean look for sub-pixel crowns.
-    let mean = mix(mean_base, dark, 0.25 + 0.3 * bare);
+    out = individual_tree(out, crown_field_id(c, size, 1.0, 11u).z, crown);
+    out = canopy_detail(out, c, size, vec2<f32>(crown, lit), shade);
+    let mean = mix(mean_base, dark, 0.25 + 0.3 * bare) * 0.72;
     let resolve = smoothstep(2.0, 5.0, size / P.look.w);
     return mix(mean, out, resolve);
 }
@@ -971,7 +988,7 @@ fn meadow_color(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
         }
         out = mix(out, flower, bloom);
     }
-    return out;
+    return meadow_detail(out, c, depth, shade);
 }
 
 // `meadow_color` in a season other than midsummer: fresh spring green,
@@ -1010,6 +1027,7 @@ fn seasonal_meadow(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
         }
         out = mix(out, flower, bloom);
     }
+    out = meadow_detail(out, c, depth, shade);
     if (seasonal()) {
         out = snow_on_ground(out, c, shade);
     }
@@ -1058,17 +1076,10 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
     var rgb = vec3<f32>(0.0);
     switch role {
         case R_SKY: {
-            let t = clamp(c.y / max(horizon, 1e-3), 0.0, 1.0);
-            rgb = mix(col(SKY_ZENITH), col(SKY_HORIZON), pow(t, 1.4));
-            // Soft variation, like an uneven sky wash.
-            rgb *= 0.94 + 0.12 * fbm(c, 0.4, 3u, 31u);
+            rgb = clear_sky(c);
         }
         case R_CLOUD: {
-            rgb = shaded(CLOUD, shade);
-            if (shade < 0.35) {
-                rgb = mix(col(STORM), rgb, shade / 0.35);
-            }
-            rgb *= 0.92 + 0.16 * fbm(c, 0.08, 4u, 41u);
+            rgb = cloud_sky(c);
         }
         case R_FAR_RIDGE: {
             rgb = shaded(FAR, shade);
@@ -1081,10 +1092,14 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
             }
         }
         case R_MOUNTAIN: {
-            rgb = mountain(c, depth, shade, horizon, summit, rise);
+            rgb = mountain(l, c, depth, shade, horizon, summit, rise);
         }
         case R_MESA: {
             rgb = mesa_surface(c, depth, shade);
+            // Shared bedding scale across body and all sedimentary bands;
+            // a thin colour band is not a separate tiny cliff.
+            let relief = stone_relief(c, 0.26 * P.frame.w, true);
+            rgb = mix(rgb, relief_light(rgb, relief, shade), 0.72);
         }
         case R_TUNDRA_GROUND: {
             rgb = meadow_color(c, depth, shade);
@@ -1139,9 +1154,9 @@ fn land(l: u32, c: vec2<f32>) -> Surface {
             }
         }
         case R_ROCK: {
-            // Stronger plane contrast: rocks are the solid forms up front.
-            rgb = shaded(ROCK, clamp((shade - 0.5) * 1.8 + 0.5, 0.0, 1.0));
-            rgb = rock_surface(rgb, c, shade);
+            let scale = max(mass_bounds(l).z - mass_bounds(l).x, 0.04);
+            let relief = stone_relief(c, scale, false);
+            rgb = mineral_surface(c, scale, relief, shade);
             rgb = mossy(rgb, c, shade);
             rgb = rock_edges(rgb, c);
             if (seasonal() && P.season_a.y > 0.25) {
@@ -1190,115 +1205,50 @@ fn mesa_surface(c: vec2<f32>, depth: f32, shade: f32) -> vec3<f32> {
     return stone;
 }
 
-// A mountainside's anatomy (renderer v3, round 8: "mountainsides have
-// detail all their own"): fall lines running down the massif, fanning out
-// as the slant between them drifts across it, with gullies (couloirs) in
-// the low ground between ribs. `slope` is the cross-fall gradient, so each
-// rib is lit on its side toward the light and shaded on the other.
-// `down` is how far down the massif the point is (0 at the summit, 1 at the
-// horizon). Band-limited like every other mark.
-struct Anatomy {
-    gully: f32,
-    rib: f32,
-    slope: f32,
-    down: f32,
-}
+// Mountains have a continuous geological surface beneath the composed
+// planes. Snow, scree and vegetation occupy that relief rather than three
+// horizontally clipped colour zones.
+fn mountain(l: u32, c: vec2<f32>, depth: f32, shade: f32, horizon: f32, summit: f32, rise: f32) -> vec3<f32> {
+    let scale = max(rise, 0.12);
+    let r = stone_relief(c, scale, false);
+    let down = clamp((c.y - summit) / scale, 0.0, 1.0);
+    let local_top = mass_span(l, c.x).x;
+    let below_crest = clamp((c.y - local_top) / max(horizon - local_top, 0.02), 0.0, 1.0);
+    let facing = max(0.0, dot(r.normal, normalize(vec3<f32>(0.66 * light_x(), -0.75, 0.65))));
+    let relief = clamp(0.18 + 0.42 * shade + 0.48 * facing * r.visibility - 0.18 * r.hollow, 0.0, 1.0);
+    var rock = mineral_surface(c, scale, r, shade);
+    let scree = smoothstep(0.42, 0.76, down) * r.hollow
+        * smoothstep(0.38, 0.68, fbm(vec2<f32>(c.x, c.y * 0.5), scale * 0.045, 5u, 2203u));
+    rock = mix(rock, relief_light(mix(shaded(ROCK, 0.7), col(SAND), 0.2), r, shade), 0.6 * scree);
 
-fn anatomy(c: vec2<f32>, horizon: f32, rise: f32) -> Anatomy {
-    let top = horizon - rise;
-    let down = clamp((c.y - top) / rise, 0.0, 1.0);
-    let slant = (fbm(vec2<f32>(c.x, 7.0), 0.25 * rise, 2u, 601u) - 0.5) * 2.4;
-    let u = c.x + slant * (c.y - top) + 0.015 * rise * (fbm(c, 0.08 * rise, 2u, 602u) - 0.5);
-    // One width everywhere: scaling it with height would make the streaks'
-    // phase race down the slope into horizontal bands.
-    // Broad ribs and spurs, with finer couloirs cut into them.
-    let wl = 0.075 * rise;
-    let q = vec2<f32>(u, c.y * 0.15);
-    let d = vec2<f32>(0.12 * wl, 0.0);
-    let g = 0.6 * fbm(q, wl, 2u, 603u) + 0.4 * fbm(q, 0.4 * wl, 3u, 604u);
-    let gp = 0.6 * fbm(q + d, wl, 2u, 603u) + 0.4 * fbm(q + d, 0.4 * wl, 3u, 604u);
-    let gm = 0.6 * fbm(q - d, wl, 2u, 603u) + 0.4 * fbm(q - d, 0.4 * wl, 3u, 604u);
-    let slope = (gp - gm) * 4.0;
-    return Anatomy(smoothstep(0.42, 0.26, g), smoothstep(0.56, 0.74, g), clamp(slope, -1.0, 1.0), down);
-}
-
-// The main massif: rock with its own relief, strata and scree above a
-// ragged treeline; alpine meadow and outcrops in between; forest below,
-// shaded by the same ribs and gullies; snow on the high peaks reaching
-// lower in the gullies, with ribs showing through. Then the season's snow,
-// which also lingers in the gullies.
-fn mountain(c: vec2<f32>, depth: f32, shade: f32, horizon: f32, summit: f32, rise: f32) -> vec3<f32> {
-    let a = anatomy(c, horizon, rise);
-    // The plane's shade, turned by the ribs toward or away from the light.
-    let relief = clamp(shade + 0.2 * a.slope * light_x() + 0.06 * (a.rib - a.gully), 0.0, 1.0);
-
-    // Rock: relief, faint tilted strata, grain, and pale scree fans
-    // spilling below the cliffs toward the treeline.
-    var rock = shaded(ROCK, relief);
-    let tilt = normalize(vec2<f32>(1.0, 0.25 * light_x()));
-    let strata = fbm(vec2<f32>(dot(c, tilt) * 0.15, dot(c, vec2<f32>(-tilt.y, tilt.x))), 0.012 * rise, 3u, 605u);
-    rock *= 0.92 + 0.16 * strata;
-    rock *= 0.93 + 0.14 * fbm(c, 0.004, 3u, 606u);
-    rock = mix(rock, rock * 0.72, 0.5 * a.gully);
-    // Cliff bands: short broken ledges along the strata, a shadow under a
-    // lit lip, fading out below a couple of pixels.
-    let ledge_res = smoothstep(1.5, 3.0, 0.004 * rise / P.look.w);
-    if (ledge_res > 0.0) {
-        let along = vec2<f32>(dot(c, tilt), dot(c, vec2<f32>(-tilt.y, tilt.x)));
-        let band = fbm(vec2<f32>(along.x * 0.08, along.y), 0.006 * rise, 2u, 613u);
-        let broken = smoothstep(0.5, 0.62, fbm(c, 0.03 * rise, 2u, 614u));
-        let ledge = smoothstep(0.7, 0.8, band) * broken * ledge_res * (1.0 - a.gully);
-        rock = mix(rock, rock * 0.62, 0.6 * ledge);
-        let lip = smoothstep(0.62, 0.7, band) * (1.0 - smoothstep(0.7, 0.75, band)) * broken * ledge_res;
-        rock = mix(rock, mix(rock, col(SUN), 0.2) * 1.1, 0.35 * lip);
-    }
-    let scree = smoothstep(0.55, 0.75, fbm(vec2<f32>(c.x, c.y * 0.5), 0.02 * rise, 3u, 607u))
-        * smoothstep(0.35, 0.6, a.down) * (1.0 - a.rib);
-    rock = mix(rock, mix(shaded(ROCK, 1.0), shaded(SAND, relief), 0.3) * (0.9 + 0.2 * fbm(c, 0.003, 2u, 608u)), 0.45 * scree);
-
-    // The treeline: higher in the gullies, lower on the ribs, ragged, with
-    // clumps of trees straggling above it.
-    let line = horizon - rise * (0.36 + 0.2 * fbm(vec2<f32>(c.x, 0.0), 0.12, 3u, 51u))
-        - rise * (0.1 * a.gully - 0.06 * a.rib);
-    let ragged = line + 0.03 * rise * (fbm(c, 0.02 * rise, 3u, 609u) - 0.5);
-    let solid = smoothstep(ragged - 0.004, ragged + 0.004, c.y);
-    let above = (ragged - c.y) / rise;
-    let clumps = smoothstep(0.58, 0.68, fbm(c, 0.012 * rise, 3u, 610u))
-        * smoothstep(0.14, 0.0, above) * step(0.0, above);
-    let tree = max(solid, clumps);
-    // Alpine meadow between the trees and the bare rock, broken by
-    // outcrops on the ribs.
-    let alpine = smoothstep(0.2, 0.03, above) * (1.0 - 0.75 * a.rib)
-        * smoothstep(0.35, 0.55, fbm(c, 0.03 * rise, 3u, 611u));
-    let turf = mix(shaded(MEADOW, relief), shaded(ROCK, relief), 0.35) * (0.92 + 0.16 * strata);
-    var rgb = mix(rock, turf, alpine);
-    // The forest follows the same ground, more softly (the canopy smooths
-    // it).
-    var woods = forest_color(c, depth, mix(shade, relief, 0.5));
-    woods *= 1.0 - 0.08 * a.gully;
-    // Avalanche chutes: paler brush and meadow down the upper gullies.
-    let chute = smoothstep(0.55, 0.9, a.gully) * smoothstep(0.85, 0.45, a.down)
-        * smoothstep(0.45, 0.6, fbm(vec2<f32>(c.x, c.y * 0.2), 0.05 * rise, 2u, 615u));
-    woods = mix(woods, mix(shaded(MEADOW, relief), woods, 0.45), 0.6 * chute);
+    let ragged = fbm(c, scale * 0.085, 6u, 2207u);
+    let line = 0.59 + 0.23 * (fbm(vec2<f32>(c.x, 0.0), scale * 0.4, 4u, 2209u) - 0.5);
+    // Sparse upper woods give way to contiguous canopy in sheltered ground;
+    // exposed cliff ribs continue all the way into the foothills.
+    let tree = smoothstep(line - 0.07, line + 0.13, down + 0.13 * (ragged - 0.5))
+        * smoothstep(0.03, 0.15, below_crest)
+        * (1.0 - 0.8 * smoothstep(0.12, 0.18, r.height));
+    let alpine = smoothstep(line - 0.23, line, down)
+        * smoothstep(0.35, 0.62, ragged) * (0.35 + 0.65 * r.hollow);
+    let turf = shaded(MEADOW, relief) * (0.62 + 0.48 * r.visibility);
+    var rgb = mix(rock, turf, 0.8 * alpine);
+    let woods = forest_color(c, depth, relief) * (0.62 + 0.48 * r.visibility);
     rgb = mix(rgb, woods, tree);
 
-    // Permanent snow on the high peaks: lower in the gullies, the ribs
-    // showing through its edge.
+    // Snow accumulates in couloirs and shelves, not as a flat summit cap.
+    // Steep ribs break through even high on the mountain.
     if (rise > 0.3 * P.frame.w) {
-        let snow_y = summit + rise * (0.18 + 0.14 * fbm(vec2<f32>(c.x, 1.0), 0.08, 3u, 52u))
-            + rise * (0.09 * a.gully - 0.05 * a.rib)
-            + 0.02 * rise * (fbm(c, 0.015 * rise, 3u, 612u) - 0.5);
-        let snow = 1.0 - smoothstep(snow_y - 0.004, snow_y + 0.004, c.y);
-        rgb = mix(rgb, shaded(SNOW, relief), snow);
+        let limit = 0.21 + 0.13 * r.hollow + 0.09 * (ragged - 0.5);
+        let snow = (1.0 - smoothstep(limit - 0.045, limit + 0.045, down))
+            * (0.28 + 0.72 * smoothstep(0.08, 0.72, r.normal.z));
+        let snow_rgb = relief_light(shaded(SNOW, 0.7), r, max(shade, 0.42));
+        rgb = mix(rgb, snow_rgb, snow);
     }
     if (seasonal()) {
-        // Seasonal snow comes down the massif, lingering in the gullies: a
-        // sheet on the rock and turf, among the trees below the treeline.
-        let h = clamp((horizon - c.y) / rise + 0.08 * a.gully - 0.04 * a.rib, 0.0, 1.0);
-        let cover = slope_snow(h, c, relief);
-        let wooded = mix(rgb, shaded(SNOW, relief), cover * (0.35 + 0.35 * P.season_a.z));
-        rgb = mix(rgb, wooded, tree);
-        rgb = mix(rgb, shaded(SNOW, relief), cover * (1.0 - tree));
+        let altitude = clamp(1.0 - down + 0.08 * r.hollow, 0.0, 1.0);
+        let cover = slope_snow(altitude, c, relief);
+        let snow_rgb = relief_light(shaded(SNOW, 0.7), r, max(shade, 0.42));
+        rgb = mix(rgb, snow_rgb, cover * (1.0 - tree * (0.65 - 0.35 * P.season_a.z)));
     }
     return rgb;
 }
@@ -1344,124 +1294,6 @@ fn fractures(c: vec2<f32>, along: vec2<f32>, size: f32, s: u32) -> f32 {
     let ridge = 1.0 - abs(2.0 * n - 1.0);
     let group = smoothstep(0.5, 0.68, fbm(c, 6.0 * size, 2u, s + 3u));
     return smoothstep(0.93, 0.985, ridge) * group;
-}
-
-// Small stone facets: a cellular field of flat chips, stretched along the
-// grain. Returns (tilt, crevice, lip): each chip's tilt toward (+) or away
-// from (-) the light, -1 to 1; a dark crevice along the chip edges turned
-// away from the light, and a lit lip along those turned toward it, 0 to 1
-// each. `size` in canvas units.
-fn rock_facets(c: vec2<f32>, size: f32, grain: vec2<f32>, s: u32) -> vec3<f32> {
-    let q = vec2<f32>(dot(c, grain) / 1.7, dot(c, vec2<f32>(-grain.y, grain.x))) / size;
-    let i = floor(q);
-    var d1 = 1e9;
-    var d2 = 1e9;
-    var p1 = vec2<f32>(0.0);
-    var p2 = vec2<f32>(0.0);
-    var h1 = 0.0;
-    var c1 = vec2<i32>(0);
-    var c2 = vec2<i32>(0);
-    for (var dy = -1; dy <= 1; dy++) {
-        for (var dx = -1; dx <= 1; dx++) {
-            let cell = vec2<i32>(i32(i.x) + dx, i32(i.y) + dy);
-            let pt = vec2<f32>(cell) + vec2<f32>(hash3(cell.x, cell.y, s), hash3(cell.x, cell.y, s + 1u));
-            let d = distance(q, pt);
-            if (d < d1) {
-                d2 = d1;
-                p2 = p1;
-                c2 = c1;
-                d1 = d;
-                p1 = pt;
-                c1 = cell;
-                h1 = hash3(cell.x, cell.y, s + 2u);
-            } else if (d < d2) {
-                d2 = d;
-                p2 = pt;
-                c2 = cell;
-            }
-        }
-    }
-    // Distance to the edge between the two nearest chips, in cells.
-    let edge = 0.5 * (d2 - d1);
-    let px = P.look.w / size;
-    // About half the edges between chips are open joints; the rest are
-    // only a change of plane.
-    let pair = c1 + c2;
-    let open = step(hash3(pair.x, pair.y, s + 3u), 0.5);
-    let line = open * (1.0 - smoothstep(0.5 * px, 1.6 * px, edge));
-    // The edge's outward normal, back in canvas directions.
-    let nq = normalize(p2 - p1 + vec2<f32>(1e-6, 0.0));
-    let n = normalize(grain * nq.x / 1.7 + vec2<f32>(-grain.y, grain.x) * nq.y);
-    let toward = dot(n, to_light());
-    return vec3<f32>(2.0 * h1 - 1.0, line * smoothstep(-0.1, -0.5, toward), line * smoothstep(0.1, 0.5, toward));
-}
-
-// A rock's surface (renderer v2, task 25: "their surfaces will need to be
-// less chonky geometric and more complex"; round 7: "you didn't ... add
-// more complex surfaces"). Over the generator's planes: warm and cool
-// staining, two scales of flat chips, each tilted to or from the light,
-// with dark crevices and lit lips along their edges; tilted strata; rain
-// streaks down the shaded faces; grouped cracks; dark and pale flecks in
-// the grain; and pale lichen rosettes on the lit, dry faces. Everything
-// finer than a couple of pixels fades out.
-fn rock_surface(rgb: vec3<f32>, c: vec2<f32>, shade: f32) -> vec3<f32> {
-    let s = P.handling.z;
-    var out = rgb;
-    // Staining: cooler grey in places, warmer iron in others.
-    let grey = vec3<f32>(luminance(out));
-    let cool = mix(out, grey * vec3<f32>(0.9, 0.97, 1.08), 0.7);
-    let warm = out * vec3<f32>(1.08, 0.98, 0.84);
-    let stain = fbm(c + vec2<f32>(5.3, 1.9), 0.06 * s, 3u, 129u);
-    out = mix(out, cool, 0.6 * smoothstep(0.45, 0.7, stain));
-    out = mix(out, warm, 0.5 * smoothstep(0.55, 0.3, stain));
-    out *= 0.92 + 0.16 * fbm(c, 0.003 * s, 2u, 121u);
-    let tilt = normalize(vec2<f32>(0.35 * light_x(), 1.0));
-    let grain = tilt.yx * vec2<f32>(1.0, -1.0);
-    // Facets at three scales: broad planes within the generator's planes
-    // (mostly a change of plane, few open joints), then chips, then small
-    // chips within them.
-    let lit = 1.0 - smoothstep(0.1, 0.9, shade) * 0.5;
-    let sizes = array<f32, 3>(0.03, 0.012, 0.0055);
-    let tilts = array<f32, 3>(0.24, 0.14, 0.09);
-    let joints = array<f32, 3>(0.35, 1.0, 0.65);
-    for (var o = 0u; o < 3u; o++) {
-        let size = sizes[o] * s;
-        let resolve = smoothstep(3.0, 7.0, size / P.look.w);
-        if (resolve > 0.0) {
-            let f = rock_facets(c, size, grain, 140u + 7u * o);
-            out *= 1.0 + tilts[o] * resolve * f.x;
-            let j = joints[o] * resolve;
-            out = mix(out, out * 0.5, 0.6 * j * f.y);
-            out = mix(out, mix(out, col(SUN), 0.3) * 1.15, 0.45 * j * f.z * lit);
-        }
-    }
-    let strata = fbm(vec2<f32>(dot(c, tilt), dot(c, vec2<f32>(-tilt.y, tilt.x)) * 0.08), 0.008 * s, 3u, 122u);
-    out *= 0.88 + 0.24 * strata;
-    let streak = fbm(vec2<f32>(c.x * 6.0, c.y * 0.6), 0.03 * s, 3u, 123u);
-    out *= 1.0 - 0.2 * smoothstep(0.5, 0.78, streak) * (1.1 - shade);
-    // Cracks: thin enough to need about 2 px before they show.
-    let resolve = smoothstep(1.2, 2.6, 0.0012 * s / P.look.w);
-    if (resolve > 0.0) {
-        let crack = fractures(c, grain, 0.02 * s, 124u) * resolve;
-        // A lit lip on the crack's side toward the light: a cut, not a line.
-        let lip = fractures(c - to_light() * 0.0014 * s, grain, 0.02 * s, 124u) * resolve;
-        out = mix(out, mix(out, col(SUN), 0.25) * 1.12, 0.5 * max(lip - crack, 0.0));
-        out = mix(out, out * 0.38, 0.9 * crack);
-    }
-    // Flecks in the grain: dark and pale, about 2 px and up.
-    let fleck_res = smoothstep(1.5, 3.0, 0.0022 * s / P.look.w);
-    if (fleck_res > 0.0) {
-        let n = vnoise(c / (0.0022 * s), 131u);
-        out *= 1.0 - 0.3 * fleck_res * smoothstep(0.78, 0.9, n);
-        out = mix(out, out * 1.25 + 0.03, 0.4 * fleck_res * smoothstep(0.24, 0.12, n));
-    }
-    let rosette = crown_field(c, 0.0045 * s, 126u);
-    let lichen = smoothstep(0.55, 0.75, fbm(c, 0.02 * s, 3u, 127u)) * smoothstep(0.42, 0.75, shade)
-        * smoothstep(0.2, 0.55, rosette.x) * smoothstep(1.5, 3.0, 0.0045 * s / P.look.w);
-    let pale = mix(col(ROCK), col(MOSS), 0.3) * 1.2;
-    let ochre = mix(col(SUN), col(SAND), 0.55) * 0.95;
-    let tint = mix(pale, ochre, smoothstep(0.55, 0.7, fbm(c, 0.05, 2u, 128u)));
-    return mix(out, tint, 0.65 * lichen);
 }
 
 // Moss on a rock: soft cushions that follow the form rather than patches
@@ -1661,7 +1493,8 @@ fn water(l: u32, c: vec2<f32>) -> Surface {
     let glint = smoothstep(0.74, 0.88, gfbm(vec2<f32>(q.x * 0.25, q.y), 0.03, 2u, 175u, gr.fp));
     rgb = mix(rgb, col(WATER_SHEEN), 0.35 * glint * rough);
     // The current: pale lines along the channel over slightly darker water.
-    rgb = mix(rgb * (1.0 - 0.07 * cur.y), col(WATER_SHEEN), 0.42 * cur.x * cur.y);
+    let broken_current = smoothstep(0.36, 0.68, gfbm(vec2<f32>(gr.g.x * 0.7, gr.g.y * 0.25), 0.16, 4u, 183u, gr.fp));
+    rgb = mix(rgb * (1.0 - 0.07 * cur.y), col(WATER_SHEEN), 0.20 * cur.x * cur.y * broken_current);
     rgb *= 0.8 + 0.4 * shade;
     // Rocks standing in the water throw dark, rippled reflections and wear
     // a broken ring of foam where the water meets them.
@@ -1721,7 +1554,15 @@ fn materials_main(@builtin(global_invocation_id) id: vec3<u32>) {
     if (l >= 0) {
         rgb = material(u32(l), c);
     }
-    textureStore(field_w, vec2<i32>(id.xy), vec4<f32>(rgb, f32(l)));
+    // Old cloud cap/base bands are one participating volume. Do not put
+    // pigment-pooling seams back along those now-invisible boundaries.
+    var identity = l;
+    if (l >= 0 && (role_of(l) == R_CLOUD || role_of(l) == R_SKY)) {
+        // Both are atmosphere, including the transparent edge of a volume.
+        // Pooling here would outline the old, now-eroded polygon in grey.
+        identity = 0;
+    }
+    textureStore(field_w, vec2<i32>(id.xy), vec4<f32>(rgb, f32(identity)));
 }
 
 // ---------------------------------------------------------------- painting

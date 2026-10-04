@@ -1,0 +1,7 @@
+pigment-prose 0.1.0 contact-sheet: alpine generator v3, renderer v5, view paint, aspect 16:9, cell 1280x720, form faceting=0.55 relief=0.5 woodland_density=0.5
+appearance: Appearance { painting: PaintingSettings { edge_looseness: 0.4, wash_gouache: 0.25, mark_scale: 1.0, granulation: 0.3, paper_grain: 0.3 }, palette: PaletteSettings { id: Lakeshore, intensity: 0.6 }, atmosphere: AtmosphereSettings { haze: 0.4 }, season: SeasonSettings { year: 0.5 } }
+device: NVIDIA GeForce RTX 4070 Ti (Vulkan)
+cell	label	template	mirrored	layers	vertices	checksum	rise	scale	planes	expanse	clutter	sky	light	foreground	coverage % (sky far-ridge mid-ridge near-ridge water shore woodland foreground-rock mountain cloud mesa tundra-ground jungle-ground jungle-canopy)	image fnv
+1	sample passage 0	tower-peak	false	80	10704	84047a02572596cf	0.59	64	3	0.21	0.00	0.08	0.60	0.27	35.1 5.4 5.2 0.0 19.4 2.2 1.4 1.1 22.2 7.9 0.0 0.0 0.0 0.0	c9f0c666ec19c062
+2	sample passage 8	framing-ridges	false	84	12424	74fcdb47b84afa81	0.36	6	4	0.22	0.01	0.12	0.73	0.55	25.4 0.5 1.6 3.7 20.7 17.6 1.5 1.4 15.2 12.4 0.0 0.0 0.0 0.0	482d9a56e57a7d1e
+3	sample passage 15	high-vantage	false	41	11922	8e5b457c30314fec	0.22	10	11	0.54	0.00	0.05	0.63	0.74	18.7 0.7 1.2 49.1 14.9 0.2 0.4 0.0 9.3 5.4 0.0 0.0 0.0 0.0	596d4be1e4d25b77

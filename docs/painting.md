@@ -1,6 +1,64 @@
-# Painting (tasks 06–07, 25)
+# Painting
 
-`pigment_gpu::PaintRenderer` (`crates/pigment-gpu/src/paint.rs` + `paint.wgsl`) paints a `Scene` with an authored palette (`pigment_core::palette`). It runs over the shared tile loop, so tiled output equals single-tile output. **Status:** the painting direction was accepted in visual-review rounds 2–5 ([round 5 result](visual-review/round-05/RESULT.md)). This is not the task 08 gate. Task 07 then added the [woodland, rocks and water](#woodland-rocks-and-water-task-07) cues and is waiting on [round 6](visual-review/round-06/README.md). Task 25 added the [final rendering detail](#wind-current-and-stone-task-25) (wind and current on water, more complex rocks), approved in [round 7](visual-review/round-07/RESULT.md); `RENDERER_VERSION` is 2 and the approved baseline is [baseline-25](visual-review/baseline-25/README.md). Task 06 evidence (settings side-by-sides, 4K edge crops, benchmark logs) is in [evidence/paint-06](evidence/paint-06/README.md), and task 07 evidence is in [evidence/paint-07](evidence/paint-07/README.md).
+## Current renderer: v5 relief candidate
+
+The owner's 2026-10-04 direction asks for substantially richer natural forms,
+not additional paper noise: fractured stone, clouds with volume, and lush
+detail. **This is a candidate awaiting human visual approval**, not a claim
+to match the supplied reference paintings or to have measured “10× detail”.
+
+`PaintRenderer` assembles `paint.wgsl` and `relief.wgsl`. `relief.rs` builds
+resolution-independent vertical envelopes from the existing scene outlines.
+Sub-planes of a mountain, rock or cumulus mass share the parent envelope.
+The scene, structural seed streams and generator v3 checksums are unchanged.
+
+- **Stone:** a nine-octave, domain-warped ridged multifractal. Coarse ridges
+  modulate finer ribs; surface normals and seven horizon-shadow samples
+  determine illumination. Mineral staining, stratification and fractures
+  add smaller-scale detail. The text seed varies geological character.
+  Mesas share a bedding scale across their body and sedimentary bands.
+- **Mountains:** snow, exposed ribs, scree, alpine turf and upper woods respond
+  to the same relief. Snow no longer forms a uniform flat summit cap.
+- **Clouds:** 24 view-ray density samples with five light-path samples per
+  occupied step, five-octave 3D turbulence, extinction and scattering.
+  Overlapping banks composite with premultiplied scattering/transmittance.
+  The old three-band shading is ignored; atmosphere has a shared paint
+  identity so transparent edges do not acquire polygon-shaped pooling halos.
+- **Vegetation:** rounded crown normals, branch-whorl conifer detail,
+  smaller leaf clusters, deeper canopy gaps and bent foreground grass blades.
+  Tree placement and silhouettes are still the existing generator's.
+- **Water:** reflections use the new materials; current highlights are
+  weaker and broken into patches rather than continuous white wires.
+
+All fields use whole-image coordinates. Fine scales fade with pixel
+footprint; no new pixel-neighbour reads or tile apron are needed. The
+additional envelope buffer is cached with the scene. Both studio preview
+and export use this path, with no new controls or external dependencies.
+
+**Compatibility:** renderer version 5 intentionally changes existing images.
+Old recipes retain their structure and load with the renderer-version notice;
+saving records v5. Old approved images/hashes remain historical evidence,
+not newly approved v5 goldens. Recipe round-trip tests still compare every
+historical recipe before/after save under the current renderer; historical
+pixel hashes are checked only on a compatible renderer and device.
+
+**Limits:** terrain remains a layered 2.5D composition with relief shading,
+not a full 3D terrain/camera system. Trees still need more individual branch
+anatomy and larger foreground specimens to approach the references.
+Prose remains a non-semantic deterministic seed, not a prompt.
+Minutes-long offline rendering is allowed by the brief, but was not needed
+for this bounded first upgrade.
+
+Candidate images, commands and validation:
+[relief-v5-candidate](visual-review/relief-v5-candidate/README.md).
+
+## Historical evolution (v1–v4)
+
+The descriptions, timings and approval claims below refer to their named
+historical versions, not the current v5 candidate.
+
+
+`pigment_gpu::PaintRenderer` (`crates/pigment-gpu/src/paint.rs` + `paint.wgsl`) paints a `Scene` with an authored palette (`pigment_core::palette`). It runs over the shared tile loop, so tiled output equals single-tile output. **Status:** the painting direction was accepted in visual-review rounds 2–5 ([round 5 result](visual-review/round-05/RESULT.md)). This is not the task 08 gate. Task 07 then added the [woodland, rocks and water](#woodland-rocks-and-water-task-07) cues and is waiting on [round 6](visual-review/round-06/README.md). Task 25 added the [final rendering detail](#wind-current-and-stone-task-25) (wind and current on water, more complex rocks), approved in [round 7](visual-review/round-07/RESULT.md); At that milestone `RENDERER_VERSION` was 2 and the approved baseline was [baseline-25](visual-review/baseline-25/README.md). Task 06 evidence (settings side-by-sides, 4K edge crops, benchmark logs) is in [evidence/paint-06](evidence/paint-06/README.md), and task 07 evidence is in [evidence/paint-07](evidence/paint-07/README.md).
 
 ## Palettes
 

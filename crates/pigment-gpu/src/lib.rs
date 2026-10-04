@@ -17,6 +17,7 @@ pub mod context;
 pub mod coverage;
 pub mod debug;
 pub mod paint;
+mod relief;
 pub mod smoke;
 mod tiled;
 

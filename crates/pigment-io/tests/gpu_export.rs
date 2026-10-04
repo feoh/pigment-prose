@@ -373,14 +373,16 @@ fn document_request(doc: &pigment_io::Document, policy: TilePolicy) -> RenderReq
 #[test]
 #[ignore = "needs a hardware GPU; run scripts/gpu-tests.sh"]
 fn approved_recipes_repaint_identically_after_save_and_load() {
-    // Every approved baseline recipe (task 25), saved and reopened, paints the same
-    // pixels as the original file. On the baseline device (RTX 4070 Ti,
-    // Vulkan) they must also match the approved image hashes.
+    // Every historical recipe, saved and reopened, paints the same pixels
+    // under the CURRENT renderer. Historical pixel hashes are authoritative
+    // only for the renderer that produced them (v4 also kept v3 alpine
+    // pixels). A versioned visual change must not rewrite approved evidence.
     let dir = Scratch::new("baseline-paint");
     let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/visual-review/baseline-16");
     let label = renderer_label();
     let baseline_device = label == "NVIDIA GeForce RTX 4070 Ti (Vulkan)";
     let mut checked = 0;
+    let mut hashes_checked = 0;
     for sheet in [
         "corpus-16x9",
         "corpus-9x16",
@@ -405,7 +407,11 @@ fn approved_recipes_repaint_identically_after_save_and_load() {
                 TilePolicy::Fixed { edge: 128 },
             ));
             assert!(a == b, "{sheet} {cell}: reopened recipe paints differently");
-            if baseline_device {
+            let recorded = original.recipe().versions.renderer;
+            let current = pigment_core::version::RENDERER_VERSION;
+            let compatible = current == recorded || (recorded == 3 && current == 4);
+            if baseline_device && compatible {
+                hashes_checked += 1;
                 let mut sink = MemorySink::default();
                 renderer()
                     .render(
@@ -425,10 +431,12 @@ fn approved_recipes_repaint_identically_after_save_and_load() {
         }
     }
     assert_eq!(checked, 47);
-    if !baseline_device {
+    if hashes_checked != checked {
         eprintln!(
-            "{label} is not the baseline device: checked reopened == original only, \
-             not the approved image hashes"
+            "{label}, renderer v{}: {checked} recipe round-trips checked; \
+             {hashes_checked} historical hashes checked (requires compatible renderer + device). \
+             New rendering direction still requires human visual approval.",
+            pigment_core::version::RENDERER_VERSION,
         );
     }
 }

@@ -27,6 +27,11 @@ use crate::coverage::CoverageIndex;
 use crate::tiled::{TilePasses, drive, storage_buffer, storage_buffer_u32, texture};
 
 const PARAMS_BYTES: u64 = 176;
+const PAINT_SHADER: &str = concat!(
+    include_str!("paint.wgsl"),
+    "\n",
+    include_str!("relief.wgsl")
+);
 
 // paint.wgsl measures wash/gouache character and texture strength from the
 // defaults (DEFAULT_WASH_GOUACHE, DEFAULT_TEXTURE).
@@ -59,6 +64,7 @@ struct SceneBuffers {
     /// The water's channel per row (renderer v2): see [`channel_rows`].
     channel: wgpu::Buffer,
     channel_desc: [f32; 4],
+    relief: wgpu::Buffer,
 }
 
 impl PaintRenderer {
@@ -68,7 +74,7 @@ impl PaintRenderer {
                 .device
                 .create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some("paint.wgsl"),
-                    source: wgpu::ShaderSource::Wgsl(include_str!("paint.wgsl").into()),
+                    source: wgpu::ShaderSource::Wgsl(PAINT_SHADER.into()),
                 });
             let make = |entry: &str| {
                 ctx.device
@@ -155,6 +161,11 @@ impl PaintRenderer {
             entries: storage_buffer_u32(&self.ctx, "coverage entries", &entries),
             channel: storage_buffer(&self.ctx, "water channel", &rows),
             channel_desc,
+            relief: storage_buffer(
+                &self.ctx,
+                "relief envelopes",
+                &crate::relief::envelopes(scene),
+            ),
         }
     }
 }
@@ -211,7 +222,7 @@ impl PaintRenderer {
         let (pipeline, out, staging) = ctx.scoped("compositing reference", || {
             let module = dev.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("paint.wgsl"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("paint.wgsl").into()),
+                source: wgpu::ShaderSource::Wgsl(PAINT_SHADER.into()),
             });
             let pipeline = dev.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("composite_reference_main"),
@@ -513,6 +524,7 @@ impl Renderer for PaintRenderer {
             entries,
             channel,
             channel_desc,
+            relief,
         } = self.scene_buffers(&req.scene);
         let pal: Vec<f32> = palette(req.appearance.palette.id)
             .gpu()
@@ -541,6 +553,7 @@ impl Renderer for PaintRenderer {
                 entry(7, bins.as_entire_binding()),
                 entry(8, entries.as_entire_binding()),
                 entry(11, channel.as_entire_binding()),
+                entry(12, relief.as_entire_binding()),
             ],
         );
         let bg_paint = bind(

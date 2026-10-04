@@ -94,7 +94,7 @@ fn approved_recipes_round_trip_and_reproduce_their_scenes() {
                 recorded: 3,
                 current: pigment_core::version::RENDERER_VERSION,
             }],
-            "{path:?} retains the old renderer record; its approved Alpine pixels are unchanged"
+            "{path:?} must warn that its recorded renderer differs; geometry remains reproducible"
         );
         assert_eq!(doc.prose(), None, "baseline recipes keep no source text");
         assert_eq!(doc.recipe().biome, pigment_core::biome::BiomeId::Alpine);

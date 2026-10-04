@@ -32,8 +32,10 @@ pub const GENERATOR_VERSION: u32 = 3;
 /// round 8) mountainsides with their own anatomy (baseline in
 /// docs/visual-review/baseline-16/); `4` = per-biome seasonal channels and the
 /// tropical mixed-species canopy/foliage paint path. Existing approved
-/// alpine renders are unchanged.
-pub const RENDERER_VERSION: u32 = 4;
+/// alpine renders are unchanged in v4; `5` = fractal stone relief with
+/// self-shadowing, volumetric cloud lighting and multi-scale canopy detail.
+/// v5 intentionally changes existing paintings; geometry/seeds stay frozen.
+pub const RENDERER_VERSION: u32 = 5;
 
 /// Text normalization: NFC, then CRLF/CR to LF, as UTF-8 (`text::normalize`).
 pub const NORMALIZATION_ID: &str = "nfc-lf-utf8/1";
