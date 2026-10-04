@@ -14,8 +14,8 @@ On Arch-based systems these are `vulkan-icd-loader`, your GPU's Vulkan driver (`
 ## Install
 
 ```sh
-tar --zstd -xf pigment-prose-0.1.0-x86_64-linux.tar.zst
-cd pigment-prose-0.1.0-x86_64-linux
+tar --zstd -xf pigment-prose-0.2.0-x86_64-linux.tar.zst
+cd pigment-prose-0.2.0-x86_64-linux
 ./install.sh                 # or: ./install.sh --prefix /some/dir
 ```
 

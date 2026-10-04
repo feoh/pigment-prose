@@ -29,8 +29,8 @@ On the test host (CachyOS) these come from `vulkan-icd-loader`, `nvidia-utils` 6
 ## Build
 
 ```sh
-packaging/linux/build-package.sh            # -> target/package/pigment-prose-0.1.0-x86_64-linux.tar.zst (+ .sha256)
-packaging/linux/smoke-test.sh target/package/pigment-prose-0.1.0-x86_64-linux.tar.zst
+packaging/linux/build-package.sh            # -> target/package/pigment-prose-0.2.0-x86_64-linux.tar.zst (+ .sha256)
+packaging/linux/smoke-test.sh target/package/pigment-prose-0.2.0-x86_64-linux.tar.zst
 ```
 
 - **Locked:** `cargo build --release --locked` with the toolchain pinned in `rust-toolchain.toml` (Rust 1.98.1). `BUILD-INFO.txt` in the package records the commit, toolchain, target, `Cargo.lock` SHA-256 and minimum glibc. The script refuses uncommitted changes unless `--allow-dirty`, which BUILD-INFO then states.
@@ -78,7 +78,7 @@ packaging/linux/smoke-test.sh target/package/pigment-prose-0.1.0-x86_64-linux.ta
 
 Automated checks cannot drive the menu, the portal dialogs or a real first start. Mark each:
 
-1. Unpack the archive and run `./install.sh`. `pigment-studio --version` prints `pigment-studio 0.1.0` (if `~/.local/bin` is on PATH).
+1. Unpack the archive and run `./install.sh`. `pigment-studio --version` prints `pigment-studio 0.2.0` (if `~/.local/bin` is on PATH).
 2. **Pigment Prose** appears in the KDE application menu with its icon; launching it opens the window, and the task bar shows the icon, not a generic one.
 3. Type a sentence. The preview paints and the status line names the RTX 4070 Ti.
 4. **Save As…** (Ctrl+Shift+S) shows the portal's dialog; save `test.recipe.json`. Change a slider, then **Open…** it: the unsaved prompt appears; choose Don't save; the saved painting returns.
